@@ -1,0 +1,14 @@
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:222:17:MB_ErrorHandler	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:56:10:MB_GetReg	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:126:17:MB_ReadRegsHandler	5
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:61:6:MB_SetReg	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:164:17:MB_WriteRegHandler	2
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:190:17:MB_WriteRegsHandler	5
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:104:17:MB_TransactionHandler	7
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:38:6:MB_RTU_Slave_Task	3
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:67:7:MB_GetFloat	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:73:6:MB_SetFloat	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:79:12:MB_GetPtr	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:85:6:MB_RegSetBit	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:91:6:MB_RegResetBit	1
+../Middlewares/Third_Party/STM32F3xx_FreeRTOS_ModbusRTU_RS485/src/ModbusRTU_slave.c:98:6:MB_RegXorBit	1

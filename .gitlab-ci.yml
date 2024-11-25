@@ -1,0 +1,71 @@
+---
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.*/'
+
+stages:
+  - build
+
+.build:
+  image: ubuntu:22.04
+  stage: build
+  variables:
+    SOURCE_DIR: $CI_PROJECT_DIR
+    CMAKE_BUILD_TYPE: Debug
+    BUILD_DIRECTORY: $SOURCE_DIR/build/$CMAKE_BUILD_TYPE
+  script:
+    - apt update
+    - apt install --no-install-recommends -y cmake wget make xz-utils srecord
+    - wget -q http://nexus.simbirsoft/repository/esko-rus-toolchain/toolchain/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz
+    - mkdir toolchain && tar xJf arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz -C toolchain
+    - export CMAKE_MAKE_PROGRAM=make
+    - export PATH=$PATH:$SOURCE_DIR/toolchain/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi/bin
+    - cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=./cmake/gcc-arm-none-eabi.cmake -B "${BUILD_DIRECTORY}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_RULE_MESSAGES:BOOL=OFF -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+    - cmake --build ${BUILD_DIRECTORY} --parallel $(nproc)
+  artifacts:
+    name: "$CI_JOB_STAGE-$BUILD_TYPE-$CI_COMMIT_REF_NAME"
+    paths:
+      - $BUILD_DIRECTORY/*.hex
+    expire_in: 20 min
+  tags:
+    - docker
+
+.boot:
+  extends:
+    - .build
+  variables:
+    SOURCE_DIR: $CI_PROJECT_DIR/boot
+
+.controller:
+  extends:
+    - .build
+  variables:
+    SOURCE_DIR: $CI_PROJECT_DIR/controller
+
+.pack:
+  extends:
+    - .build
+  variables:
+  script:
+    - echo "pack-firmware"
+  dependencies: 
+    - .boot
+    - .controller
+  needs:
+    - .boot
+    - .controller
+
+pack_debug:
+  extends:
+    - .pack
+  variables:
+    CMAKE_BUILD_TYPE: Debug
+
+pack_release:
+  extends:
+     - .pack
+  variables:
+    CMAKE_BUILD_TYPE: Release
+

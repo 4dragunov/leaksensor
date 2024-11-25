@@ -1,0 +1,6 @@
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:104:12:_cbGetTime	8	static
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:187:6:SYSVIEW_DeleteTask	12	static
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:228:6:SYSVIEW_SendTaskInfo	32	static
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:126:6:SYSVIEW_AddTask	32	static
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:156:6:SYSVIEW_UpdateTask	32	static
+../Middlewares/Third_Party/segger/SysView/SEGGER_SYSVIEW_FreeRTOS.c:84:13:_cbSendTaskList	16	static
