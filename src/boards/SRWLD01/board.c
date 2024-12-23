@@ -85,7 +85,7 @@ Uart_t Usart2;
 
 Ds18B20_t ds18b20;
 
-Usid *UniqueSiliconID = U_ID;
+Usid *UniqueSiliconID = (Usid *) U_ID;
 
 
 const ChannelConfig gChannelConfig[ADC_CHANNEL_COUNT] = {
@@ -340,10 +340,10 @@ void BoardInitMcu( void )
 		GpioInit( &gChannelsPins[i].ntp, gChannelConfig[i].toggle_pin2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
 		AdcInit( gChannelConfig[i].hadc, &gChannelsPins[i].ap, gChannelConfig[i].analog_pin, gChannelConfig[i].adc_channel);  // Just initialize ADC
 	}
-	printf("\n\nCore=%d, %d MHz\n", SystemCoreClock, SystemCoreClock / 1000000);
-	printf("HCLK=%d\n", HAL_RCC_GetHCLKFreq());
-	printf("APB1=%d\n", HAL_RCC_GetPCLK1Freq());
-	printf("APB2=%d\n", HAL_RCC_GetPCLK2Freq());
+	printf("\n\nCore=%li, %li MHz\n", SystemCoreClock, SystemCoreClock / 1000000);
+	printf("HCLK=%li\n", HAL_RCC_GetHCLKFreq());
+	printf("APB1=%li\n", HAL_RCC_GetPCLK1Freq());
+	printf("APB2=%li\n", HAL_RCC_GetPCLK2Freq());
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
     SpiInit( &SX126x.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS );
@@ -380,7 +380,7 @@ void BoardInitMcu( void )
 
 
 static TimerEvent_t TestTimer;
-volatile static bool TestTimerPassed = false;
+static volatile bool TestTimerPassed = false;
 const uint16_t times[] = { 1011, 2212}; // 10, 2, 1,
 static void TestTimerEvent()
 {
@@ -402,10 +402,10 @@ bool Board_Timer_Test(void){
 		TestTimerPassed = false;
 		uint32_t t =  HAL_GetTick() - timeStart;
 		if((t>times[i] && t-times[i]<5)||(t<times[i] && times[i]-t<5)||(t==times[i])){
-			DBG("TM:%i pass: %i diff: %i\n",times[i], t, t-times[i]);
+			DBG("TM:%i pass: %li diff: %li\n",times[i], t, t-times[i]);
 			pass++;
 		}else{
-			DBG("TM:%i fail: %i diff: %i\n",times[i], t,  t-times[i]);
+			DBG("TM:%i fail: %li diff: %li\n",times[i], t,  t-times[i]);
 		}
 	}
 	return pass == ARRAY_SIZE(times);
