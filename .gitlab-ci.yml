@@ -13,6 +13,7 @@ stages:
   stage: build
   variables:
     SOURCE_DIR: $CI_PROJECT_DIR
+    APP_CONFIG: ""
     CMAKE_BUILD_TYPE: Debug
     BUILD_DIRECTORY: $SOURCE_DIR/build/$CMAKE_BUILD_TYPE
   script:
@@ -22,7 +23,7 @@ stages:
     - mkdir toolchain && tar xJf arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi.tar.xz -C toolchain
     - export CMAKE_MAKE_PROGRAM=make
     - export PATH=$PATH:$SOURCE_DIR/toolchain/arm-gnu-toolchain-12.3.rel1-x86_64-arm-none-eabi/bin
-    - cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=./cmake/gcc-arm-none-eabi.cmake -B "${BUILD_DIRECTORY}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_RULE_MESSAGES:BOOL=OFF -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
+    - cmake -G "Unix Makefiles" -DCMAKE_TOOLCHAIN_FILE=./cmake/toolchain-arm-none-eabi.cmake -B "${BUILD_DIRECTORY}" -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_RULE_MESSAGES:BOOL=OFF  ${APP_CONFIG}
     - cmake --build ${BUILD_DIRECTORY} --parallel $(nproc)
   artifacts:
     name: "$CI_JOB_STAGE-$BUILD_TYPE-$CI_COMMIT_REF_NAME"
@@ -36,14 +37,14 @@ stages:
   extends:
     - .build
   variables:
-    SOURCE_DIR: $CI_PROJECT_DIR/boot
-
+    SOURCE_DIR: $CI_PROJECT_DIR/src/boot
+    APP_CONFIG: ""
 .controller:
   extends:
     - .build
   variables:
-    SOURCE_DIR: $CI_PROJECT_DIR/controller
-
+    SOURCE_DIR: $CI_PROJECT_DIR/
+    APP_CONFIG: '-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DAPPLICATION="LeakDetector"   -DCLASS="classA"   -DCLASSB_ENABLED="ON" -DACTIVE_REGION="LORAMAC_REGION_EU868" -DREGION_EU868="ON" -DREGION_RU864="OFF" -DBOARD="SRWLD01" -DBOARD_RADIO="SX1276MB1LAS"'
 .pack:
   extends:
     - .build

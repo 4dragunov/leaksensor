@@ -1,32 +1,28 @@
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
+lst/
+obj/
+bin/
+build/
+tmp/
+*.bin
+.kdev4
+*.log
+*.dep
+*.uvgui.*
+*.uvgui_*.bak
+*.uvguix.*
+*.uvguix_*.bak
+*_uvopt.bak
+*_uvoptx.bak
+*_uvproj.bak
+*_uvprojx.bak
+*.ctx
+*.dbi
+*.xdb
+*.svn
+*.pbxproj
+*.cogui
+*.comarker
+.directory
+.vscode/launch.json
+.cmaketools.json
+ipch/

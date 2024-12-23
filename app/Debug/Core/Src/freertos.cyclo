@@ -1,7 +1,0 @@
-../Core/Src/freertos.c:66:13:configureTimerForRunTimeStats	1
-../Core/Src/freertos.c:71:22:getRunTimeCounterValue	1
-../Core/Src/freertos.c:78:6:vApplicationStackOverflowHook	1
-../Core/Src/freertos.c:87:6:vApplicationMallocFailedHook	1
-../Core/Src/freertos.c:103:13:PreSleepProcessing	1
-../Core/Src/freertos.c:108:13:PostSleepProcessing	1
-../Core/Src/freertos.c:118:6:vApplicationGetIdleTaskMemory	1
