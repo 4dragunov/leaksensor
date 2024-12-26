@@ -27,6 +27,7 @@
 extern "C"
 {
 #endif
+
 #include <stdbool.h>
 #include "cmsis_os.h"
 #include "fifo.h"
@@ -35,6 +36,7 @@ extern "C"
 /*!
  * UART peripheral ID
  */
+/*
 typedef enum
 {
     USART_1,
@@ -45,6 +47,25 @@ typedef enum
     UART_USB_CDC = 255,
 	UART_NONE
 }UartId_t;
+*/
+
+#define FOREACH_USART(USART) \
+		USART(USART_1)   \
+		USART(USART_2)  \
+		USART(USART_3)   \
+		USART(UART_4)  \
+		USART(UART_5)  \
+		USART(UART_USB_CDC)  \
+		USART(UART_NONE)  \
+
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(STRING) #STRING,
+
+typedef enum {
+	FOREACH_USART(GENERATE_ENUM)
+}UartId_t;
+
+extern const char *gUsartNames[];
 
 /*!
  * UART notification identifier
@@ -54,6 +75,12 @@ typedef enum
     UART_NOTIFY_TX,
     UART_NOTIFY_RX
 }UartNotifyId_t;
+
+typedef enum
+{
+    FIFO = 0,
+	SYNC
+}FifoMode_t;
 
 /*!
  * UART object type definition
@@ -68,6 +95,8 @@ typedef struct
     Fifo_t FifoRx;
     osSemaphoreId rxSem;
     osSemaphoreId txSem;
+    FifoMode_t fifo;
+    void *handle;
    void ( *IrqNotify )( UartNotifyId_t id );
 }Uart_t;
 
@@ -144,7 +173,7 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx );
  * \param [IN] parity       packet parity
  * \param [IN] flowCtrl     UART flow control
  */
-void UartConfig( Uart_t *obj, UartMode_t mode, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
+void UartConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
 
 /*!
  * \brief DeInitializes the UART object and MCU pins

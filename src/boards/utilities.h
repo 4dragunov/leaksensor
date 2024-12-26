@@ -23,11 +23,6 @@
 #ifndef __UTILITIES_H__
 #define __UTILITIES_H__
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -206,6 +201,12 @@ uint32_t Crc32Finalize( uint32_t crc );
  */
 #define CRITICAL_SECTION_END( ) BoardCriticalSectionEnd( &mask )
 
+#ifdef __cplusplus
+	#define _C extern "C"
+#else
+	#define _C
+#endif
+
 /*
  * ============================================================================
  * Following functions must be implemented inside the specific platform
@@ -217,17 +218,14 @@ uint32_t Crc32Finalize( uint32_t crc );
  *
  * \param [IN] mask Pointer to a variable where to store the CPU IRQ mask
  */
-void BoardCriticalSectionBegin( uint32_t *mask );
+_C void BoardCriticalSectionBegin( uint32_t *mask );
 
 /*!
  * Ends critical section
  *
  * \param [IN] mask Pointer to a variable where the CPU IRQ mask was stored
  */
-void BoardCriticalSectionEnd( uint32_t *mask );
+_C void BoardCriticalSectionEnd( uint32_t *mask );
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif // __UTILITIES_H__

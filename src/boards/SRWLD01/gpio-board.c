@@ -93,43 +93,41 @@ void GpioMcuInit( Gpio_t *obj, PinNames pin, PinModes mode, PinConfigs config, P
         GPIO_InitStructure.Pull = obj->pull = type;
         GPIO_InitStructure.Speed = GPIO_SPEED_FREQ_HIGH;
 
-        if( mode == PIN_INPUT )
-        {
-            GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
-        }
-        else if( mode == PIN_ANALOGIC )
-        {
-            GPIO_InitStructure.Mode = GPIO_MODE_ANALOG;
-        }
-        else if( mode == PIN_ALTERNATE_FCT )
-        {
-            if( config == PIN_OPEN_DRAIN )
-            {
-                GPIO_InitStructure.Mode = GPIO_MODE_AF_OD;
-            }
-            else
-            {
-                GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
-            }
-        }
-        else // mode output
-        {
-            if( config == PIN_OPEN_DRAIN )
-            {
-                GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_OD;
-            }
-            else
-            {
-                GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-            }
-        }
-
-        // Sets initial output value
-        if( mode == PIN_OUTPUT )
-        {
-            GpioMcuWrite( obj, value );
-        }
-
+        switch(mode) {
+			case PIN_INPUT:{
+				GPIO_InitStructure.Mode = GPIO_MODE_INPUT;
+			}break;
+			case  PIN_ANALOGIC:
+			{
+				GPIO_InitStructure.Mode = GPIO_MODE_ANALOG;
+			}break;
+			case PIN_ALTERNATE_FCT:
+			{
+				if( config == PIN_OPEN_DRAIN )
+				{
+					GPIO_InitStructure.Mode = GPIO_MODE_AF_OD;
+				}
+				else
+				{
+					GPIO_InitStructure.Mode = GPIO_MODE_AF_PP;
+				}
+			}break;
+			case PIN_OUTPUT:
+			{
+				if( config == PIN_OPEN_DRAIN )
+				{
+					GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_OD;
+				}
+				else
+				{
+					GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+				}
+				// Sets initial output value
+				GpioMcuWrite( obj, value );
+			}break;
+			default:{
+			}
+        };
         HAL_GPIO_Init( obj->port, &GPIO_InitStructure );
     }
     else

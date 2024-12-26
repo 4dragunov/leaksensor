@@ -53,7 +53,8 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx );
  * \param [IN] parity       packet parity
  * \param [IN] flowCtrl     UART flow control
  */
-void UartMcuConfig( Uart_t *obj, UartMode_t mode, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
+void UartMcuConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
+
 
 /*!
  * \brief DeInitializes the UART object and MCU pins

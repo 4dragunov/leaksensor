@@ -26,20 +26,28 @@
 osSemaphoreDef(rxSem);
 osSemaphoreDef(txSem);
 
+const char *gUsartNames[] = {
+		FOREACH_USART(GENERATE_STRING)
+};
+
 void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 {
     if( obj->IsInitialized == false )
     {
+    	const char usartName[20];
+
     	obj->rxSem = osSemaphoreCreate(osSemaphore(rxSem), 1);
+    	vQueueAddToRegistry( obj->rxSem, "rxSem" );
     	obj->txSem = osSemaphoreCreate(osSemaphore(txSem), 1);
+    	vQueueAddToRegistry( obj->txSem, "txSem"  );
         obj->IsInitialized = true;
         UartMcuInit( obj, uartId, tx, rx );
     }
 }
 
-void UartConfig( Uart_t *obj, UartMode_t mode, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
+void UartConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
 {
-    UartMcuConfig( obj, mode, baudrate, wordLength, stopBits, parity, flowCtrl );
+    UartMcuConfig( obj, mode, fifo, baudrate, wordLength, stopBits, parity, flowCtrl );
 }
 
 void UartDeInit( Uart_t *obj )

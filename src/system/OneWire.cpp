@@ -1,26 +1,47 @@
 #include "OneWire.h"
 #include "uart.h"
 
+#define WIRE_1 0xFF
+#define WIRE_0 0x00
+
+#define RESET_SPEED 9600
+#define WORK_SPEED 115200
+
+#define OW_TIMEOUT 50 //1 ms is enouph
+
+namespace OneWire {
+
+
+Bus::Bus( Uart_t *const uart):
+	mLastDiscrepancy(),
+	mLastFamilyDiscrepancy(),
+	mLastDeviceFlag(),
+	mROM(),
+	mUart(uart),
+	mStatus()
+{
+
+}
+
 /**
  * internal function to reset uart when an error happens
  * 
  * It seems this function is unneeded when 8 bits are sent separatly
  */
-void OW_resetUART(OneWire_t* ow)
+void Bus::resetUART(void)
 {
-	UartDeInit(ow->uart);
-	UartConfig(ow->uart, RX_TX, 921600, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
-	ow->status = 0;
+	UartDeInit(mUart);
+	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+	mStatus = 0;
 }
 
-void OW_init(OneWire_t *ow, Uart_t *obj)
+void Bus::init(void)
 {
-    /* Save settings */
-    ow->uart = obj;
-	ow->status = 0;
+	mStatus = 0;
+	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
 }
 
-uint8_t bitsToByte(uint8_t *bits) {
+static uint8_t bitsToByte(uint8_t *bits) {
     uint8_t target_byte, i;
     target_byte = 0;
     for (i = 0; i < 8; i++) {
@@ -34,7 +55,7 @@ uint8_t bitsToByte(uint8_t *bits) {
 }
 
 /// Convert one byte to array of 8 bytes
-uint8_t *byteToBits(uint8_t ow_byte, uint8_t *bits) {
+static uint8_t *byteToBits(uint8_t ow_byte, uint8_t *bits) {
     uint8_t i;
     for (i = 0; i < 8; i++) {
         if (ow_byte & 0x01) {
@@ -52,51 +73,51 @@ uint8_t *byteToBits(uint8_t ow_byte, uint8_t *bits) {
  * If set baud rate with Deinit and Init there will be an unneeded byte 0xF0
  * on the bus
  */
-void OW_setBaudRate(Uart_t *obj, uint32_t bdr)
+void Bus::setBaudRate(const uint32_t bdr)
 {
-    UartConfig(obj, RX_TX, bdr, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+    UartSetBaudrate(mUart, bdr);
 }
 
-uint8_t OW_reset(OneWire_t *ow)
+bool Bus::reset(void)
 {
 	//Reset UART if there is an error
-	if (ow->status != 0) {
-		OW_resetUART(ow);
+	if (mStatus != 0) {
+		resetUART();
 	}
 
     uint8_t reset = 0xF0;
     uint8_t resetBack = 0;
 
-    OW_setBaudRate(ow->uart, OW_RESET_SPEED);
-    
-    UartPutChar(ow->uart, reset, OW_TIMEOUT);
-    ow->status = UartGetChar(ow->uart, &resetBack, OW_TIMEOUT);
+    setBaudRate(RESET_SPEED);
 
-    OW_setBaudRate(ow->uart, OW_WORK_SPEED);
+    UartPutChar(mUart, reset, OW_TIMEOUT);
+    mStatus = UartGetChar(mUart, &resetBack, OW_TIMEOUT);
+
+    setBaudRate(WORK_SPEED);
 
     return reset!=resetBack;
 }
 
-void OW_sendBit(OneWire_t *ow, uint8_t b)
+void Bus::sendBit(const uint8_t b)
 {
     uint8_t r,s;
     s = b ? WIRE_1 : WIRE_0;
-    UartPutChar(ow->uart, s, OW_TIMEOUT);
-    ow->status = UartGetChar(ow->uart, &r, OW_TIMEOUT);
+    UartPutChar(mUart, s, OW_TIMEOUT);
+    mStatus = UartGetChar(mUart, &r, OW_TIMEOUT);
 }
 
-uint8_t OW_receiveBit(OneWire_t *ow)
+uint8_t Bus::receiveBit(void)
 {
     uint8_t s = 0xFF, r;
-    UartPutChar(ow->uart, s, OW_TIMEOUT);
-    ow->status = UartGetChar(ow->uart, &r, OW_TIMEOUT);
+    UartPutChar(mUart, s, OW_TIMEOUT);
+    mStatus = UartGetChar(mUart, &r, OW_TIMEOUT);
 
 	if (r==0xFF) return 1;
 
 	return 0;
 }
 
-void OW_sendByte(OneWire_t *ow, uint8_t b)
+void Bus::send(const uint8_t b)
 {
     uint8_t sendByte[8];
     //uint8_t recvByte[8];
@@ -104,7 +125,7 @@ void OW_sendByte(OneWire_t *ow, uint8_t b)
     byteToBits(b, sendByte); //0b01101001 => 0x00 0xFF 0xFF 0x00 0xFF 0x00 0x00 0xFF
 
 	for(uint8_t i=0;i<8;i++) {
-		OW_sendBit(ow, sendByte[i]);
+		sendBit(sendByte[i]);
 	}
 	/* 
 	On a high loaded system there will be desynchronization of transmit and receive
@@ -116,34 +137,34 @@ void OW_sendByte(OneWire_t *ow, uint8_t b)
     //ow->status = HAL_UART_Receive(ow->huart, recvByte, 8, OW_TIMEOUT);
 }
 
-void OW_sendBytes(OneWire_t *ow, uint8_t *bytes, uint8_t len)
+void Bus::send(const uint8_t *bytes, const uint8_t len)
 {
-    for(uint8_t i=0;i<len;i++) {
-		OW_sendByte(ow, bytes[i]);
+    for(uint8_t i=0; i<len; i++) {
+		send(bytes[i]);
     }
 }
 
-uint8_t OW_receiveByte(OneWire_t *ow)
+uint8_t Bus::receive(void)
 {
     uint8_t sendByte[8];
     uint8_t recvByte[8];
     byteToBits(0xFF, sendByte);
 
 	for (uint8_t i=0;i<8;i++) {
-		recvByte[i] = OW_receiveBit(ow);
+		recvByte[i] = receiveBit();
 	}
 
     return bitsToByte(recvByte);
 }
 
-void OW_receiveBytes(OneWire_t *ow, uint8_t *bytes, uint8_t len)
+void Bus::receive(uint8_t * const bytes, const uint8_t len)
 {
     for(uint8_t i=0;i<len;i++) {
-        bytes[i] = OW_receiveByte(ow);
+        bytes[i] = receive();
     }
 }
 
-uint8_t OW_CRC8(uint8_t* addr, uint8_t len)
+uint8_t Bus::crc8(const uint8_t* addr, uint8_t len) const
 {
     uint8_t crc = 0, inbyte, i, mix;
 	
@@ -163,26 +184,26 @@ uint8_t OW_CRC8(uint8_t* addr, uint8_t len)
 	return crc;
 }
 
-void OW_resetSearch(OneWire_t *ow)
+void Bus::resetSearch(void)
 {
 	/* Reset the search state */
-	ow->LastDiscrepancy = 0;
-	ow->LastDeviceFlag = 0;
-	ow->LastFamilyDiscrepancy = 0;
+	mLastDiscrepancy = 0;
+	mLastDeviceFlag = 0;
+	mLastFamilyDiscrepancy = 0;
 }
 
 
-uint8_t OW_first(OneWire_t *ow)
+uint8_t Bus::first(void)
 {
 	/* Reset search values */
-	OW_resetSearch(ow);
+	resetSearch();
 
 	/* Start with searching */
-	return OW_search(ow, OW_CMD_SEARCHROM);
+	return search(Command::SEARCHROM);
 }
 
 
-uint8_t OW_search(OneWire_t* ow, uint8_t command)
+uint8_t Bus::search(const Command command)
 {
 	uint8_t id_bit_number;
 	uint8_t last_zero, rom_byte_number, search_result;
@@ -197,22 +218,22 @@ uint8_t OW_search(OneWire_t* ow, uint8_t command)
 	search_result = 0;
 
 	/* Check if any devices */
-	if (!ow->LastDeviceFlag) {
+	if (!mLastDeviceFlag) {
 		/* 1-Wire reset */
-		if (!OW_reset(ow)) {
+		if (!reset()) {
 			/* Reset the search */
-            OW_resetSearch(ow);
+            resetSearch();
 			return 0; //Reset failed
 		}
 
 		/* Issue the search command */
-        OW_sendByte(ow, command);
+        send(to_underlying(command));
 		
 		/* Loop to do the search */
 		do {
 			/* Read a bit and its complement */
-			id_bit = OW_receiveBit(ow); //0
-			cmp_id_bit = OW_receiveBit(ow); //1
+			id_bit = receiveBit(); //0
+			cmp_id_bit = receiveBit(); //1
 
 			/* Check for no devices on 1-wire */
 			if ((id_bit == 1) && (cmp_id_bit == 1)) {
@@ -224,11 +245,11 @@ uint8_t OW_search(OneWire_t* ow, uint8_t command)
 					search_direction = id_bit; //1
 				} else {
 					/* If this discrepancy is before the Last Discrepancy on a previous next then pick the same as last time */
-					if (id_bit_number < ow->LastDiscrepancy) {
-						search_direction = ((ow->ROM_NO[rom_byte_number] & rom_byte_mask) > 0);
+					if (id_bit_number < mLastDiscrepancy) {
+						search_direction = (( mROM[rom_byte_number] & rom_byte_mask) > 0);
 					} else {
 						/* If equal to last pick 1, if not then pick 0 */
-						search_direction = (id_bit_number == ow->LastDiscrepancy);
+						search_direction = (id_bit_number == mLastDiscrepancy);
 					}
 					
 					/* If 0 was picked then record its position in LastZero */
@@ -237,20 +258,20 @@ uint8_t OW_search(OneWire_t* ow, uint8_t command)
 
 						/* Check for Last discrepancy in family */
 						if (last_zero < 9) {
-							ow->LastFamilyDiscrepancy = last_zero;
+							mLastFamilyDiscrepancy = last_zero;
 						}
 					}
 				}
 
 				/* Set or clear the bit in the ROM byte rom_byte_number with mask rom_byte_mask */
 				if (search_direction == 1) { // 1
-					ow->ROM_NO[rom_byte_number] |= rom_byte_mask; // |= 1
+					mROM[rom_byte_number] |= rom_byte_mask; // |= 1
 				} else {
-					ow->ROM_NO[rom_byte_number] &= ~rom_byte_mask;
+					mROM[rom_byte_number] &= ~rom_byte_mask;
 				}
 				
 				/* Serial number search direction write bit */
-                OW_sendBit(ow, search_direction);  //1
+                sendBit(search_direction);  //1
 
 				/* Increment the byte counter id_bit_number and shift the mask rom_byte_mask */
 				id_bit_number++; // 1 -> 2
@@ -268,11 +289,11 @@ uint8_t OW_search(OneWire_t* ow, uint8_t command)
 		/* If the search was successful then */
 		if (!(id_bit_number < 65)) {
 			/* Search successful so set LastDiscrepancy, LastDeviceFlag, search_result */
-			ow->LastDiscrepancy = last_zero;
+			mLastDiscrepancy = last_zero;
 
 			/* Check for last device */
-			if (ow->LastDiscrepancy == 0) {
-				ow->LastDeviceFlag = 1;
+			if (mLastDiscrepancy == 0) {
+				mLastDeviceFlag = 1;
 			}
 
 			search_result = 1;
@@ -280,49 +301,45 @@ uint8_t OW_search(OneWire_t* ow, uint8_t command)
 	}
 
 	/* If no device found then reset counters so next 'search' will be like a first */
-	if (!search_result || !ow->ROM_NO[0]) {
-        OW_resetSearch(ow);
+	if (!search_result || !mROM[0]) {
+        resetSearch();
 		search_result = 0;
 	}
 
 	return search_result;
 }
 
-uint8_t OW_next(OneWire_t* ow)
+uint8_t Bus::next(void)
 {
-   /* Leave the search state alone */
-   return OW_search(ow, OW_CMD_SEARCHROM);
+   return search(Bus::Command::SEARCHROM);
 }
 
-uint8_t OW_getROM(OneWire_t* ow, uint8_t index)
+uint8_t Bus::getROM(const uint8_t index) const
 {
-	return ow->ROM_NO[index];
+	return mROM[index];
 }
 
-void OW_getFullROM(OneWire_t* ow, uint8_t *firstIndex)
+void Bus::getFullROM(uint8_t * const firstIndex) const
 {
-    uint8_t i;
-	for (i = 0; i < 8; i++) {
-		*(firstIndex + i) = ow->ROM_NO[i];
+	for (uint8_t i = 0; i < 8; i++) {
+		*(firstIndex + i) = mROM[i];
 	}
 }
 
-void OW_select(OneWire_t* ow, uint8_t* addr)
+void Bus::select(uint8_t* addr)
 {
-    uint8_t i;
-	OW_sendByte(ow, OW_CMD_MATCHROM);
-	
-	for (i = 0; i < 8; i++) {
-		OW_sendByte(ow, *(addr + i));
+	send(to_underlying(Command::MATCHROM));
+	for (uint8_t i = 0; i < 8; i++) {
+		send(*(addr + i));
 	}
 }
 
-void OW_selectWithPointer(OneWire_t* ow, uint8_t* ROM)
+void Bus::selectWithPointer(uint8_t* ROM)
 {
-    uint8_t i;
-	OW_sendByte(ow, OW_CMD_MATCHROM);
-	
-	for (i = 0; i < 8; i++) {
-		OW_sendByte(ow, *(ROM + i));
+	send(to_underlying(Command::MATCHROM));
+	for (uint8_t i = 0; i < 8; i++) {
+		send(*(ROM + i));
 	}
 }
+
+} //namespace OneWire

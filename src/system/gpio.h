@@ -69,6 +69,12 @@ typedef enum
     PIN_PULL_DOWN
 }PinTypes;
 
+typedef enum
+{
+    LOW = 0,
+    HIGHT
+}PinFreq;
+
 /*!
  * Define the GPIO as Push-pull type or Open Drain
  */

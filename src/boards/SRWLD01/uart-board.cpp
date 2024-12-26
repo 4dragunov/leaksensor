@@ -37,7 +37,10 @@
 #define TX_BUFFER_RETRY_COUNT                       10
 #define UART_COUNT 5
 
+
+
 static UART_HandleTypeDef UartHandle[UART_COUNT];
+
 const USART_TypeDef *UsartTypeDefs[UART_COUNT] = {USART1, USART2, USART3, UART4, UART5};
 const IRQn_Type UartIRQ[UART_COUNT] = {USART1_IRQn, USART2_IRQn, USART3_IRQn, UART4_IRQn, UART5_IRQn};
 Uart_t *UartsRegistered[UART_COUNT];
@@ -61,6 +64,7 @@ UartId_t IdByHandle(const UART_HandleTypeDef *handle){
 void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 {
     obj->UartId = uartId;
+    obj->handle = &UartHandle[uartId];
 
     if( uartId == UART_USB_CDC )
     {
@@ -70,6 +74,7 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
     }
     else
     {
+
         switch(obj->UartId) {
         	case USART_1: {
         		__HAL_RCC_USART1_FORCE_RESET( );
@@ -101,11 +106,25 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
         	}
         };
         GpioInit( &obj->Tx, tx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-        GpioInit( &obj->Rx, rx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-    }
+        GpioInit( &obj->Rx, rx, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
+        switch(obj->UartId) {
+        	case USART_1: {
+        		if(tx == PB_6 && rx == PB_7){
+        		    __HAL_AFIO_REMAP_USART1_ENABLE();
+        		}
+            } break;
+        	case USART_2: {
+        	    if(tx == PD_5 && rx == PD_6){
+        	        __HAL_AFIO_REMAP_USART2_ENABLE();
+        	    }
+        	} break;
+            default:{
+            }
+        };
+   }
 }
 
-void UartMcuConfig( Uart_t *obj, UartMode_t mode, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
+void UartMcuConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
 {
     if( obj->UartId == UART_USB_CDC )
     {
@@ -118,6 +137,7 @@ void UartMcuConfig( Uart_t *obj, UartMode_t mode, uint32_t baudrate, WordLength_
     	assert_param(obj->UartId >= USART1 && obj->UartId <= UART5);
         UartHandle[obj->UartId].Instance = (USART_TypeDef*)UsartTypeDefs[obj->UartId];
         UartHandle[obj->UartId].Init.BaudRate = baudrate;
+        obj->fifo = fifo;
 
         if( mode == TX_ONLY )
         {
@@ -278,19 +298,23 @@ uint8_t UartMcuPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )
     }
     else
     {
-        TxData[obj->UartId] = data;
-
-        if( IsFifoFull( &obj->FifoTx ) == false )
+        if((obj->fifo==FIFO && IsFifoFull( &obj->FifoTx ) == false )||
+           (obj->fifo==SYNC && IsFifoEmpty( &obj->FifoTx ) == true ))
         {
-            FifoPush( &obj->FifoTx, TxData[obj->UartId] );
+        	if(obj->fifo == SYNC)
+        		return HAL_UART_Transmit((UART_HandleTypeDef*)obj->handle, &data, 1, timeout);
 
+        	CRITICAL_SECTION_BEGIN( );
+            FifoPush( &obj->FifoTx, data );
             // Trig UART Tx interrupt to start sending the FIFO contents.
             __HAL_UART_ENABLE_IT( &UartHandle[obj->UartId], UART_IT_TC );
-
-
+            CRITICAL_SECTION_END( );
+            if(obj->fifo==SYNC ) {
+            	uint32_t res = osSemaphoreWait (obj->txSem, timeout);
+            	return res;
+            }
             return 0; // OK
         }
-
         return 1; // Busy
     }
 }
@@ -307,16 +331,24 @@ uint8_t UartMcuGetChar( Uart_t *obj, uint8_t *data , uint32_t timeout )
     }
     else
     {
-    	if( IsFifoEmpty( &obj->FifoRx ) )
-    		osSemaphoreWait (obj->rxSem, timeout);
+    	//if(obj->fifo == SYNC)
+    	//	return HAL_UART_Receive((UART_HandleTypeDef*)obj->handle, data, 1, timeout);
+
+		CRITICAL_SECTION_BEGIN( );
+    	if( IsFifoEmpty( &obj->FifoRx ) && obj->fifo == SYNC)
+    		if(osSemaphoreWait (obj->rxSem, timeout) != osOK ){
+    			return osErrorOS;
+    		}
 
         if( IsFifoEmpty( &obj->FifoRx ) == false )
         {
             *data = FifoPop( &obj->FifoRx );
+            CRITICAL_SECTION_END( );
             return 0;
         }else {
         	//TODO:change this
         }
+        CRITICAL_SECTION_END( );
         return 1;
     }
 }
@@ -339,7 +371,7 @@ uint8_t UartMcuPutBuffer( Uart_t *obj, uint8_t *buffer, uint16_t size , uint32_t
         for( i = 0; i < size; i++ )
         {
             retryCount = 0;
-            while( UartPutChar( obj, buffer[i] ,timeout) != 0 )
+            while( UartPutChar( obj, buffer[i], timeout) != 0 )
             {
                 retryCount++;
 
@@ -423,8 +455,15 @@ uint32_t UartMcuGetBaudrate(const Uart_t *obj)
 
 bool UartMcuSetBaudrate(const Uart_t *obj, uint32_t baudrate)
 {
+	/*
 	UartHandle[obj->UartId].Init.BaudRate = baudrate;
 	return HAL_UART_Init(&UartHandle[obj->UartId]) == HAL_OK;
+*/
+	__HAL_UART_DISABLE(&UartHandle[obj->UartId]);
+	uint32_t bus_clk = (obj->UartId == USART_1)? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
+	UartHandle[obj->UartId].Instance->BRR = UART_BRR_SAMPLING16(bus_clk, baudrate);
+	__HAL_UART_ENABLE(&UartHandle[obj->UartId]);
+	return  true;
 }
 
 void UartMcuAbortReceive(const Uart_t *obj) {
@@ -460,20 +499,21 @@ extern "C" void ModBus_TxCpltCallback(UART_HandleTypeDef *huart);
 
 extern "C" void HAL_UART_TxCpltCallback( UART_HandleTypeDef *handle )
 {
-	if(UartsRegistered[IdByHandle(handle)]) {
-		if( IsFifoEmpty( &UartsRegistered[IdByHandle(handle)]->FifoTx ) == false )
+	UartId_t uart = IdByHandle(handle);
+	if(uart != UART_NONE && UartsRegistered[uart]) {
+		if( !IsFifoEmpty( &UartsRegistered[uart]->FifoTx ) )
 		{
-			TxData[IdByHandle(handle)] = FifoPop( &UartsRegistered[IdByHandle(handle)]->FifoTx );
+			TxData[uart] = FifoPop( &UartsRegistered[uart]->FifoTx );
 			//  Write one byte to the transmit data register
-			HAL_UART_Transmit_IT( &UartHandle[IdByHandle(handle)], &TxData[IdByHandle(handle)], 1 );
+			HAL_UART_Transmit_IT( &UartHandle[uart], &TxData[uart], 1 );
 		}
 
-		if( UartsRegistered[IdByHandle(handle)]->IrqNotify != NULL )
+		if( UartsRegistered[uart]->IrqNotify != NULL )
 		{
-			UartsRegistered[IdByHandle(handle)]->IrqNotify( UART_NOTIFY_TX );
+			UartsRegistered[uart]->IrqNotify( UART_NOTIFY_TX );
 		}
 		if(osKernelRunning())
-			osSemaphoreRelease (UartsRegistered[IdByHandle(handle)]->txSem);
+			osSemaphoreRelease (UartsRegistered[uart]->txSem);
 	}else
 	{
 		ModBus_TxCpltCallback(handle);
@@ -482,20 +522,21 @@ extern "C" void HAL_UART_TxCpltCallback( UART_HandleTypeDef *handle )
 
 extern "C" void HAL_UART_RxCpltCallback( UART_HandleTypeDef *handle )
 {
-	if(UartsRegistered[IdByHandle(handle)]) {
-		if( IsFifoFull( &UartsRegistered[IdByHandle(handle)]->FifoRx ) == false )
+	UartId_t uart = IdByHandle(handle);
+	if(uart != UART_NONE && UartsRegistered[uart]) {
+		if( !IsFifoFull( &UartsRegistered[uart]->FifoRx ) )
 		{
 			// Read one byte from the receive data register
-			FifoPush( &UartsRegistered[IdByHandle(handle)]->FifoRx, RxData[IdByHandle(handle)] );
+			FifoPush( &UartsRegistered[uart]->FifoRx, RxData[uart] );
 		}
 
-		if( UartsRegistered[IdByHandle(handle)]->IrqNotify != NULL )
+		if( UartsRegistered[uart]->IrqNotify != NULL )
 		{
-			UartsRegistered[IdByHandle(handle)]->IrqNotify( UART_NOTIFY_RX );
+			UartsRegistered[uart]->IrqNotify( UART_NOTIFY_RX );
 		}
 		if(osKernelRunning())
-			osSemaphoreRelease (UartsRegistered[IdByHandle(handle)]->rxSem);
-		HAL_UART_Receive_IT( &UartHandle[IdByHandle(handle)], &RxData[IdByHandle(handle)], 1 );
+			osSemaphoreRelease (UartsRegistered[uart]->rxSem);
+		HAL_UART_Receive_IT( &UartHandle[uart], &RxData[uart], 1 );
 	}else
 	{
 		ModBus_RxCpltCallback(handle);
@@ -504,8 +545,9 @@ extern "C" void HAL_UART_RxCpltCallback( UART_HandleTypeDef *handle )
 
 extern "C" void HAL_UART_ErrorCallback( UART_HandleTypeDef *handle )
 {
-	if(UartHandle[IdByHandle(handle)].Instance) {
-		HAL_UART_Receive_IT( &UartHandle[IdByHandle(handle)], &RxData[IdByHandle(handle)], 1 );
+	UartId_t uart = IdByHandle(handle);
+	if(UartHandle[uart].Instance) {
+		HAL_UART_Receive_IT( &UartHandle[uart], &RxData[uart], 1 );
 	}else
 		ModBus_ErrorCallback(handle);
 }

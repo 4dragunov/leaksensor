@@ -133,6 +133,7 @@ uint8_t GetBoardPowerSource( void );
  */
 Version_t BoardGetVersion( void );
 
+
 #ifdef __cplusplus
 }
 #endif

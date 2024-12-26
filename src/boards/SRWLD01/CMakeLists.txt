@@ -30,7 +30,7 @@ cmake_print_variables(BOARD_MCU)
 
 list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/adc-board.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/board.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/delay-board.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom-board.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/gpio-board.c"

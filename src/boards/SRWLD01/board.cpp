@@ -83,7 +83,8 @@ Adc_t  AdcTempSens = {.inst = ADC1, .channel = ADC_CHANNEL_TEMPSENSOR};
 Uart_t Usart1;
 Uart_t Usart2;
 
-Ds18B20_t ds18b20;
+OneWire::Bus gOWI(&Usart1);
+OneWire::DS18B20 gDs18b20(&gOWI, OneWire::DS18B20::Resolution::SR12BITS);
 
 Usid *UniqueSiliconID = (Usid *) U_ID;
 
@@ -253,7 +254,7 @@ static void SystemClockConfig( void );
  */
 static void SystemClockReConfig( void );
 
-extern void initialise_monitor_handles(void);
+extern "C" void initialise_monitor_handles(void);
 
 void configureTimerForRunTimeStats(void);
 unsigned long getRunTimeCounterValue(void);
@@ -315,10 +316,10 @@ void BoardInitMcu( void )
         FifoInit( &Usart2.FifoRx, Uart2RxBuffer, UART2_FIFO_RX_SIZE );
         // Configure your terminal for 8 Bits data (7 data bit + 1 parity bit), no parity and no flow ctrl
         UartInit( &Usart2, USART_2, RS485_TX, RS485_RX );
-        UartConfig( &Usart2, RX_TX, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartConfig( &Usart2, RX_TX, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
         UartInit( &Usart1, USART_1, OW_TX, OW_RX );
-        UartConfig( &Usart1, RX_TX, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartConfig( &Usart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
         RtcInit( );
 
@@ -382,7 +383,7 @@ void BoardInitMcu( void )
 static TimerEvent_t TestTimer;
 static volatile bool TestTimerPassed = false;
 const uint16_t times[] = { 1011, 2212}; // 10, 2, 1,
-static void TestTimerEvent()
+static void TestTimerEvent(void* ctx)
 {
   TimerStop( &TestTimer );
   TestTimerPassed = true;
@@ -578,9 +579,10 @@ int16_t BoardGetInternalTemperature( void )
 
 int16_t BoardGetTemperature( void ) {
 	 int16_t tempRaw = NO_DATA;
-     if (DS18B20_isTempReady(&ds18b20, 0)) {
-           tempRaw = DS18B20_getTempRaw(&ds18b20, 0);
-         DS18B20_startMeasure(&ds18b20, DS18B20_MEASUREALL);
+     if (gDs18b20.isTempReady(0)) {
+           gDs18b20.getTempRaw(0, &tempRaw);
+     }else{
+    	 gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL));
      }
      return tempRaw;
 }

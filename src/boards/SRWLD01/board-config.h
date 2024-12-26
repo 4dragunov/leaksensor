@@ -33,10 +33,6 @@
 #ifndef __BOARD_CONFIG_H__
 #define __BOARD_CONFIG_H__
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
 #include "gpio.h"
 #include "adc.h"
 /*!
@@ -95,8 +91,8 @@ extern "C"
 #define RS485_TX                                     PD_5
 #define RS485_RX                                     PD_6
 //usart1
-#define OW_RX                                    PA_10
-#define OW_TX                                    PA_9
+#define OW_RX                                    PB_7
+#define OW_TX                                    PB_6
 
 
 typedef struct {
@@ -115,8 +111,6 @@ typedef struct {
 
 #define ADC_CHANNEL_COUNT 20
 
-#ifdef __cplusplus
-}
-#endif
+
 
 #endif // __BOARD_CONFIG_H__

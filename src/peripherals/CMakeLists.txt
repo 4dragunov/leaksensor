@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.10)
 #---------------------------------------------------------------------------------------
 
 if(${SECURE_ELEMENT} MATCHES SOFT_SE)
-    file(GLOB ${PROJECT_NAME}_SOURCES "*.c" "onewire/*.c" "soft-se/*.c")
+    file(GLOB ${PROJECT_NAME}_SOURCES "*.c" "onewire/*.c" "onewire/*.cpp" "soft-se/*.c")
 else()
     if(${SECURE_ELEMENT} MATCHES LR1110_SE)
         if (${RADIO} MATCHES lr1110)

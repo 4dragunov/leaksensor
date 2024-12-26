@@ -44,7 +44,7 @@
 #include "board-config.h"
 
 #include "OneWire.h"
-#include "Ds18B20.h"
+#include "ds18b20.h"
 #include "modbus.h"
 
 #define TEST
@@ -302,7 +302,8 @@ extern Uart_t Usart2;
 extern Adc_t Adc1;
 extern Adc_t Adc3;
 
-extern Ds18B20_t ds18b20;
+extern OneWire::Bus gOWI;
+extern OneWire::DS18B20 gDs18b20;
 
 volatile uint16_t channel_data[20] ;
 
@@ -470,6 +471,8 @@ void StartTaskDefault(void const * argument)
   /* USER CODE END StartTaskLeakMeter */
 }
 
+
+
 /* USER CODE BEGIN Header_StartTaskOneWire */
 /**
 * @brief Function implementing the oneWireTask thread.
@@ -479,29 +482,35 @@ void StartTaskDefault(void const * argument)
 /* USER CODE END Header_StartTaskOneWire */
 void StartTaskOneWire(void const * argument)
 {
-  /* USER CODE BEGIN StartTaskOneWire */
-  /* Infinite loop */
-  DS18B20_init(&ds18b20, &Usart1, DS18B20_12BITS);
-  uint8_t sensors = DS18B20_getSensorsAvailable(&ds18b20);
-  if (sensors)
-      DS18B20_startMeasure(&ds18b20, DS18B20_MEASUREALL);
+  static uint8_t sensors = 0;
   for(;;)
   {
-    osDelay(1000);
-    if (sensors) {
-      if (DS18B20_isTempReady(&ds18b20, 0)) {
-        for (uint8_t s=0;s<sensors;s++) {
-            int16_t tempRaw = DS18B20_getTempRaw(&ds18b20, s);
-            printf("sensor #%d, temp raw = %d\n", s, tempRaw);
-        }
-        DS18B20_startMeasure(&ds18b20, DS18B20_MEASUREALL);
-      }
-    } else {
-        printf("no sensors\n");
-    }
-  }
+    if(!sensors) {
+    	sensors = gDs18b20.init(OneWire::DS18B20::Resolution::SR12BITS);
+    	if(!sensors) {DBG("No sensors!\n");osDelay(200);}
+    }else {
+    	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
 
-  /* USER CODE END StartTaskOneWire */
+    	if(gDs18b20.waitTempReady(0) == osOK) {
+    		DBG("Temp ready\n");
+    		for(uint8_t s = 0; s < sensors; s++) {
+				int16_t tempRaw;
+				OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &tempRaw);
+				if(err == OneWire::DS18B20::Error::TEMP_READ){
+					DBG("sensor #%d, temp raw = %d\n", s, tempRaw);
+				}
+				else{
+					DBG("Temp not read\n");
+				}
+    		}
+        }else {
+        	DBG("temp wait error\n");
+        }
+	  } else{
+		  DBG("failed to start measure\n");
+	  }
+  }
+ }
 }
 
 
@@ -572,11 +581,11 @@ int main( void )
 /*
     osThreadStaticDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 128, modbusTaskBuffer, &modbusTaskControlBlock);
     modbusTaskHandle = osThreadCreate(osThread(modbusTask), NULL);
-
+ */
 
     osThreadStaticDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 128, oneWireTaskBuffer, &oneWireTaskControlBlock);
     oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
-
+    /*
     osThreadStaticDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
     defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
