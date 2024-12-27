@@ -25,7 +25,7 @@
 #include <math.h>
 #include <assert.h>
 #include <sys/time.h>
-
+#include <time.h>
 #include "../firmwareVersion.h"
 #include "../../common/githubVersion.h"
 #include "utilities.h"
@@ -120,9 +120,6 @@ using namespace ModBus::Slave;
 #define ADC_MAX     4095   // Максимальное значение для 12-битного АЦП
 #define R1          10000  // Значение известного сопротивления R1 в омах
 #define UART_BUFFER_SIZE 256
-
-
-
 
 
 /*!
@@ -305,8 +302,29 @@ extern Adc_t Adc3;
 extern OneWire::Bus gOWI;
 extern OneWire::DS18B20 gDs18b20;
 
-volatile uint16_t channel_data[20] ;
+typedef struct {
+	int16_t data[20];
+	uint8_t sensors;
+	time_t timestamp;
+} LeakSensorsData ;
 
+typedef struct {
+	int16_t data[8];
+	uint8_t sensors;
+	time_t timestamp;
+} ThermalSensorsData ;
+
+osPoolDef(ThermalSensorsDataPool, 1, ThermalSensorsData);                    // Define memory pool
+osPoolId  gThermalSensorsDataPool;
+
+osMessageQDef(ThermalSensorsDataBox, 1, ThermalSensorsData);              // Define message queue
+osMessageQId  gThermalSensorsDataBox;
+
+osPoolDef(LeakSensorsDataPool, 1, LeakSensorsData);                    // Define memory pool
+osPoolId  gLeakSensorsDataPool;
+
+osMessageQDef(LeakSensorsDataBox, 1, LeakSensorsData);              // Define message queue
+osMessageQId  gLeakSensorsDataBox;
 
 void SetChannels(ChannelPins* active_channel, uint8_t val) {
     // Перебираем все каналы и подаем высокий логический уровень на неактивные
@@ -446,7 +464,6 @@ void StartTaskDefault(void const * argument)
 
     // Process characters sent over the command line interface
           //CliProcess( &Usart2 );
-
           // Processes the LoRaMac events
           LmHandlerProcess( );
 
@@ -493,16 +510,22 @@ void StartTaskOneWire(void const * argument)
 
     	if(gDs18b20.waitTempReady(0) == osOK) {
     		DBG("Temp ready\n");
+    		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osPoolAlloc(gThermalSensorsDataPool));
+
     		for(uint8_t s = 0; s < sensors; s++) {
-				int16_t tempRaw;
-				OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &tempRaw);
+				OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &sensorData->data[s]);
 				if(err == OneWire::DS18B20::Error::TEMP_READ){
-					DBG("sensor #%d, temp raw = %d\n", s, tempRaw);
+					DBG("sensor #%d, temp raw = %d\n", s, sensorData->data[s]);
 				}
 				else{
 					DBG("Temp not read\n");
 				}
     		}
+    		sensorData->sensors = sensors;
+    		time(&sensorData->timestamp);
+    		osMessagePut(gThermalSensorsDataBox, (uint32_t)sensorData, osWaitForever);  // Send Message
+    		osThreadYield();                               // Cooperative multitasking
+
         }else {
         	DBG("temp wait error\n");
         }
@@ -519,29 +542,15 @@ void StartTaskLeakMeter(void const * argument)
 	BoardInitPeriph( );
 
 	while( 1 ){
+		LeakSensorsData* leakSensorsData = static_cast<LeakSensorsData*>(osPoolAlloc(gLeakSensorsDataPool));
 		// Process characters sent over the command line interface
 		for (int i = 0; i < ADC_CHANNEL_COUNT; i++) {
-			channel_data[i] = ProcessChannel(&gChannelsPins[i]);
+			leakSensorsData->data[i] = ProcessChannel(&gChannelsPins[i]);
 		}
-
-		// Processes the LoRaMac events
-		LmHandlerProcess( );
-
-		// Process application uplinks management
-		UplinkProcess( );
-
-		CRITICAL_SECTION_BEGIN( );
-		if( IsMacProcessPending == 1 )
-		{
-			// Clear flag and prevent MCU to go into low power modes.
-			IsMacProcessPending = 0;
-		}
-		else
-		{
-	        // The MCU wakes up through events
-			BoardLowPowerHandler( );
-		}
-		CRITICAL_SECTION_END( );
+		leakSensorsData->sensors = ADC_CHANNEL_COUNT;
+		time(&leakSensorsData->timestamp);
+		osMessagePut(gThermalSensorsDataBox, (uint32_t)leakSensorsData, osWaitForever);  // Send Message
+		osThreadYield();
 	}
 }
 
@@ -578,6 +587,7 @@ int main( void )
 {
     BoardInitMcu( );
 
+
 /*
     osThreadStaticDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 128, modbusTaskBuffer, &modbusTaskControlBlock);
     modbusTaskHandle = osThreadCreate(osThread(modbusTask), NULL);
@@ -593,6 +603,11 @@ int main( void )
     osThreadStaticDef(timerTestTask, StartTaskTimerTest, osPriorityNormal, 0, 128, timerTestTaskBuffer, &timerTestTaskControlBlock);
     timerTestTaskHandle = osThreadCreate(osThread(timerTestTask), NULL);
 
+	gThermalSensorsDataPool = osPoolCreate(osPool(ThermalSensorsDataPool));                 // create memory pool
+	gThermalSensorsDataBox = osMessageCreate(osMessageQ(ThermalSensorsDataBox), NULL);  // create msg queue
+
+	gLeakSensorsDataPool = osPoolCreate(osPool(LeakSensorsDataPool));                 // create memory pool
+	gLeakSensorsDataBox = osMessageCreate(osMessageQ(LeakSensorsDataBox), NULL);  // create msg queue
 
     osKernelStart();
 
@@ -720,20 +735,41 @@ static void OnSysTimeUpdate( void )
  */
 static void PrepareTxFrame( void )
 {
+	uint8_t channel = 0;
+	osEvent evt;
+
     if( LmHandlerIsBusy( ) == true )
     {
         return;
     }
 
-    uint8_t channel = 0;
-
     AppData.Port = LORAWAN_APP_PORT;
 
     CayenneLppReset( );
-    CayenneLppAddDigitalInput( channel++, AppLedStateOn );
 
-    for(int i = 0; i < 20; i++)
-    	CayenneLppAddAnalogInput( channel++, channel_data[i] * 100 / 254 );
+    evt = osMessageGet(gLeakSensorsDataBox, osWaitForever);  // wait for message
+    if (evt.status == osEventMessage) {
+    	LeakSensorsData *leakSensorsData = static_cast<LeakSensorsData*>(evt.value.p);
+
+    	CayenneLppAddDigitalInput(channel++, leakSensorsData->sensors );
+    	for(int i = 0; i < 20; i++) {
+    		CayenneLppAddRelativeHumidity(channel++, leakSensorsData->data[i] * 100 / 254 );
+    	}
+    	osPoolFree(gLeakSensorsDataPool, leakSensorsData);
+	}
+
+    evt = osMessageGet(gThermalSensorsDataBox, osWaitForever);  // wait for message
+    if (evt.status == osEventMessage) {
+    	ThermalSensorsData *thermalSensorsData = static_cast<ThermalSensorsData *>(evt.value.p);
+
+    	CayenneLppAddDigitalInput(channel++, thermalSensorsData->sensors );
+
+    	for(int i = 0; i < thermalSensorsData->sensors; i++) {
+    		CayenneLppAddTemperature( channel++, thermalSensorsData->data[i] * 100 / 254 );
+    	}
+        osPoolFree(gThermalSensorsDataPool, thermalSensorsData);
+    }
+
 
     CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
 
