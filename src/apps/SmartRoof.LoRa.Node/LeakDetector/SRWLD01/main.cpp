@@ -42,10 +42,7 @@
 #include "LmHandlerMsgDisplay.h"
 
 #include "board-config.h"
-
-#include "OneWire.h"
-#include "ds18b20.h"
-#include "modbus.h"
+#include "nonvol.h"
 
 #define TEST
 
@@ -266,6 +263,8 @@ static LmHandlerParams_t LmHandlerParams =
     .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
 };
 
+
+
 static LmhpComplianceParams_t LmhpComplianceParams =
 {
     .FwVersion = {.Value = FIRMWARE_VERSION},
@@ -394,10 +393,10 @@ uint16_t ProcessChannel(ChannelPins* channel) {
 void StartTaskModBus(void const * argument)
 {
   /* USER CODE BEGIN StartTaskModBus */
-	uint16_t modbusDATA[8];
+	ModBus::Registers modbusDATA = {};
 	Gpio_t dePin;
 	GpioInit(&dePin, PD_4, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-	ModBusSlave modbusSlave(&Usart2, &dePin, 10, modbusDATA, ARRAY_SIZE(modbusDATA));
+	ModBusSlave modbusSlave(&Usart2, &dePin, 10, modbusDATA);
   /* Infinite loop */
 
 	//modbusSlave.Start();
@@ -411,6 +410,9 @@ void StartTaskModBus(void const * argument)
   /* USER CODE END StartTaskModBus */
 }
 
+void UpdateHadlerProps(){
+
+}
 /* USER CODE BEGIN Header_StartTaskLeakMeter */
 /**
 * @brief Function implementing the leakMeterTask thread.
@@ -500,10 +502,13 @@ void StartTaskDefault(void const * argument)
 void StartTaskOneWire(void const * argument)
 {
   static uint8_t sensors = 0;
+  NvProperty<OneWire::DS18B20::Resolution> resolution(OneWire::DS18B20::Resolution::SR9BITS,
+		  OneWire::DS18B20::Resolution::SR12BITS,
+		  OneWire::DS18B20::Resolution::SR12BITS, NvVar::DS18B20_RESOLUTION);
   for(;;)
   {
     if(!sensors) {
-    	sensors = gDs18b20.init(OneWire::DS18B20::Resolution::SR12BITS);
+    	sensors = gDs18b20.init(resolution);
     	if(!sensors) {DBG("No sensors!\n");osDelay(200);}
     }else {
     	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
@@ -543,7 +548,7 @@ void StartTaskLeakMeter(void const * argument)
 
 	while( 1 ){
 		LeakSensorsData* leakSensorsData = static_cast<LeakSensorsData*>(osPoolAlloc(gLeakSensorsDataPool));
-		// Process characters sent over the command line interface
+
 		for (int i = 0; i < ADC_CHANNEL_COUNT; i++) {
 			leakSensorsData->data[i] = ProcessChannel(&gChannelsPins[i]);
 		}
@@ -772,6 +777,7 @@ static void PrepareTxFrame( void )
 
 
     CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
+   // CayenneLppAddAnalogOutput( channel++, BoardGetModbusId( ) * 100 / 254 );
 
     CayenneLppCopy( AppData.Buffer );
     AppData.BufferSize = CayenneLppGetSize( );

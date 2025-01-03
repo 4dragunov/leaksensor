@@ -35,6 +35,10 @@
 
 #include "gpio.h"
 #include "adc.h"
+#include "OneWire.h"
+#include "ds18b20.h"
+#include "modbus.h"
+#include "eeprom.h"
 /*!
  * Defines the time required for the TCXO to wakeup [ms].
  */

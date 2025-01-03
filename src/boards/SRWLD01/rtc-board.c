@@ -325,11 +325,11 @@ void RtcSetAlarm( uint32_t timeout )
     }
 
     if(timeout >= 1000) {
-    	DBG("timer plan rtc: %i\n", timeout);
+    	DBG("timer plan rtc: %li\n", timeout);
 		RtcStartAlarm( timeout );
     }
     else {
-    	DBG("timer plan tim: %i\n", timeout);
+    	DBG("timer plan tim: %li\n", timeout);
 		TimStartAlarm( timeout );
     }
 }
@@ -449,7 +449,7 @@ void RtcStartAlarm( const uint32_t timeoutMs )
      /* Convert time in seconds */
     if(RtcAcquireAccess()){
     	 gettimeofday(&RtcTimerContext.Time, NULL);
-    	 DBG("S:%i US:%i\n", (uint32_t)RtcTimerContext.Time.tv_sec, (uint32_t)RtcTimerContext.Time.tv_usec);
+    	 DBG("S:%li US:%li\n", (uint32_t)RtcTimerContext.Time.tv_sec, (uint32_t)RtcTimerContext.Time.tv_usec);
 		if (seconds) {
 		  uint16_t realtimeoutMs = (seconds* 1000) + (1000 -  (RtcTimerContext.Time.tv_usec / 1000));
 		  DBG("Real timeout before correction : %i\n", realtimeoutMs);

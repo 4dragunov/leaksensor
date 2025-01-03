@@ -153,6 +153,14 @@ SECTIONS
 
   } >RAM AT> FLASH
 
+.emulated_eeprom :
+{
+  __emulated_eeprom_start = .;
+  *(.emulated_eeprom)
+  *(.emulated_eeprom.*)
+  __emulated_eeprom_end = .;
+} >EEPROM
+
   /* Uninitialized data section into "RAM" Ram type memory */
   . = ALIGN(4);
   .bss :

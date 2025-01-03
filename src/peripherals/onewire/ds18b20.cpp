@@ -2,7 +2,7 @@
 #include "ds18b20.h"
 #include "OneWire.h"
 #include "cmsis_os.h"
-#include "utils.h"
+#include "utilities.h"
 
 namespace OneWire {
 
@@ -81,7 +81,7 @@ uint8_t DS18B20::init(const  Resolution bits)
 
 osStatus DS18B20::startMeasure(const uint8_t sensor)
 {
-    if ( sensor < mSensorsFound || sensor == to_underlying(Command::MEASUREALL) ) {
+    if ( sensor < mSensorsFound || sensor == to_underlying(DS18B20::Command::MEASUREALL) ) {
 
         struct timeval now;
         if(!gettimeofday(&now, nullptr)) {

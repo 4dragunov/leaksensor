@@ -16,7 +16,9 @@
 #include "cmsis_os.h"
 #include "uart.h"
 
+
 #ifdef __cplusplus
+#include "nonvol.h"
 
 namespace ModBus {
 
@@ -116,6 +118,82 @@ typedef union {
 
 
 
+
+class ModbusRegister;
+typedef void(*OnChanged)(ModbusRegister *reg);
+
+enum class ModbusRegisterIndex{
+	IDENT, //rw - nv
+	BAUD_RATE,//rw - nv
+	WORD_LEN,//rw - nv
+	STOP_BITS,//rw - nv
+	TEMP_SENSORS,//ro
+	TEMP_1,//ro - mand
+	TEMP_2,//ro - opt
+	TEMP_3,//ro - opt
+	TEMP_4,//ro - opt
+	TEMP_5,//ro - opt
+	TEMP_6,//ro - opt
+	TEMP_7,//ro - opt
+	TEMP_8,//ro - opt
+	WL_SENSORS,//ro
+	WL_1,//ro
+	WL_2,//ro
+	WL_3,//ro
+	WL_4,//ro
+	WL_5,//ro
+	WL_6,//ro
+	WL_7,//ro
+	WL_8,//ro
+	WL_9,//ro
+	WL_10,//ro
+	WL_12,//ro
+	WL_13,//ro
+	WL_14,//ro
+	WL_15,//ro
+	WL_16,//ro
+	WL_17,//ro
+	WL_18,//ro
+	WL_19,//ro
+	WL_20,//ro
+	COUNT
+};
+
+class ModbusRegister  {
+
+	uint16_t *reg;
+	NvProperty<uint16_t> *prop;
+	ModbusRegister* pair;
+	OnChanged onChanged;
+public:
+	ModbusRegister():reg(),prop(),pair(),onChanged() {};
+	ModbusRegister(uint16_t *reg, ModbusRegister *h = nullptr, NvProperty<uint16_t> *prop = nullptr, OnChanged changed = nullptr):
+			reg(reg)
+			,prop(prop)
+			,pair(h)
+			,onChanged(changed){
+
+	};
+	virtual ~ModbusRegister() = default;
+
+	operator uint16_t& () {
+		  return *reg;
+	}
+
+	// Write variable to RAM and through to backing store.
+	uint16_t& operator = (const uint16_t& v)
+	{
+		*reg = v;
+		update();
+		return *reg;
+	}
+	void update(void) {
+		if(onChanged)
+			onChanged(this);
+	};
+};
+typedef std::map<ModbusRegisterIndex, ModbusRegister> Registers;
+
 /**
  * @class ModBusQuery
  * @brief
@@ -130,10 +208,9 @@ typedef struct Query
     FunctionCode fct;   /*!< Function code: 1, 2, 3, 4, 5, 6, 15 or 16 */
     uint16_t regAdd;    /*!< Address of the first register to access at slave/s */
     uint16_t coilsNo;   /*!< Number of coils or registers to access */
-    uint16_t *reg;      /*!< Pointer to memory image in master */
+    Registers reg;      /*!< Pointer to memory image in master */
     uint32_t *currentTask; /*!< Pointer to the task that will receive notifications from Modbus */
 }Query_t;
-
 
 template<typename T, uint8_t S>
 	class RingBuffer {
@@ -187,6 +264,7 @@ template<typename T, uint8_t S>
 };
 
 
+
 /**
  * @class ModBus
  * @brief
@@ -198,16 +276,19 @@ class ModbusHandler
 {
 	ModBusType mType;
 	Uart_t *mUart; //HAL Serial Port handler
-	uint8_t mId; //!< 0=master, 1..247=slave number
+	NvProperty<uint8_t> mId; //!< 0=master, 1..247=slave number
+	NvProperty<uint32_t> mBaudRate;
+	NvProperty<uint8_t> mWordLen;
+	NvProperty<uint8_t> mStopBits;
+	NvProperty<uint8_t> mParity;
 	Gpio_t * mDePin;  //!< flow control pin: 0=USB or RS-232 mode, >1=RS-485 mode
 	Error  mLastError;
 	uint8_t mBuffer[MAX_BUFFER]; //Modbus buffer for communication
 	uint8_t mBufferSize;
 	uint8_t mLastRec;
-	uint16_t *mRegs;
+	Registers mRegs;
 	uint16_t mInCnt, mOutCnt, mErrCnt; //keep statistics of Modbus traffic
 	uint16_t mTimeOut;
-	uint16_t mRegsize;
 	uint8_t mDataRX;
 	int8_t mState;
 
@@ -250,11 +331,13 @@ class ModbusHandler
 
 public:
 	typedef  RingBuffer<uint8_t,static_cast<unsigned char>(MAX_BUFFER)> BusBuffer;
+
 	// Function prototypes
-	ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type = ModBusType::Slave, const uint8_t id = 10, uint16_t *regs = 0, const uint8_t regSize = 0);
+	ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, Registers &regs);
 	virtual ~ModbusHandler(){};
 
 	void Start();
+	virtual void SetLine();
 
 	void setTimeOut( uint16_t timeOut); //!<write communication watch-dog timer
 	uint16_t getTimeOut(); //!<get communication watch-dog timer value
@@ -270,6 +353,7 @@ public:
 	xTimerHandle t35TimerHandle() {return mTimerT35;}
 	BusBuffer& busBuffer() {return mBufferRX;}
 	uint8_t &  dataRX() {return mDataRX;}
+	Registers& registers() {return mRegs;}
 };
 
 extern uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
@@ -281,7 +365,7 @@ namespace Master {
 class ModBusMaster:public ModbusHandler {
 public:
 
-	ModBusMaster(Uart_t *uart, Gpio_t *dePin, uint16_t *regs, const uint8_t regsSize):ModbusHandler(uart, dePin, ModBusType::Master, 0, regs, regsSize) {};
+	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Master, 0, regs) {};
 	virtual ~ModBusMaster()=default;
 };
 }//namespace Master
@@ -291,7 +375,7 @@ namespace Slave {
 class ModBusSlave:public ModbusHandler {
 public:
 
-	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, uint16_t *regs, const uint8_t regsSize):ModbusHandler(uart, dePin, ModBusType::Slave, id, regs, regsSize) {};
+	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Slave, id, regs) {};
 	virtual ~ModBusSlave()=default;
 };
 } //namespace Slave

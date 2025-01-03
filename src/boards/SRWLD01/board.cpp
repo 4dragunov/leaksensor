@@ -390,6 +390,7 @@ static void TestTimerEvent(void* ctx)
 }
 bool Board_Timer_Test(void){
 	uint8_t pass = 0;
+
 	TimerInit( &TestTimer, TestTimerEvent );
 	for(uint8_t i = 0; i < ARRAY_SIZE(times); i++) {
 		DBG("TEST TM:%i\n",times[i]);

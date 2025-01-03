@@ -1,12 +1,11 @@
 #pragma once
-
 #include <stdint.h>
 #include <stdbool.h>
 #include <cmsis_os.h>
 #include <sys/time.h>
 #include "OneWire.h"
 
-#pragma once
+#ifdef __cplusplus
 
 namespace OneWire {
 
@@ -101,3 +100,4 @@ namespace OneWire {
 		OneWire::Bus *mBus;
 	}; //class DS18B20
 } //namespace OneWire
+#endif

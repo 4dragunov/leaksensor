@@ -23,7 +23,8 @@
 #include <stdint.h>
 #include <cmsis_os.h>
 #include "uart.h"
-#include "utils.h"
+
+#ifdef __cplusplus
 
 namespace OneWire {
 
@@ -176,3 +177,4 @@ namespace OneWire {
 	}; //class Bus
 
 } //namespace OneWire
+#endif

@@ -28,6 +28,11 @@
 #include <stdio.h>
 #include <cmsis_os.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
 #ifdef DEBUG
@@ -201,12 +206,6 @@ uint32_t Crc32Finalize( uint32_t crc );
  */
 #define CRITICAL_SECTION_END( ) BoardCriticalSectionEnd( &mask )
 
-#ifdef __cplusplus
-	#define _C extern "C"
-#else
-	#define _C
-#endif
-
 /*
  * ============================================================================
  * Following functions must be implemented inside the specific platform
@@ -218,14 +217,23 @@ uint32_t Crc32Finalize( uint32_t crc );
  *
  * \param [IN] mask Pointer to a variable where to store the CPU IRQ mask
  */
-_C void BoardCriticalSectionBegin( uint32_t *mask );
+void BoardCriticalSectionBegin( uint32_t *mask );
 
 /*!
  * Ends critical section
  *
  * \param [IN] mask Pointer to a variable where the CPU IRQ mask was stored
  */
-_C void BoardCriticalSectionEnd( uint32_t *mask );
+ void BoardCriticalSectionEnd( uint32_t *mask );
 
+#ifdef __cplusplus
+}
+
+#include <type_traits>
+template <typename E>
+constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
+    return static_cast<typename std::underlying_type<E>::type>(e);
+}
+#endif
 
 #endif // __UTILITIES_H__

@@ -4,7 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define EEPROM_PAGE0_ADDR   ((uint32_t)0x08004000)
+
+extern uint32_t __emulated_eeprom_start[];
+
+#define EEPROM_PAGE0_ADDR   ((uint32_t)__emulated_eeprom_start)
 #define EEPROM_PAGE1_ADDR   ((uint32_t)EEPROM_PAGE0_ADDR + FLASH_PAGE_SIZE)
 #define EEPROM_LENGTH       128
 
@@ -62,67 +65,75 @@ static uint16_t EE_VerifyPageFullWriteVariable(uint16_t VirtAddress, uint16_t Da
 static uint16_t EE_PageTransfer(uint16_t VirtAddress, uint16_t Data);
 static uint16_t EE_VerifyPageFullyErased(uint32_t Address);
 
-bool eepromInit()
+static uint8_t eepromReadByte(uint32_t addr);
+static bool eepromWriteByte(uint32_t addr, uint8_t data_in);
+
+Eeprom::Eeprom()
 {
-  uint16_t i;
+	if(!mInitialized) {
+		for(uint16_t i=0; i<NB_OF_VAR; i++ )
+		{
+			VirtAddVarTab[i] = i;
+		}
 
+		HAL_FLASH_Unlock();
 
-  for( i=0; i<NB_OF_VAR; i++ )
-  {
-    VirtAddVarTab[i] = i;
-  }
-
-
-  HAL_FLASH_Unlock();
-
-  if( EE_Init() == HAL_OK )
-  {
-    IsInit = true;
-  }
-
-  return IsInit;
+		mInitialized = (EE_Init() == HAL_OK);
+	}
 }
 
-bool eepromRead(uint32_t addr, uint8_t *p_data, uint32_t length)
-{
-  bool ret = true;
-  uint32_t i;
 
-  if( IsInit == false )
-  {
-    return false;
-  }
+Eeprom::~Eeprom() {
 
-
-  for (i=0; i<length; i++)
-  {
-    p_data[i] = eepromReadByte(addr+i);
-  }
-
-  return ret;
 }
 
-bool eepromWrite(uint32_t addr, uint8_t *p_data, uint32_t length)
-{
+
+bool Eeprom::read(Eeprom::address_type addr, Eeprom::data_type* buf, size_t length){
+
   bool ret = true;
-  uint32_t i;
 
-  if( IsInit == false )
+  if( mInitialized )
   {
-    return false;
-  }
+    for (size_t i=0; i<length; i++)
+	{
+    	((uint8_t*)buf)[i] = eepromReadByte((uint32_t)addr+i);
+	}
+    return ret;
+  }else
+	  return false;
+}
 
-
-  for (i=0; i<length; i++)
+bool Eeprom::write(Eeprom::address_type addr, const Eeprom::data_type* buf, size_t length){
+  bool ret = true;
+  if( mInitialized )
   {
-    ret = eepromWriteByte(addr+i, p_data[i]);
-    if (ret == false)
-    {
-      break;
-    }
+	  for (size_t i=0; i<length; i++)
+	  {
+		ret = eepromWriteByte((uint32_t)addr+i, ((uint8_t*)buf)[i]);
+		if (ret == false)
+		{
+		  break;
+		}
+	  }
+	  return ret;
   }
+  else
+	  return false;
+}
 
-  return ret;
+extern "C" bool eepromInit()
+{
+	return &Eeprom::Instance()!=nullptr;
+}
+
+extern "C" bool eepromWrite(uint16_t addr, const void* buf, size_t length)
+{
+	return Eeprom::Instance().write(addr, (Eeprom::data_type*)buf, length);
+}
+
+extern "C" bool eepromRead(uint16_t addr, const void* buf, size_t length)
+{
+	return Eeprom::Instance().read(addr, (Eeprom::data_type*)const_cast<void*>(buf), length);
 }
 
 uint8_t eepromReadByte(uint32_t addr)
@@ -848,4 +859,6 @@ static uint16_t EE_PageTransfer(uint16_t VirtAddress, uint16_t Data)
   /* Return last operation flash status */
   return flashstatus;
 }
+
+
 
