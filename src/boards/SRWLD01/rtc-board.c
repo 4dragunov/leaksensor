@@ -85,17 +85,6 @@
  * \brief Indicates if the RTC is already Initialized or not
  */
 static bool RtcInitialized = false;
-
-/*!
- * Number of days in each month on a normal year
- */
-static const uint8_t DaysInMonth[] = { 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
-/*!
- * Number of days in each month on a leap year
- */
-static const uint8_t DaysInMonthLeapYear[] = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
-
 /*!
  * \brief RTC Handle
  */
@@ -114,11 +103,6 @@ static RTC_HandleTypeDef RtcHandle =
 static TIM_HandleTypeDef htim;
 
 /*!
- * \brief RTC Alarm
- */
-static RTC_AlarmTypeDef RtcAlarm;
-
-/*!
  * Keep the value of the RTC timer when the RTC alarm is set
  * Set with the \ref RtcSetTimerContext function
  * Value is kept as a Reference to calculate alarm
@@ -132,7 +116,7 @@ RtcTimerContext_t RtcTimerContext;
  * \param [IN] time           Pointer to RTC_TimeStruct
  * \retval calendarValue Time in ticks
  */
-static uint64_t RtcGetCalendarValue( RTC_DateTypeDef* date, RTC_TimeTypeDef* time, bool renew );
+uint32_t RtcGetCalendarValue( RTC_DateTypeDef* date, RTC_TimeTypeDef* time, bool renew );
 static void TimInit(void);
 static void TimStartAlarm(uint32_t timer);
 
@@ -346,12 +330,6 @@ void RtcStopAlarm( void )
     __HAL_RTC_ALARM_EXTI_CLEAR_FLAG( );
 }
 
-static void RtcWaitWriteCompleted(void) {
-
-  while ((RTC->CRL & RTC_CRL_RTOFF) == 0)
-    ;
-}
-
 /**
  * @brief   Acquires write access to RTC registers.
  * @details Before writing to the backup domain RTC registers the previous
@@ -400,43 +378,6 @@ static bool RtcReleaseAccess(void) {
 	}
    return true;
 }
-
-static uint32_t RtcReadAlarmCounter(RTC_HandleTypeDef *hrtc)
-{
-  uint16_t high1 = 0U, low = 0U;
-
-  high1 = READ_REG(hrtc->Instance->ALRH & RTC_CNTH_RTC_CNT);
-  low   = READ_REG(hrtc->Instance->ALRL & RTC_CNTL_RTC_CNT);
-
-  return (((uint32_t) high1 << 16U) | low);
-}
-
-static uint32_t RtcReadTimeCounter(RTC_HandleTypeDef *hrtc)
-{
-  uint16_t high1 = 0U, high2 = 0U, low = 0U;
-  uint32_t timecounter = 0U;
-
-  high1 = READ_REG(hrtc->Instance->CNTH & RTC_CNTH_RTC_CNT);
-  low   = READ_REG(hrtc->Instance->CNTL & RTC_CNTL_RTC_CNT);
-  high2 = READ_REG(hrtc->Instance->CNTH & RTC_CNTH_RTC_CNT);
-
-  if (high1 != high2)
-  {
-    /* In this case the counter roll over during reading of CNTL and CNTH registers,
-       read again CNTL register then return the counter value */
-    timecounter = (((uint32_t) high2 << 16U) | READ_REG(hrtc->Instance->CNTL & RTC_CNTL_RTC_CNT));
-  }
-  else
-  {
-    /* No counter roll over during reading of CNTL and CNTH registers, counter
-       value is equal to first value of CNTL and CNTH */
-    timecounter = (((uint32_t) high1 << 16U) | low);
-  }
-
-  return timecounter;
-}
-
-
 
 void RtcStartAlarm( const uint32_t timeoutMs )
 {
@@ -490,12 +431,7 @@ void RtcStartAlarm( const uint32_t timeoutMs )
 
 uint32_t RtcGetTimerValue( void )
 {
-    RTC_TimeTypeDef time;
-    RTC_DateTypeDef date;
-
-    uint32_t calendarValue = ( uint32_t )RtcGetCalendarValue( &date, &time, true );
-
-    return( calendarValue );
+    return RtcGetCalendarTime(0);
 }
 
 struct timeval  RtcGetTimerElapsedTime( void )
@@ -516,7 +452,7 @@ uint32_t RtcGetCalendarTime( uint16_t *milliseconds )
 {
 	struct timeval tv;
 	struct timezone tzv;
-    _gettimeofday(&tv, &tzv);
+    gettimeofday(&tv, &tzv);
     if(milliseconds)
         *milliseconds = tv.tv_usec / 1000;
     return tv.tv_sec;
@@ -658,23 +594,18 @@ int _gettimeofday(struct timeval *tp, struct timezone *tzvp)
 
 int _settimeofday(const struct timeval *tp, const struct timezone *tzvp)
 {
-
-    if (RTC_EnterInitMode(&RtcHandle) != HAL_OK)
-	{
-	  return -1;
-	}
-	else
+	if (RtcAcquireAccess())
 	{
 		CRITICAL_SECTION_BEGIN( );
 	    WRITE_REG(RtcHandle.Instance->CNTH, ( tp->tv_sec >> 16U));
 	    WRITE_REG(RtcHandle.Instance->CNTL, ( tp->tv_sec & RTC_CNTL_RTC_CNT));
-	    RTC_ExitInitMode(&RtcHandle);
 	    CRITICAL_SECTION_END( );
+	    RtcReleaseAccess();
+	    HAL_RTCEx_BKUPWrite( &RtcHandle, RTC_BKP_DR3, tzvp->tz_minuteswest );
+	    HAL_RTCEx_BKUPWrite( &RtcHandle, RTC_BKP_DR4, tzvp->tz_dsttime  );
+	    return 0;
 	}
-    HAL_RTCEx_BKUPWrite( &RtcHandle, RTC_BKP_DR3, tzvp->tz_minuteswest );
-    HAL_RTCEx_BKUPWrite( &RtcHandle, RTC_BKP_DR4, tzvp->tz_dsttime  );
-
-    return 0;
+    return -1;
 }
 
 

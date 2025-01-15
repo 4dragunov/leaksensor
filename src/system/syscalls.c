@@ -66,7 +66,7 @@ __weak int __io_getchar(void) {
 int _getpid(void)
 {
 	if(osThreadGetId())
-		return osThreadGetId();
+		return (int)osThreadGetId();
 	else
 		return 1;
 }
@@ -75,7 +75,7 @@ int _kill(int pid, int sig)
 {
   (void)sig;
   errno = 0;
-  return osThreadTerminate(pid);
+  return osThreadTerminate((osThreadId)pid);
 }
 
 void _exit (int status)

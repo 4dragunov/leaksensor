@@ -167,7 +167,7 @@ __attribute__( ( always_inline ) ) __STATIC_INLINE void __set_PSP(uint32_t topOf
 
 /**
   \brief   Get Main Stack Pointer
-  \details Returns the current value of the Main Stack Pointer (MSP).
+  \details Returns the current value of t`he Main Stack Pointer (MSP).
   \return               MSP Register value
  */
 __attribute__( ( always_inline ) ) __STATIC_INLINE uint32_t __get_MSP(void)

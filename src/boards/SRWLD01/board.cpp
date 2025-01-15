@@ -566,7 +566,7 @@ uint8_t BoardGetBatteryLevel( void )
     return batteryLevel;
 }
 
-int16_t BoardGetInternalTemperature( void )
+float BoardGetInternalTemperature( void )
 {
     uint16_t tempRaw = 0;
 

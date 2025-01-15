@@ -21,7 +21,8 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "stm32f1xx.h"
-
+#include "assert.h"
+#include "utilities.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -65,6 +66,16 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName);
 void vApplicationMallocFailedHook(void);
 
 /* USER CODE BEGIN 1 */
+const char *GetTaskName( xTaskHandle task )
+{
+    TaskStatus_t xTaskDetails;
+    // Use the handle to obtain further information about the task.
+     vTaskGetInfo( task,
+                     &xTaskDetails,
+                     pdTRUE, // Include the high water mark in xTaskDetails.
+                     eInvalid ); // Include the task state in xTaskDetails.
+     return xTaskDetails.pcTaskName;
+}
 /* Functions needed when configGENERATE_RUN_TIME_STATS is on */
 __weak void configureTimerForRunTimeStats(void)
 {
@@ -83,6 +94,8 @@ void vApplicationStackOverflowHook(xTaskHandle xTask, signed char *pcTaskName)
    /* Run time stack overflow checking is performed if
    configCHECK_FOR_STACK_OVERFLOW is defined to 1 or 2. This hook function is
    called if a stack overflow is detected. */
+	DBG("Stack Overflow:%s\n",pcTaskName);
+	assert(0);
 }
 /* USER CODE END 4 */
 
@@ -99,6 +112,8 @@ void vApplicationMallocFailedHook(void)
    FreeRTOSConfig.h, and the xPortGetFreeHeapSize() API function can be used
    to query the size of free heap space that remains (although it does not
    provide information on how the remaining heap might be fragmented). */
+	DBG("malloc failed:%s\n", GetTaskName(xTaskGetCurrentTaskHandle()));
+	assert(0);
 }
 /* USER CODE END 5 */
 

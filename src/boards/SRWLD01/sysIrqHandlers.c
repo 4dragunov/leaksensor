@@ -35,7 +35,7 @@ void NMI_Handler( void )
  * \param  None
  * \retval None
  */
-#define HARD_FAULT_HANDLER_ENABLED
+
 #if defined( HARD_FAULT_HANDLER_ENABLED )
 void HardFault_Handler_C( unsigned int *args )
 {

@@ -21,9 +21,10 @@ enable_language(C ASM CXX)
 #---------------------------------------------------------------------------------------
 # Target
 #---------------------------------------------------------------------------------------
-set(MCU "STM32F103xE")
+set(MCU STM32F103xE)
 set(BOARD_MCU ${MCU} PARENT_SCOPE)
 set(BOARD_MCU ${MCU})
+
 include(CMakePrintHelpers)
 
 cmake_print_variables(BOARD_MCU)
@@ -42,6 +43,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/uart-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/nonvol.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom-data.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/modbus_callback.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.c"

@@ -1,19 +1,15 @@
-#include "eeprom.h"
-
-#include "stm32f1xx.h"
 #include <stdbool.h>
 #include <stdint.h>
-
+#include <stm32f1xx.h>
+#include "eeprom.h"
+#include "nonvol.h"
+#include "utilities.h"
 
 extern uint32_t __emulated_eeprom_start[];
 
 #define EEPROM_PAGE0_ADDR   ((uint32_t)__emulated_eeprom_start)
 #define EEPROM_PAGE1_ADDR   ((uint32_t)EEPROM_PAGE0_ADDR + FLASH_PAGE_SIZE)
-#define EEPROM_LENGTH       128
-
-
-static bool IsInit = false;
-static uint16_t VirtAddVarTab[EEPROM_LENGTH];
+#define EEPROM_LENGTH       (2048/sizeof(uint32_t))
 
 /* Define the size of the sectors to be used */
 #define PAGE_SIZE               (uint32_t)FLASH_PAGE_SIZE  /* Page size */
@@ -65,19 +61,15 @@ static uint16_t EE_VerifyPageFullWriteVariable(uint16_t VirtAddress, uint16_t Da
 static uint16_t EE_PageTransfer(uint16_t VirtAddress, uint16_t Data);
 static uint16_t EE_VerifyPageFullyErased(uint32_t Address);
 
-static uint8_t eepromReadByte(uint32_t addr);
-static bool eepromWriteByte(uint32_t addr, uint8_t data_in);
+
+bool Eeprom::mInitialized = false;
+const Eeprom::address_type Eeprom::base = EEPROM_START;          // start address of first record in EEPROM
+const Eeprom::address_type Eeprom::end = EEPROM_SIZE;           // end of available EEPROM
 
 Eeprom::Eeprom()
 {
 	if(!mInitialized) {
-		for(uint16_t i=0; i<NB_OF_VAR; i++ )
-		{
-			VirtAddVarTab[i] = i;
-		}
-
 		HAL_FLASH_Unlock();
-
 		mInitialized = (EE_Init() == HAL_OK);
 	}
 }
@@ -87,6 +79,13 @@ Eeprom::~Eeprom() {
 
 }
 
+Eeprom& Eeprom::Instance()
+{
+   static Eeprom s;
+   printf("epr s %p\n",&Eeprom::Instance);
+   DBG("epr ss %p\n",(void*)&s);
+   return s;
+}
 
 bool Eeprom::read(Eeprom::address_type addr, Eeprom::data_type* buf, size_t length){
 
@@ -94,27 +93,29 @@ bool Eeprom::read(Eeprom::address_type addr, Eeprom::data_type* buf, size_t leng
 
   if( mInitialized )
   {
-    for (size_t i=0; i<length; i++)
+	  size_t i = 0;
+    do
 	{
-    	((uint8_t*)buf)[i] = eepromReadByte((uint32_t)addr+i);
-	}
-    return ret;
+    	buf[i] = eepromReadWord((uint32_t)addr + i++);
+	} while(--length);
+    return true;
   }else
 	  return false;
 }
 
 bool Eeprom::write(Eeprom::address_type addr, const Eeprom::data_type* buf, size_t length){
   bool ret = true;
-  if( mInitialized )
+  if( Eeprom::mInitialized )
   {
-	  for (size_t i=0; i<length; i++)
+	  size_t i = 0;
+	  do
 	  {
-		ret = eepromWriteByte((uint32_t)addr+i, ((uint8_t*)buf)[i]);
+		ret = eepromWriteWord((uint32_t)addr + i, buf[i++]);
 		if (ret == false)
 		{
 		  break;
 		}
-	  }
+	  }while(--length);
 	  return ret;
   }
   else
@@ -136,28 +137,27 @@ extern "C" bool eepromRead(uint16_t addr, const void* buf, size_t length)
 	return Eeprom::Instance().read(addr, (Eeprom::data_type*)const_cast<void*>(buf), length);
 }
 
-uint8_t eepromReadByte(uint32_t addr)
+uint16_t eepromReadWord(uint32_t addr)
 {
   uint16_t read_value;
 
 
-  if( IsInit == false ) return 0;
+  if( Eeprom::mInitialized == false ) return 0;
 
   HAL_FLASH_Unlock();
 
   EE_ReadVariable((uint16_t)addr,  &read_value);
 
-  return (uint8_t)read_value;
+  return read_value;
 }
 
-
-bool eepromWriteByte(uint32_t addr, uint8_t data_in)
+bool eepromWriteWord(uint32_t addr, uint16_t data_in)
 {
-  if( IsInit == false ) return false;
+  if( Eeprom::mInitialized == false ) return false;
 
   HAL_FLASH_Unlock();
 
-  if (EE_WriteVariable(addr, (uint16_t)data_in) == HAL_OK)
+  if (EE_WriteVariable(addr, data_in) == HAL_OK)
   {
     return true;
   }
@@ -170,7 +170,7 @@ bool eepromWriteByte(uint32_t addr, uint8_t data_in)
 
 uint32_t eepromGetLength(void)
 {
-  if( IsInit == false ) return 0;
+  if( Eeprom::mInitialized == false ) return 0;
 
   return NB_OF_VAR;
 }
@@ -193,9 +193,6 @@ bool eepromFormat(void)
 
 /* Global variable used to store variable value in read sequence */
 uint16_t DataVar = 0;
-
-/* Virtual address defined by the user: 0xFFFF value is prohibited */
-extern uint16_t VirtAddVarTab[NB_OF_VAR];
 
 
 /**
@@ -281,19 +278,19 @@ uint16_t EE_Init(void)
         /* Transfer data from Page1 to Page0 */
         for (varidx = 0; varidx < NB_OF_VAR; varidx++)
         {
-          if (( *(__IO uint16_t*)(PAGE0_BASE_ADDRESS + 6)) == VirtAddVarTab[varidx])
+          if (( *(__IO uint16_t*)(PAGE0_BASE_ADDRESS + 6)) == varidx)
           {
             x = varidx;
           }
           if (varidx != x)
           {
             /* Read the last variables' updates */
-            readstatus = EE_ReadVariable(VirtAddVarTab[varidx], &DataVar);
+            readstatus = EE_ReadVariable(varidx, &DataVar);
             /* In case variable corresponding to the virtual address was found */
             if (readstatus != 0x1)
             {
               /* Transfer the variable to the Page0 */
-              eepromstatus = EE_VerifyPageFullWriteVariable(VirtAddVarTab[varidx], DataVar);
+              eepromstatus = EE_VerifyPageFullWriteVariable(varidx, DataVar);
               /* If program operation was failed, a Flash error code is returned */
               if (eepromstatus != HAL_OK)
               {
@@ -390,19 +387,19 @@ uint16_t EE_Init(void)
         /* Transfer data from Page0 to Page1 */
         for (varidx = 0; varidx < NB_OF_VAR; varidx++)
         {
-          if ((*(__IO uint16_t*)(PAGE1_BASE_ADDRESS + 6)) == VirtAddVarTab[varidx])
+          if ((*(__IO uint16_t*)(PAGE1_BASE_ADDRESS + 6)) == varidx)
           {
             x = varidx;
           }
           if (varidx != x)
           {
             /* Read the last variables' updates */
-            readstatus = EE_ReadVariable(VirtAddVarTab[varidx], &DataVar);
+            readstatus = EE_ReadVariable(varidx, &DataVar);
             /* In case variable corresponding to the virtual address was found */
             if (readstatus != 0x1)
             {
               /* Transfer the variable to the Page1 */
-              eepromstatus = EE_VerifyPageFullWriteVariable(VirtAddVarTab[varidx], DataVar);
+              eepromstatus = EE_VerifyPageFullWriteVariable(varidx, DataVar);
               /* If program operation was failed, a Flash error code is returned */
               if (eepromstatus != HAL_OK)
               {
@@ -816,15 +813,15 @@ static uint16_t EE_PageTransfer(uint16_t VirtAddress, uint16_t Data)
   /* Transfer process: transfer variables from old to the new active page */
   for (varidx = 0; varidx < NB_OF_VAR; varidx++)
   {
-    if (VirtAddVarTab[varidx] != VirtAddress)  /* Check each variable except the one passed as parameter */
+    if (varidx != VirtAddress)  /* Check each variable except the one passed as parameter */
     {
       /* Read the other last variable updates */
-      readstatus = EE_ReadVariable(VirtAddVarTab[varidx], &DataVar);
+      readstatus = EE_ReadVariable(varidx, &DataVar);
       /* In case variable corresponding to the virtual address was found */
       if (readstatus != 0x1)
       {
         /* Transfer the variable to the new active page */
-        eepromstatus = EE_VerifyPageFullWriteVariable(VirtAddVarTab[varidx], DataVar);
+        eepromstatus = EE_VerifyPageFullWriteVariable(varidx, DataVar);
         /* If program operation was failed, a Flash error code is returned */
         if (eepromstatus != HAL_OK)
         {

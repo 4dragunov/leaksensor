@@ -6,7 +6,7 @@
 
 namespace OneWire {
 
-#define BITS2CMD(x) (31 + (32 * x))
+#define BITS2CMD(x) ((uint8_t)(31u + (32u * x)))
 #define usec2sec(x)  (x / (1000 * 1000))
 #define sec2usec(x)  (x * 1000 * 1000)
 #define msecOnSec (1000 * 1000)
@@ -69,7 +69,7 @@ uint8_t DS18B20::init(const  Resolution bits)
     					to_underlying(Bus::Command::WSCRATCHPAD),
                         0x7F, //0b0111 1111 //temp high
                         0xFF, //0b1111 1111 //temp low 
-						BITS2CMD(to_underlying(bits)) };
+						BITS2CMD((uint8_t)to_underlying(bits)) };
 
     if ( mBus->reset()) {
         //Select all sensors.

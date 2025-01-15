@@ -18,6 +18,11 @@
 
 
 #ifdef __cplusplus
+#include <map>
+#include <vector>
+#include <functional>
+#include <variant>
+
 #include "nonvol.h"
 
 namespace ModBus {
@@ -119,80 +124,165 @@ typedef union {
 
 
 
-class ModbusRegister;
-typedef void(*OnChanged)(ModbusRegister *reg);
 
-enum class ModbusRegisterIndex{
-	IDENT, //rw - nv
-	BAUD_RATE,//rw - nv
-	WORD_LEN,//rw - nv
-	STOP_BITS,//rw - nv
-	TEMP_SENSORS,//ro
-	TEMP_1,//ro - mand
-	TEMP_2,//ro - opt
-	TEMP_3,//ro - opt
-	TEMP_4,//ro - opt
-	TEMP_5,//ro - opt
-	TEMP_6,//ro - opt
-	TEMP_7,//ro - opt
-	TEMP_8,//ro - opt
-	WL_SENSORS,//ro
-	WL_1,//ro
-	WL_2,//ro
-	WL_3,//ro
-	WL_4,//ro
-	WL_5,//ro
-	WL_6,//ro
-	WL_7,//ro
-	WL_8,//ro
-	WL_9,//ro
-	WL_10,//ro
-	WL_12,//ro
-	WL_13,//ro
-	WL_14,//ro
-	WL_15,//ro
-	WL_16,//ro
-	WL_17,//ro
-	WL_18,//ro
-	WL_19,//ro
-	WL_20,//ro
-	COUNT
-};
+// helper type for the visitor #4
+template<class... Ts>
+struct overloaded : Ts... { using Ts::operator()...; };
+// explicit deduction guide (not needed as of C++20)
+template<class... Ts>
+overloaded(Ts...) -> overloaded<Ts...>;
 
-class ModbusRegister  {
 
-	uint16_t *reg;
-	NvProperty<uint16_t> *prop;
-	ModbusRegister* pair;
-	OnChanged onChanged;
-public:
-	ModbusRegister():reg(),prop(),pair(),onChanged() {};
-	ModbusRegister(uint16_t *reg, ModbusRegister *h = nullptr, NvProperty<uint16_t> *prop = nullptr, OnChanged changed = nullptr):
-			reg(reg)
-			,prop(prop)
-			,pair(h)
-			,onChanged(changed){
 
-	};
-	virtual ~ModbusRegister() = default;
+class Register {
 
-	operator uint16_t& () {
-		  return *reg;
-	}
+	template <typename Var1, typename Var2> struct variant_flat;
 
-	// Write variable to RAM and through to backing store.
-	uint16_t& operator = (const uint16_t& v)
+	template <typename ... Ts1, typename ... Ts2>
+	struct variant_flat<std::variant<Ts1...>, std::variant<Ts2...>>
 	{
-		*reg = v;
-		update();
-		return *reg;
-	}
-	void update(void) {
-		if(onChanged)
-			onChanged(this);
+	    using type = std::variant<Ts1..., Ts2...>;
 	};
+public:
+	enum class Access{
+				RO,
+				RW,
+				WO
+	};
+	typedef void (*OnChanged)(const Register *reg);
+	typedef void (*OnAccessError)(const Register *reg);
+
+	template<typename T>
+	struct RefValue{
+		T& value;
+		T  min;
+		T  max;
+	 RefValue(T&value, T min, T max):value(value),min(min),max(max){}
+	 operator const T& () const {
+		return value;
+	}
+
+	const T& operator = (const T& v) {
+		value = std::clamp(v, min, max);
+		return value;
+	}
+	};
+    typedef std::variant<
+    		RefValue<bool>,
+			RefValue<uint8_t>,
+			RefValue<uint16_t>,
+			RefValue<uint32_t>,
+			RefValue<int8_t>,
+			RefValue<int16_t>,
+			RefValue<int32_t>
+    > RefValueTypes;
+    using nvb_ref  = std::reference_wrapper<NvProperty<bool>>;
+    using nv8_ref  = std::reference_wrapper<NvProperty<uint8_t>>;
+    using nv16_ref = std::reference_wrapper<NvProperty<uint16_t>>;
+    using nv32_ref = std::reference_wrapper<NvProperty<uint32_t>>;
+    using nv64_ref = std::reference_wrapper<NvProperty<uint64_t>>;
+    typedef std::variant<
+    		nvb_ref,
+			nv8_ref,
+			nv16_ref,
+			nv32_ref,
+			nv64_ref
+    > NvValueTypes;
+    using VariantType_all = variant_flat<RefValueTypes, NvValueTypes>::type;
+    typedef std::vector<VariantType_all>  ValuesType;
+
+	typedef std::function<uint16_t (const Register::ValuesType &vs)> GetterType;
+	typedef std::function<void(Register::ValuesType &vs, const uint16_t value)> SetterType;
+	const SetterType defaultSetter = [](Register::ValuesType &nvp, const uint16_t value){
+		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
+			std::get<Register::nvb_ref>(nvp[0]).get() = value;
+		} else
+		if(std::holds_alternative<Register::nv8_ref>(nvp[0])) {
+			std::get<Register::nv8_ref>(nvp[0]).get() = value;
+		}else
+		if(std::holds_alternative<Register::nv16_ref>(nvp[0])) {
+			std::get<Register::nv16_ref>(nvp[0]).get() = value;
+		}else
+		if(std::holds_alternative<Register::nv32_ref>(nvp[0])) {
+			std::get<Register::nv32_ref>(nvp[0]).get() = value;
+		}else
+		if(std::holds_alternative<Register::RefValue<bool>>(nvp[0])) {
+			std::get<Register::RefValue<bool>>(nvp[0]) = value;
+		} else
+		if(std::holds_alternative<Register::RefValue<uint8_t>>(nvp[0])) {
+			std::get<Register::RefValue<uint8_t>>(nvp[0]) = value;
+		}else
+		if(std::holds_alternative<Register::RefValue<uint16_t>>(nvp[0])) {
+			std::get<Register::RefValue<uint16_t>>(nvp[0]) = value;
+		}else
+		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
+			std::get<Register::RefValue<uint32_t>>(nvp[0]) = value;
+		}
+		return value;
+	};
+	const GetterType defaultGetter = [](const Register::ValuesType &nvp)->uint16_t{
+		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
+			return std::get<Register::nvb_ref>(nvp[0]).get();
+		} else
+		if(std::holds_alternative<Register::nv8_ref>(nvp[0])) {
+			return std::get<Register::nv8_ref>(nvp[0]).get();
+		}else
+		if(std::holds_alternative<Register::nv16_ref>(nvp[0])) {
+			return std::get<Register::nv16_ref>(nvp[0]).get();
+		}else
+		if(std::holds_alternative<Register::nv32_ref>(nvp[0])) {
+			return std::get<Register::nv32_ref>(nvp[0]).get();
+		}else
+		if(std::holds_alternative<Register::RefValue<bool>>(nvp[0])) {
+			return std::get<Register::RefValue<bool>>(nvp[0]);
+		} else
+		if(std::holds_alternative<Register::RefValue<uint8_t>>(nvp[0])) {
+			return std::get<Register::RefValue<uint8_t>>(nvp[0]);
+		}else
+		if(std::holds_alternative<Register::RefValue<uint16_t>>(nvp[0])) {
+			return std::get<Register::RefValue<uint16_t>>(nvp[0]);
+		}else
+		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
+			return std::get<Register::RefValue<uint32_t>>(nvp[0]);
+		}
+		return 0;
+	};
+	const OnChanged defaultOnChanged = [](const Register *reg){};
+	const OnAccessError defaultOnAccessError = [](const Register *reg){};
+	Register();
+	Register(Register::ValuesType values,
+			Register::Access acc = Register::Access::RW,
+			Register::GetterType getter = [](const Register::ValuesType &vs)->uint16_t{return 0;},
+			Register::SetterType setter = [](Register::ValuesType &vs, const uint16_t value){},
+			Register::OnChanged changed = nullptr,
+			Register::OnAccessError error = nullptr);
+
+
+	virtual ~Register() = default;
+
+	virtual operator const uint16_t& ();
+	virtual const uint16_t& operator = (const uint16_t& value);
+	virtual const uint16_t& operator &= (const uint16_t& value);
+	virtual const uint16_t& operator |= (const uint16_t& value);
+	const Access  acces;
+protected:
+
+private:
+	ValuesType mValues;
+	GetterType mGetter;
+	SetterType mSetter;
+	OnChanged  mOnChanged;
+	OnAccessError mOnAccessError;
 };
-typedef std::map<ModbusRegisterIndex, ModbusRegister> Registers;
+
+enum class Index: uint8_t {
+	IDENT,
+	BAUD_RATE_AND_WORD_LEN,
+	STOP_BITS_AND_PARITY,//rw - nv
+	END
+};
+
+using Registers = std::map<Index, Register>;
 
 /**
  * @class ModBusQuery
@@ -202,6 +292,7 @@ typedef std::map<ModbusRegisterIndex, ModbusRegister> Registers;
  * A Master may keep several of these structures and send them cyclically or
  * use them according to program needs.
  */
+
 typedef struct Query
 {
     uint8_t id;       /*!< Slave address between 1 and 247. 0 means broadcast */
@@ -271,13 +362,12 @@ template<typename T, uint8_t S>
  * Modbus handler structure
  * Contains all the variables required for Modbus daemon operation
  */
-
 class ModbusHandler
 {
 	ModBusType mType;
 	Uart_t *mUart; //HAL Serial Port handler
-	NvProperty<uint8_t> mId; //!< 0=master, 1..247=slave number
-	NvProperty<uint32_t> mBaudRate;
+	NvProperty<uint8_t> mId;        //!< 0=master, 1..247=slave number
+	NvProperty<uint8_t> mBaudRate; // as 115200/baud
 	NvProperty<uint8_t> mWordLen;
 	NvProperty<uint8_t> mStopBits;
 	NvProperty<uint8_t> mParity;
@@ -287,6 +377,7 @@ class ModbusHandler
 	uint8_t mBufferSize;
 	uint8_t mLastRec;
 	Registers mRegs;
+	typedef Registers::key_type Index_type;
 	uint16_t mInCnt, mOutCnt, mErrCnt; //keep statistics of Modbus traffic
 	uint16_t mTimeOut;
 	uint8_t mDataRX;
@@ -365,7 +456,9 @@ namespace Master {
 class ModBusMaster:public ModbusHandler {
 public:
 
-	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Master, 0, regs) {};
+	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Master, 0, regs) {
+
+	}
 	virtual ~ModBusMaster()=default;
 };
 }//namespace Master
@@ -375,7 +468,8 @@ namespace Slave {
 class ModBusSlave:public ModbusHandler {
 public:
 
-	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Slave, id, regs) {};
+	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Slave, id, regs) {
+	}
 	virtual ~ModBusSlave()=default;
 };
 } //namespace Slave

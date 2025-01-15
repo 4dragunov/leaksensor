@@ -42,7 +42,7 @@ enum BoardPowerSources
 
 enum Temperature
 {
-    NO_DATA = -126,
+    NO_DATA = -127,
 };
 
 /*!
@@ -99,7 +99,7 @@ uint8_t BoardGetBatteryLevel( void );
  * \retval temperature * 256
  */
 int16_t BoardGetTemperature( void );
-
+float BoardGetInternalTemperature( void );
 /*!
  * Returns a pseudo random seed generated using the MCU Unique ID
  *

@@ -2,13 +2,14 @@
 
 #include <algorithm>
 #include <cstring>
+#include <numeric>
 #include <cassert>
-#include <map>
 #include "eeprom.h"
 #include "utilities.h"
 
-enum class NvVar:uint8_t {
-	MODBUS_SLAVE_ID = 1, // 0 not used
+typedef enum NvVar {
+	FIRST_VAR = 0,
+	MODBUS_SLAVE_ID = 0,
 	MODBUS_SPEED,
 	MODBUS_BITS,
 	MODBUS_STOP_BITS,
@@ -16,13 +17,15 @@ enum class NvVar:uint8_t {
 	TEMP_CHANNELS,
 	DS18B20_RESOLUTION,
 	LORA_REGION,
-	LORA_TX_DUTYCYCLE_RND,
 	LORA_TX_DUTYCYCLE,
+	LORA_TX_DUTYCYCLE_RND,
 	LORA_DEFAULT_DATARATE,
 	LORA_ADR_STATE,
+	LORA_APP_PORT,
 	CHECKSUMM,
-	COUNT
-};
+	NV_LAST_VAR,
+	EEPROM_LENGTH = NV_LAST_VAR
+}NvVar;
 
 
 typedef uint8_t NvSum;		// ones-complement checksum
@@ -33,22 +36,17 @@ class NvField
   typename Eeprom::address_type addr;		// current read/write address in device
   NvSum sum;		// checksum accumulator
 
-  // Update ones-complement checksum with contents of buffer and advance
-  // address with its length.
-
   void note(const void* buf, size_t len)
   {
     const uint8_t* p = static_cast<const uint8_t*>(buf);
 
-    for (size_t i = 0; i < len; i++)
+    for (size_t i = 0; i < len * sizeof(typename Eeprom::data_type); i++)
     {
       NvSum t = sum;
 
       if ((sum += *p++) < t)
         sum += 1;
     }
-
-    addr += len;
   }
 
 public:
@@ -56,25 +54,28 @@ public:
 
   // Write buffer to device; update checksum and address.
 
-  void write(const void* buf, size_t len)
+  bool write(const void* buf, size_t len)
   {
-    eeprom.write(addr, (Eeprom::data_type*)buf, len);
-    note(buf, len);
+	bool retval = Eeprom::Instance().write(addr, (Eeprom::data_type*)buf, len);
+	if(retval)
+		note(buf, len);
+    return retval;
   }
 
   // Read from device into buffer; update checksum and address.
 
   bool read(void* buf, size_t len)
   {
-    bool retval = eeprom.read(addr, (Eeprom::data_type*)buf, len);
-    note(buf, len);
+    bool retval = Eeprom::Instance().read(addr, (Eeprom::data_type*)buf, len);
+    if(retval)
+    	note(buf, len);
     return retval;
   }
 
   // Write or read arbitrary types.
 
   template <typename T>
-  void write(const T& t) { write(&t, sizeof(t)); }
+  bool write(const T& t) { return write(&t, sizeof(t)); }
   template <typename T>
   bool read(T& t) { return read(&t, sizeof(t)); }
 
@@ -99,10 +100,11 @@ public:
 // Nonvolatile storage layout manager for byte-eraseable devices.
 class NvStore
 {
-  Eeprom& eeprom;       // EEPROM driver
+public:
+  Eeprom &eeprom;       // EEPROM driver
 
-  const typename std::remove_reference<decltype(eeprom)>::type::address_type base = STORE_BEGIN;          // start address of first record in EEPROM
-  const typename std::remove_reference<decltype(eeprom)>::type::address_type end = STORE_END;           // end of available EEPROM
+  const Eeprom::address_type base = STORE_BEGIN;          // start address of first record in EEPROM
+  const Eeprom::address_type end = STORE_END;           // end of available EEPROM
 
   const size_t maxNameLen = 16;  // maximum record name length
   NvStore()
@@ -111,78 +113,120 @@ class NvStore
 
   NvStore(NvStore const&)= delete;
   NvStore& operator= (NvStore const&)= delete;
-  const std::map<NvVar, uint8_t> registry;
+  static const uint8_t registry[NvVar::NV_LAST_VAR];
   public:
   typedef decltype(eeprom) eeprom_type;
 
-  static NvStore& Instance()
-  {
-        static NvStore s;
-        return s;
-  }
+  static NvStore& Instance();
   
-  typename std::remove_reference<decltype(eeprom)>::type::address_type open(const NvVar& name, void* buf, size_t len)
+  Eeprom::address_type open(const NvVar& name, void* buf)
   {
-    typename std::remove_reference<decltype(eeprom)>::type::address_type addr = base;
-    //check than each address has unique data length associated
-   // assert((registry::find(name) != NvStore::registry.end() && registry[name] == len));
 
-    for(const auto& [key, value] : registry) {
-    	if(key == name){
-    		addr += to_underlying(name);
-    		NvField payload(eeprom, addr);
-    		payload.read(buf, len);
+    if(name < NvVar::NV_LAST_VAR) {
+    		Eeprom::address_type addr = std::accumulate(registry, &registry[name], base);// size in words
+    		if(buf) {
+				NvField payload(eeprom, addr);
+				payload.read(buf, registry[name]);
+    		}
     		return addr ;
-    	}else
-    		addr += value;
-    }
-    return 0;
+    } else
+    	return end + 1;
   }
 
-  void update(typename std::remove_reference<decltype(eeprom)>::type::address_type  addr, const void* buf, size_t len)
+  bool update(const NvVar& name, const void* buf)
   {
-    if (addr)
-    {
-      NvField payload(eeprom, addr);
-      payload.write(buf, len);
-    }
+      NvField payload(eeprom, open(name, nullptr));
+      return payload.write(buf, registry[name]);
   }
 
+  void dump() {
+
+	for (int i = 0; i < NvVar::NV_LAST_VAR; i++) {
+		union {
+		uint8_t bytes[4];
+		uint32_t dword;
+		}buf = {};
+		DBG("id:%i adr: %i, val: %li size: %i\n", i, open((NvVar)i, buf.bytes), buf.dword,  NvStore::registry[i]);
+	}
+}
 };
 
 
-// Nonvolatile variable.
+template<typename T>
+using is_class_enum = std::integral_constant<
+   bool,
+   std::is_enum<T>::value && !std::is_convertible<T, int>::value>;
+
 
 template < typename T>
 class NvProperty
 {
- T mMin;
- T mMax;
- T mV;                  // RAM image of the nonvolatile variable
+  using TT = typename std::conditional<
+	    std::is_enum<T>::value,
+	    std::underlying_type<T>,
+	    std::enable_if<true, T>>::type::type;
+
+  TT value;                   // RAM image of the nonvolatile variable
+  uint16_t  addr;        // EEPROM address of the record payload
+  NvVar id;
 public:
-  NvStore& store;       // EEPROM storage layout manager
-  uint16_t  addr;          // EEPROM address of the record payload
-
-  NvProperty(const T& min, const T& max, const T& _t,  const NvVar& id)
-  : mMin(min), mMax(max), mV(_t), store(NvStore::Instance()), addr(store.open(id, &mV, sizeof(mV)))
+  const TT min;
+  const TT max;
+  /*
+  template <typename U = T, std::enable_if_t<std::is_enum_v<U>>* = nullptr>
+  constexpr explicit NvProperty(const U& mint, const U& maxt, const U& defVal,  const NvVar& id):
+	value(to_underlying(defVal)),
+	addr(NvStore::Instance().open(id, &value)),
+	id(id),
+	min(to_underlying(mint)),
+	max(to_underlying(maxt))
   {
-	 // std::clamp(mV, min, max);
+	  DBG("st %p\n", (void*)&NvStore::Instance());
+	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
+	  if((value > max) || (value < min)) {
+		  if(NvStore::Instance().update(id, &defVal)){
+			  value = to_underlying(defVal);
+			  DBG("default set\n");
+		  } else {
+			  DBG("default fail \n");
+		  }
+	  } else {
+		  DBG("%i skip\n",addr);
+	  }
+  }
+  template <typename U = T, std::enable_if_t<!std::is_enum_v<U> && std::is_integral_v<U>>* = nullptr>
+
+  constexpr explicit */
+  NvProperty(const T& min, const T& max, const T& defVal,  const NvVar& id):
+	value(defVal),
+	addr(NvStore::Instance().open(id, &value)),
+	id(id),
+	min(min),
+	max(max)
+  {
+	  DBG("st %p\n", (void*)&NvStore::Instance());
+	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
+	  if((value > max) || (value < min)) {
+		  if(NvStore::Instance().update(id, &defVal)){
+			  value = defVal;
+			  DBG("default set\n");
+		  } else {
+			  DBG("default fail \n");
+		  }
+	  } else {
+		  DBG("%i skip\n",addr);
+	  }
   }
 
-  // Read variable from RAM image.
-  
   operator const T& () const {
-	  return mV;
+	  return value;
   }
 
-  // Write variable to RAM and through to backing store.
-  
   const T& operator = (const T& v)
   { 
-
-    mV = v;//std::clamp(v, mMin, mMax);
-    store.update(addr, &mV, sizeof(mV));
-    return mV;
+	value = std::clamp(v, min, max);
+    NvStore::Instance().update(id, &value);
+    return value;
   }
 };  
 

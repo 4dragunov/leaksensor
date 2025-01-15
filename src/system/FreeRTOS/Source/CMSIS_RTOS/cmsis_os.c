@@ -26,7 +26,7 @@
  *  
  *----------------------------------------------------------------------------
  *
- * Portions Copyright © 2016 STMicroelectronics International N.V. All rights reserved.
+ * Portions Copyright ï¿½ 2016 STMicroelectronics International N.V. All rights reserved.
  * Portions Copyright (c) 2013 ARM LIMITED
  * All rights reserved.
  * Redistribution and use in source and binary forms, with or without
@@ -138,7 +138,10 @@ static int inHandlerMode (void)
 * @retval status code that indicates the execution status of the function.
 * @note   MUST REMAIN UNCHANGED: \b osKernelInitialize shall be consistent in every CMSIS-RTOS.
 */
-osStatus osKernelInitialize (void);
+osStatus osKernelInitialize (void)
+{
+	return osOK;
+}
 
 /**
 * @brief  Start the RTOS Kernel with executing the specified thread.

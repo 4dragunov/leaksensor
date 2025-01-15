@@ -22,6 +22,7 @@
 /*! \file periodic-uplink/NucleoL152/main.c */
 
 #include <stdio.h>
+#include <memory>
 #include <math.h>
 #include <assert.h>
 #include <sys/time.h>
@@ -43,6 +44,7 @@
 
 #include "board-config.h"
 #include "nonvol.h"
+#include "utilities.h"
 
 #define TEST
 
@@ -83,6 +85,7 @@ using namespace ModBus::Slave;
  */
 #define LORAWAN_ADR_STATE                           LORAMAC_HANDLER_ADR_ON
 
+
 /*!
  * Default datarate
  *
@@ -113,11 +116,26 @@ using namespace ModBus::Slave;
  */
 #define LORAWAN_APP_PORT                            2
 
+
 #define VREF        3.3   // Опорное напряжение АЦП
 #define ADC_MAX     4095   // Максимальное значение для 12-битного АЦП
 #define R1          10000  // Значение известного сопротивления R1 в омах
 #define UART_BUFFER_SIZE 256
 
+
+NvProperty<uint8_t> gActiveRegion(LORAMAC_REGION_AS923, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
+
+NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_resolution(to_underlying(OneWire::DS18B20::Resolution::SR9BITS),
+		to_underlying(OneWire::DS18B20::Resolution::SR12BITS),
+		to_underlying(OneWire::DS18B20::Resolution::SR12BITS), NvVar::DS18B20_RESOLUTION);
+//2678400000
+NvProperty<uint32_t> gLoraAppTxDutyCycle(1000,  1000u * 60u * 60u * 24u* 31u, APP_TX_DUTYCYCLE, NvVar::LORA_TX_DUTYCYCLE);
+
+NvProperty<uint16_t> gLoraAppTxDutyCycleRnd(100,  1000 * 2, APP_TX_DUTYCYCLE_RND, NvVar::LORA_TX_DUTYCYCLE_RND);
+NvProperty<uint8_t> gLoraAdrState(0,  1, LORAWAN_ADR_STATE, NvVar::LORA_ADR_STATE);
+
+NvProperty<uint8_t> gLoraDefaultDatarate(DR_0,  DR_15, LORAWAN_DEFAULT_DATARATE, NvVar::LORA_DEFAULT_DATARATE);
+NvProperty<uint8_t> gLoraAppPort(1,  223, LORAWAN_APP_PORT, NvVar::LORA_APP_PORT);
 
 /*!
  *
@@ -172,15 +190,15 @@ static TimerEvent_t Led2Timer;
 static TimerEvent_t LedBeaconTimer;
 
 osThreadId modbusTaskHandle;
-uint32_t modbusTaskBuffer[ 128 ];
+uint32_t modbusTaskBuffer[ 256 ];
 osStaticThreadDef_t modbusTaskControlBlock;
 
 osThreadId oneWireTaskHandle;
-uint32_t oneWireTaskBuffer[ 128 ];
+uint32_t oneWireTaskBuffer[ 256 ];
 osStaticThreadDef_t oneWireTaskControlBlock;
 
 osThreadId defaultTaskHandle;
-uint32_t defaultTaskBuffer[ 128 ];
+uint32_t defaultTaskBuffer[ 256 ];
 osStaticThreadDef_t defaultTaskControlBlock;
 
 
@@ -188,6 +206,135 @@ osStaticThreadDef_t defaultTaskControlBlock;
 osThreadId timerTestTaskHandle;
 uint32_t timerTestTaskBuffer[ 128 ];
 osStaticThreadDef_t timerTestTaskControlBlock;
+
+static uint8_t ds18b20Sensors = 0;
+int16_t ds18b20SensorTemp[8] = {};
+uint16_t gLeakSensorData[20] = {};
+uint8_t  gLeakSensorCount = 20;
+
+enum class Index:std::underlying_type_t<ModBus::Index>{
+			DS18B20_RESOLUTION = static_cast<std::underlying_type_t<ModBus::Index>>(ModBus::Index::END),
+			LORA_REGION,
+			LORA_TX_DUTYCYCLE,
+			LORA_TX_DUTYCYCLE_RND,
+			LORA_DEFAULT_DATARATE,
+			LORA_ADR_STATE,
+			LORA_APP_PORT,
+			TEMP_SENSORS,//ro
+			TEMP_1,//ro - mand
+			TEMP_2,//ro - opt
+			TEMP_3,//ro - opt
+			TEMP_4,//ro - opt
+			TEMP_5,//ro - opt
+			TEMP_6,//ro - opt
+			TEMP_7,//ro - opt
+			TEMP_8,//ro - opt
+			WL_SENSORS,//ro
+			WL_1,//ro
+			WL_2,//ro
+			WL_3,//ro
+			WL_4,//ro
+			WL_5,//ro
+			WL_6,//ro
+			WL_7,//ro
+			WL_8,//ro
+			WL_9,//ro
+			WL_10,//ro
+			WL_12,//ro
+			WL_13,//ro
+			WL_14,//ro
+			WL_15,//ro
+			WL_16,//ro
+			WL_17,//ro
+			WL_18,//ro
+			WL_19,//ro
+			WL_20,//ro
+			COUNT
+		};
+
+ModBus::Registers modbusRegisters = {
+		{static_cast<ModBus::Index>(Index::DS18B20_RESOLUTION), ModBus::Register({std::ref(ds18b20_resolution)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_REGION),           ModBus::Register({std::ref(gActiveRegion)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_TX_DUTYCYCLE),     ModBus::Register({std::ref(gLoraAppTxDutyCycle)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_TX_DUTYCYCLE_RND), ModBus::Register({std::ref(gLoraAppTxDutyCycleRnd)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_DEFAULT_DATARATE), ModBus::Register({std::ref(gLoraDefaultDatarate)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_ADR_STATE),        ModBus::Register({std::ref(gLoraAdrState)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+		{static_cast<ModBus::Index>(Index::LORA_APP_PORT),         ModBus::Register({std::ref(gLoraAppPort)}, ModBus::Register::Access::RW,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		},
+
+		{static_cast<ModBus::Index>(Index::TEMP_SENSORS),          ModBus::Register({ModBus::Register::RefValue<uint8_t>{ds18b20Sensors, 0, 8}}, ModBus::Register::Access::RO,
+				[](const ModBus::Register::ValuesType &nvp)->uint16_t
+				{
+					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
+				},
+				[](ModBus::Register::ValuesType &nvp, const uint16_t value)->uint16_t {
+					std::get<ModBus::Register::nv8_ref>(nvp[0]).get() = value;
+					return value;
+				})
+		}
+};
 
 static void OnMacProcessNotify( void );
 static void OnNvmDataChange( LmHandlerNvmContextStates_t state, uint16_t size );
@@ -235,7 +382,7 @@ static void OnLedBeaconTimerEvent( void* context );
 static LmHandlerCallbacks_t LmHandlerCallbacks =
 {
     .GetBatteryLevel = BoardGetBatteryLevel,
-    .GetTemperature = NULL,
+    .GetTemperature = BoardGetInternalTemperature,
     .GetRandomSeed = BoardGetRandomSeed,
     .OnMacProcess = OnMacProcessNotify,
     .OnNvmDataChange = OnNvmDataChange,
@@ -250,19 +397,17 @@ static LmHandlerCallbacks_t LmHandlerCallbacks =
     .OnSysTimeUpdate = OnSysTimeUpdate,
 };
 
-static LmHandlerParams_t LmHandlerParams =
-{
-    .Region = ACTIVE_REGION,
-    .AdrEnable = LORAWAN_ADR_STATE,
-    .IsTxConfirmed = LORAWAN_DEFAULT_CONFIRMED_MSG_STATE,
-    .TxDatarate = LORAWAN_DEFAULT_DATARATE,
-    .PublicNetworkEnable = LORAWAN_PUBLIC_NETWORK,
-    .DutyCycleEnabled = LORAWAN_DUTYCYCLE_ON,
-    .DataBufferMaxSize = LORAWAN_APP_DATA_BUFFER_MAX_SIZE,
-    .DataBuffer = AppDataBuffer,
-    .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
-};
-
+static LmHandlerParams_t LmHandlerParams =  {
+        .Region = (LoRaMacRegion_t)(uint8_t)gActiveRegion,
+        .AdrEnable = gLoraAdrState,
+        .IsTxConfirmed = LORAWAN_DEFAULT_CONFIRMED_MSG_STATE,
+        .TxDatarate = gLoraDefaultDatarate,
+        .PublicNetworkEnable = LORAWAN_PUBLIC_NETWORK,
+        .DutyCycleEnabled = LORAWAN_DUTYCYCLE_ON,
+        .DataBufferMaxSize = LORAWAN_APP_DATA_BUFFER_MAX_SIZE,
+        .DataBuffer = AppDataBuffer,
+        .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
+    };
 
 
 static LmhpComplianceParams_t LmhpComplianceParams =
@@ -390,18 +535,37 @@ uint16_t ProcessChannel(ChannelPins* channel) {
 }
 
 
+
+
 void StartTaskModBus(void const * argument)
 {
   /* USER CODE BEGIN StartTaskModBus */
-	ModBus::Registers modbusDATA = {};
+
+
+
+	for(size_t sensor = 0; sensor < ds18b20Sensors ; sensor++){
+
+		modbusRegisters.emplace(static_cast<ModBus::Index>(to_underlying(Index::TEMP_1) + sensor),
+				ModBus::Register({ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
+	}
+
+	modbusRegisters.emplace(static_cast<ModBus::Index>(Index::WL_SENSORS), ModBus::Register({ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
+
+
+	for(size_t sensor = 0; sensor < gLeakSensorCount; sensor++) {
+		modbusRegisters.emplace(static_cast<ModBus::Index>(to_underlying(Index::WL_1) + sensor),
+				ModBus::Register({ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
+	}
+
 	Gpio_t dePin;
 	GpioInit(&dePin, PD_4, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-	ModBusSlave modbusSlave(&Usart2, &dePin, 10, modbusDATA);
+	auto slave = std::make_unique<ModBusSlave>(&Usart2, &dePin, 10, modbusRegisters);
   /* Infinite loop */
 
-	//modbusSlave.Start();
+	slave->Start();
 	for(;;)
 	{
+
 		osDelay(500);
 		GpioWrite( &Led1, 1 );
 		GpioWrite( &Led2, 1 );
@@ -431,14 +595,34 @@ void StartTaskDefault(void const * argument)
 
 	TimerInit( &LedBeaconTimer, OnLedBeaconTimerEvent );
 	TimerSetValue( &LedBeaconTimer, 5000 );
-    // Initialize transmission periodicity variable
-    TxPeriodicity = APP_TX_DUTYCYCLE + randr( -APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND );
+
+
 
     const Version_t appVersion = { .Value = FIRMWARE_VERSION };
     const Version_t gitHubVersion = { .Value = GITHUB_VERSION };
     DisplayAppInfo( "periodic-uplink-lpp",
                     &appVersion,
                     &gitHubVersion );
+
+
+
+
+    // Initialize transmission periodicity variable
+    TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
+    LmHandlerParams =   {
+        .Region = (LoRaMacRegion_t)(uint8_t)gActiveRegion,
+        .AdrEnable = gLoraAdrState,
+        .IsTxConfirmed = LORAWAN_DEFAULT_CONFIRMED_MSG_STATE,
+        .TxDatarate = gLoraDefaultDatarate,
+        .PublicNetworkEnable = LORAWAN_PUBLIC_NETWORK,
+        .DutyCycleEnabled = LORAWAN_DUTYCYCLE_ON,
+        .DataBufferMaxSize = LORAWAN_APP_DATA_BUFFER_MAX_SIZE,
+        .DataBuffer = AppDataBuffer,
+        .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
+    };
+
+
+
 
     if ( LmHandlerInit( &LmHandlerCallbacks, &LmHandlerParams ) != LORAMAC_HANDLER_SUCCESS )
     {
@@ -501,35 +685,35 @@ void StartTaskDefault(void const * argument)
 /* USER CODE END Header_StartTaskOneWire */
 void StartTaskOneWire(void const * argument)
 {
-  static uint8_t sensors = 0;
-  NvProperty<OneWire::DS18B20::Resolution> resolution(OneWire::DS18B20::Resolution::SR9BITS,
-		  OneWire::DS18B20::Resolution::SR12BITS,
-		  OneWire::DS18B20::Resolution::SR12BITS, NvVar::DS18B20_RESOLUTION);
+
+
   for(;;)
   {
-    if(!sensors) {
-    	sensors = gDs18b20.init(resolution);
-    	if(!sensors) {DBG("No sensors!\n");osDelay(200);}
+    if(!ds18b20Sensors) {
+    	ds18b20Sensors = gDs18b20.init(static_cast<OneWire::DS18B20::Resolution>((uint8_t)ds18b20_resolution));
+    	if(!ds18b20Sensors) {DBG("No sensors!\n");osDelay(200);}
     }else {
     	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
 
     	if(gDs18b20.waitTempReady(0) == osOK) {
     		DBG("Temp ready\n");
+    		//gLoraAppPort.store.dump();
+    		DBG("Heap %i\n",xPortGetFreeHeapSize());
     		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osPoolAlloc(gThermalSensorsDataPool));
-
-    		for(uint8_t s = 0; s < sensors; s++) {
-				OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &sensorData->data[s]);
-				if(err == OneWire::DS18B20::Error::TEMP_READ){
-					DBG("sensor #%d, temp raw = %d\n", s, sensorData->data[s]);
+    		if(sensorData) {
+				for(uint8_t s = 0; s < ds18b20Sensors; s++) {
+					OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &sensorData->data[s]);
+					if(err == OneWire::DS18B20::Error::TEMP_READ){
+						DBG("sensor #%d, temp raw = %d\n", s, sensorData->data[s]);
+					}
+					else{
+						DBG("Temp not read\n");
+					}
 				}
-				else{
-					DBG("Temp not read\n");
-				}
-    		}
-    		sensorData->sensors = sensors;
-    		time(&sensorData->timestamp);
-    		osMessagePut(gThermalSensorsDataBox, (uint32_t)sensorData, osWaitForever);  // Send Message
-    		osThreadYield();                               // Cooperative multitasking
+				sensorData->sensors = ds18b20Sensors;
+				time(&sensorData->timestamp);
+				osMessagePut(gThermalSensorsDataBox, (uint32_t)sensorData, osWaitForever);  // Send Message
+    		}// Cooperative multitasking
 
         }else {
         	DBG("temp wait error\n");
@@ -555,7 +739,6 @@ void StartTaskLeakMeter(void const * argument)
 		leakSensorsData->sensors = ADC_CHANNEL_COUNT;
 		time(&leakSensorsData->timestamp);
 		osMessagePut(gThermalSensorsDataBox, (uint32_t)leakSensorsData, osWaitForever);  // Send Message
-		osThreadYield();
 	}
 }
 
@@ -580,7 +763,7 @@ void StartTaskTimerTest(void const * argument)
     	osDelay(100);
     	gettimeofday(&tv, NULL);
     	GpioToggle(&Led1);
-    	DBG("tv: sec: %d, usec:%d \n", (uint32_t)tv.tv_sec, (uint32_t)tv.tv_usec);
+    	DBG("tv: sec: %ld, usec:%ld \n", (uint32_t)tv.tv_sec, (uint32_t)tv.tv_usec);
     }
 
 }
@@ -592,28 +775,26 @@ int main( void )
 {
     BoardInitMcu( );
 
+    osKernelInitialize();                    // initialize CMSIS-RTOS
 
-/*
-    osThreadStaticDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 128, modbusTaskBuffer, &modbusTaskControlBlock);
+    osThreadStaticDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 256, modbusTaskBuffer, &modbusTaskControlBlock);
     modbusTaskHandle = osThreadCreate(osThread(modbusTask), NULL);
- */
 
-    osThreadStaticDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 128, oneWireTaskBuffer, &oneWireTaskControlBlock);
-    oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
-    /*
-    osThreadStaticDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
-    defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    //osThreadStaticDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 128, oneWireTaskBuffer, &oneWireTaskControlBlock);
+   // oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
 
- */
-    osThreadStaticDef(timerTestTask, StartTaskTimerTest, osPriorityNormal, 0, 128, timerTestTaskBuffer, &timerTestTaskControlBlock);
-    timerTestTaskHandle = osThreadCreate(osThread(timerTestTask), NULL);
+    //osThreadStaticDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
+    //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+ //   osThreadStaticDef(timerTestTask, StartTaskTimerTest, osPriorityNormal, 0, 128, timerTestTaskBuffer, &timerTestTaskControlBlock);
+//    timerTestTaskHandle = osThreadCreate(osThread(timerTestTask), NULL);
 
 	gThermalSensorsDataPool = osPoolCreate(osPool(ThermalSensorsDataPool));                 // create memory pool
 	gThermalSensorsDataBox = osMessageCreate(osMessageQ(ThermalSensorsDataBox), NULL);  // create msg queue
 
 	gLeakSensorsDataPool = osPoolCreate(osPool(LeakSensorsDataPool));                 // create memory pool
 	gLeakSensorsDataBox = osMessageCreate(osMessageQ(LeakSensorsDataBox), NULL);  // create msg queue
-
+	DBG("Heap %i\n",xPortGetFreeHeapSize());
     osKernelStart();
 
     while(1) {
@@ -667,7 +848,7 @@ static void OnTxData( LmHandlerTxParams_t* params )
 static void OnRxData( LmHandlerAppData_t* appData, LmHandlerRxParams_t* params )
 {
     DisplayRxUpdate( appData, params );
-
+//TODO:rx data process
     switch( appData->Port )
     {
     case 1: // The application LED can be controlled on port 1 or 2
@@ -830,7 +1011,7 @@ static void OnTxPeriodicityChanged( uint32_t periodicity )
 
     if( TxPeriodicity == 0 )
     { // Revert to application default periodicity
-        TxPeriodicity = APP_TX_DUTYCYCLE + randr( -APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND );
+       //TODO:!! TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
     }
 
     // Update timer periodicity
