@@ -77,6 +77,8 @@ typedef struct USID{
 Gpio_t Led1;
 Gpio_t Led2;
 
+Gpio_t BattPwr;
+
 /*
  * MCU objects
  */
@@ -164,6 +166,8 @@ void BoardInitMcu( void )
         // LEDs
         GpioInit( &Led1, LED_1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
         GpioInit( &Led2, LED_2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+
+        GpioInit( &BattPwr, BAT_PWR, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
 
         FifoInit( &Usart1.FifoTx, Uart1TxBuffer, UART1_FIFO_TX_SIZE );
         FifoInit( &Usart1.FifoRx, Uart1RxBuffer, UART1_FIFO_RX_SIZE );
@@ -395,7 +399,7 @@ uint8_t BoardGetBatteryLevel( void )
 
     BatteryVoltage = BoardBatteryMeasureVoltage( );
 
-    if( GetBoardPowerSource( ) == USB_POWER )
+    if( GetBoardPowerSource( ) == EXT_POWER )
     {
         batteryLevel = BATTERY_LORAWAN_EXT_PWR;
     }
@@ -422,7 +426,7 @@ uint8_t BoardGetBatteryLevel( void )
     return batteryLevel;
 }
 
-float BoardGetInternalTemperature( void )
+float BoardGetTemperature( void )
 {
     uint16_t tempRaw = 0;
 
@@ -431,17 +435,7 @@ float BoardGetInternalTemperature( void )
     tempRaw = AdcReadChannel( &AdcTempSens );
 
     // Compute and return the temperature in degree celcius * 256
-    return ( int16_t ) COMPUTE_TEMPERATURE( tempRaw, BatteryVoltage );
-}
-
-int16_t BoardGetTemperature( void ) {
-	 int16_t tempRaw = NO_DATA;
-     if (gDs18b20.isTempReady(0)) {
-           gDs18b20.getTempRaw(0, &tempRaw);
-     }else{
-    	 gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL));
-     }
-     return tempRaw;
+    return COMPUTE_TEMPERATURE( tempRaw, BatteryVoltage ) / 256.0;
 }
 
 static void BoardUnusedIoInit( void )
@@ -576,7 +570,7 @@ void HAL_MspDeInit(void)
 
 uint8_t GetBoardPowerSource( void )
 {
-   return BATTERY_POWER;
+   return (GpioRead(&BattPwr) == GPIO_PIN_SET)? EXT_POWER : BATTERY_POWER;
 }
 
 /**

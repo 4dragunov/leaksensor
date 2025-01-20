@@ -380,7 +380,7 @@ static void OnLedBeaconTimerEvent( void* context );
 static LmHandlerCallbacks_t LmHandlerCallbacks =
 {
     .GetBatteryLevel = BoardGetBatteryLevel,
-    .GetTemperature = BoardGetInternalTemperature,
+    .GetTemperature = BoardGetTemperature,
     .GetRandomSeed = BoardGetRandomSeed,
     .OnMacProcess = OnMacProcessNotify,
     .OnNvmDataChange = OnNvmDataChange,

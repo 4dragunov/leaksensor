@@ -99,6 +99,7 @@
 #define OW_RX                                    PB_7
 #define OW_TX                                    PB_6
 
+#define BAT_PWR                                  PF_3
 
 #define ADC_CHANNEL_COUNT 20
 

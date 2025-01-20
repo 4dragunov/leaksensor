@@ -36,7 +36,7 @@ extern "C"
  */
 enum BoardPowerSources
 {
-    USB_POWER = 0,
+    EXT_POWER = 0,
     BATTERY_POWER,
 };
 
@@ -98,8 +98,7 @@ uint8_t BoardGetBatteryLevel( void );
  *
  * \retval temperature * 256
  */
-int16_t BoardGetTemperature( void );
-float BoardGetInternalTemperature( void );
+float BoardGetTemperature( void );
 /*!
  * Returns a pseudo random seed generated using the MCU Unique ID
  *
