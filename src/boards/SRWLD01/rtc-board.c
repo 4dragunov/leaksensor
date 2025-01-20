@@ -582,8 +582,9 @@ int _gettimeofday(struct timeval *tp, struct timezone *tzvp)
     	assert_param(tp);
     }
     if (tzvp)  {
-    	tzvp->tz_minuteswest = 0;
-    	tzvp->tz_dsttime = 0;
+    	tzvp->tz_minuteswest = HAL_RTCEx_BKUPRead( &RtcHandle, RTC_BKP_DR3);
+    	tzvp->tz_dsttime = HAL_RTCEx_BKUPRead( &RtcHandle, RTC_BKP_DR4 );
+
     }else {
     	// Allowed to be not set
     	// Not a error
