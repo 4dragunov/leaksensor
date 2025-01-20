@@ -39,6 +39,7 @@
 #include "ds18b20.h"
 #include "modbus.h"
 #include "eeprom.h"
+#include "sensors.h"
 /*!
  * Defines the time required for the TCXO to wakeup [ms].
  */
@@ -99,22 +100,6 @@
 #define OW_TX                                    PB_6
 
 
-typedef struct {
-	PinNames toggle_pin1;      // Первый пин для ToggleCurrentDirection
-	PinNames toggle_pin2;      // Второй пин для ToggleCurrentDirection
-	PinNames analog_pin;       // Вход АЦП
-	uint32_t adc_channel;
-	void* hadc;               // Указатель на обработчик АЦП
-} ChannelConfig;
-
-typedef struct {
-	Gpio_t ptp;
-	Gpio_t ntp;
-	Adc_t ap;
-} ChannelPins;
-
 #define ADC_CHANNEL_COUNT 20
-
-
 
 #endif // __BOARD_CONFIG_H__

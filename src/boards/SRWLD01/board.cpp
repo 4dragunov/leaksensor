@@ -20,7 +20,7 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
-#include <assert.h>
+#include <cassert>
 #include "stm32f1xx.h"
 #include "utilities.h"
 #include "gpio.h"
@@ -37,6 +37,7 @@
 #include "OneWire.h"
 #include "Ds18B20.h"
 #include "FreeRTOS.h"
+#include "sensors.h"
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
     #include "sx126x-board.h"
@@ -69,6 +70,7 @@ typedef struct USID{
 
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+
 /*!
  * LED GPIO pins objects
  */
@@ -88,152 +90,6 @@ OneWire::DS18B20 gDs18b20(&gOWI, OneWire::DS18B20::Resolution::SR12BITS);
 
 Usid *UniqueSiliconID = (Usid *) U_ID;
 
-
-const ChannelConfig gChannelConfig[ADC_CHANNEL_COUNT] = {
-
-    {// канал 1
-     .toggle_pin1 = PE_12,
-     .toggle_pin2 = PE_1,
-	 .analog_pin =  PB_1,
-	 .adc_channel = ADC_CHANNEL_9,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 2
-     .toggle_pin1 = PE_13,
-     .toggle_pin2 = PE_0,
-	 .analog_pin =  PB_0,
-	 .adc_channel = ADC_CHANNEL_8,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 3
-     .toggle_pin1 = PE_14,
-     .toggle_pin2 =	PB_9,
-	 .analog_pin =  PC_5,
-	 .adc_channel = ADC_CHANNEL_15,
-	 .hadc = (void*)ADC1
-    },
-    { // канал 4
-     .toggle_pin1 = PE_15,
-	 .toggle_pin2 = PB_8,
-	 .analog_pin =  PC_4,
-	 .adc_channel = ADC_CHANNEL_14,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 5
-     .toggle_pin1 =PB_10,
-     .toggle_pin2 = PG_14,
-	 .analog_pin =  PA_7,
-	 .adc_channel = ADC_CHANNEL_7,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 6
-     .toggle_pin1 =PD_9,
-     .toggle_pin2 = PG_13,
-	 .analog_pin =  PA_6,
-	 .adc_channel = ADC_CHANNEL_6,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 7
-     .toggle_pin1 =PD_10,
-     .toggle_pin2 = PG_12,
-	 .analog_pin =  PA_5,
-	 .adc_channel = ADC_CHANNEL_5,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 8
-     .toggle_pin1 = PD_11,
-     .toggle_pin2 = PG_11,
-	 .analog_pin =  PA_4,
-	 .adc_channel = ADC_CHANNEL_4,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 9
-     .toggle_pin1 = PD_12,
-     .toggle_pin2 = PG_10,
-	 .analog_pin =  PA_3,
-	 .adc_channel = ADC_CHANNEL_3,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 10
-     .toggle_pin1 = PD_13,
-     .toggle_pin2 = PG_9,
-	 .analog_pin =  PA_2,
-	 .adc_channel = ADC_CHANNEL_2,
-	 .hadc = (void*)ADC1
-    },
-    { // канал 11
-     .toggle_pin1 = PD_14,
-     .toggle_pin2 = PD_3,
-	 .analog_pin =  PA_1,
-	 .adc_channel = ADC_CHANNEL_1,
-	 .hadc =(void*)ADC1
-    },
-    { // канал 12
-     .toggle_pin1 = PD_15,
-     .toggle_pin2 = PD_2,
-	 .analog_pin =  PC_3,
-	 .adc_channel = ADC_CHANNEL_13,
-	 .hadc = (void*)ADC1
-    },
-    { // канал 13
-     .toggle_pin1 = PG_2,
-     .toggle_pin2 = PD_1,
-	 .analog_pin =  PC_2,
-	 .adc_channel = ADC_CHANNEL_12,
-	 .hadc =(void*)ADC1
-    },
-    { // канал 14
-     .toggle_pin1 = PG_3,
-     .toggle_pin2 = PD_0,
-     .analog_pin =  PC_1,
-	 .adc_channel = ADC_CHANNEL_11,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 15
-     .toggle_pin1 = PG_4,
-     .toggle_pin2 = PC_11,
-	 .analog_pin =  PC_0,
-	 .adc_channel = ADC_CHANNEL_10,
-	 .hadc = (void*)ADC1
-    },
-    {// канал 16
-     .toggle_pin1 = PG_5,
-     .toggle_pin2 = PC_10,
-	 .analog_pin =  PF_10,
-	 .adc_channel = ADC_CHANNEL_8,
-	 .hadc = (void*)ADC3
-    },
-    { // канал 17
-     .toggle_pin1 = PG_6,
-     .toggle_pin2 = PA_12,
-	 .analog_pin =  PF_9,
-	 .adc_channel = ADC_CHANNEL_7,
-	 .hadc = (void*)ADC3
-    },
-    {// канал 18
-     .toggle_pin1 = PG_7,
-     .toggle_pin2 = PA_11,
-	 .analog_pin =  PF_8,
-	 .adc_channel = ADC_CHANNEL_6,
-	 .hadc = (void*)ADC3
-    },
-    { // канал 19
-     .toggle_pin1 = PC_6,
-     .toggle_pin2 = PC_9,
-	 .analog_pin =  PF_7,
-	 .adc_channel = ADC_CHANNEL_5,
-	 .hadc = (void*)ADC3
-    },
-    {// канал 20
-     .toggle_pin1 = PC_7,
-     .toggle_pin2 = PC_8,
-	 .analog_pin =  PF_6,
-	 .adc_channel = ADC_CHANNEL_4,
-	 .hadc = (void*)ADC3
-    }
-};
-
-ChannelPins gChannelsPins[ADC_CHANNEL_COUNT];
 
 #if defined( LR1110MB1XXS )
     extern lr1110_t LR1110;

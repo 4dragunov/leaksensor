@@ -44,6 +44,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/nonvol.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sensors.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom-data.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/modbus_callback.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.c"

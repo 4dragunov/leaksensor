@@ -234,8 +234,46 @@ template <typename E>
 constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
     return static_cast<typename std::underlying_type<E>::type>(e);
 }
+/*-----------------------------------------------*/
+#include <variant>
+#include <ostream>
+template<class T>
+struct streamer {
+    const T& val;
+};
+template<class T> streamer(T) -> streamer<T>;
 
+template<class T>
+std::ostream& operator<<(std::ostream& os, streamer<T> s) {
+    os << s.val;
+    return os;
+}
 
-#endif
+template<class... Ts>
+std::ostream& operator<<(std::ostream& os, streamer<std::variant<Ts...>> sv) {
+   std::visit([&os](const auto& v) { os << streamer{v}; }, sv.val);
+   return os;
+}
+/*-----------------------------------------------*/
+template < typename C, C beginVal, C endVal>
+class enum_iterator {
+  typedef typename std::underlying_type<C>::type val_t;
+  int val;
+public:
+  enum_iterator(const C & f) : val(static_cast<val_t>(f)) {}
+  enum_iterator() : val(static_cast<val_t>(beginVal)) {}
+  enum_iterator operator++() {
+    ++val;
+    return *this;
+  }
+  C operator*() { return static_cast<C>(val); }
+  enum_iterator begin() const { return *this; } //default ctor is good
+  enum_iterator end() const {
+      static const enum_iterator endIter=++enum_iterator(endVal); // cache it
+      return endIter;
+  }
+  bool operator!=(const enum_iterator& i) { return val != i.val; }
 
+};
+#endif //cpp
 #endif // __UTILITIES_H__

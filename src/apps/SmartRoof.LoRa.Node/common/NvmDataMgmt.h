@@ -41,6 +41,7 @@
 extern "C" {
 #endif
 
+
 /*!
  * \brief NVM Management event.
  *

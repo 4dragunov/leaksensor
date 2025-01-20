@@ -66,7 +66,9 @@ bool Eeprom::mInitialized = false;
 const Eeprom::address_type Eeprom::base = EEPROM_START;          // start address of first record in EEPROM
 const Eeprom::address_type Eeprom::end = EEPROM_SIZE;           // end of available EEPROM
 
-Eeprom::Eeprom()
+osMutexDef (RwLock);
+
+Eeprom::Eeprom():mRwLock(osMutexCreate(osMutex(RwLock)))
 {
 	if(!mInitialized) {
 		HAL_FLASH_Unlock();
@@ -76,7 +78,12 @@ Eeprom::Eeprom()
 
 
 Eeprom::~Eeprom() {
-
+	if (mRwLock != nullptr)  {
+		osStatus status = osMutexDelete(mRwLock);
+	    if (status != osOK)  {
+	          assert(0);
+	        }
+	  }
 }
 
 Eeprom& Eeprom::Instance()
@@ -89,42 +96,52 @@ Eeprom& Eeprom::Instance()
 
 bool Eeprom::read(Eeprom::address_type addr, Eeprom::data_type* buf, size_t length){
 
-  bool ret = true;
 
-  if( mInitialized )
-  {
-	  size_t i = 0;
-    do
-	{
-    	buf[i] = eepromReadWord((uint32_t)addr + i++);
-	} while(--length);
+ //	  assert_param(addr < this->size);
+ //	  assert_param(buf);
+ //	  assert_param(length > 0);
+	bool ret = true;
+   if( mInitialized )
+   {
+		size_t i = 0;
+		osMutexWait(mRwLock, osWaitForever);
+		do
+		{
+			buf[i] = eepromReadWord((uint32_t)addr + i++);
+		} while(--length);
+		osMutexRelease(mRwLock);
     return true;
-  }else
+   }else
 	  return false;
 }
 
 bool Eeprom::write(Eeprom::address_type addr, const Eeprom::data_type* buf, size_t length){
-  bool ret = true;
-  if( Eeprom::mInitialized )
-  {
-	  size_t i = 0;
-	  do
-	  {
-		ret = eepromWriteWord((uint32_t)addr + i, buf[i++]);
-		if (ret == false)
-		{
-		  break;
-		}
-	  }while(--length);
-	  return ret;
-  }
-  else
+	//	  assert_param(addr < this->size);
+	//	  assert_param(buf);
+	//	  assert_param(length > 0);
+	bool ret = true;
+   if( Eeprom::mInitialized )
+   {
+		  osMutexWait(mRwLock, osWaitForever);
+		  size_t i = 0;
+		  do
+		  {
+			ret = eepromWriteWord((uint32_t)addr + i, buf[i++]);
+			if (ret == false)
+			{
+			  break;
+			}
+		  }while(--length);
+		  osMutexRelease(mRwLock);
+		  return ret;
+   }
+   else
 	  return false;
 }
 
 extern "C" bool eepromInit()
 {
-	return &Eeprom::Instance()!=nullptr;
+	return (&Eeprom::Instance() != nullptr);
 }
 
 extern "C" bool eepromWrite(uint16_t addr, const void* buf, size_t length)

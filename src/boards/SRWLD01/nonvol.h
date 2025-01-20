@@ -4,8 +4,13 @@
 #include <cstring>
 #include <numeric>
 #include <cassert>
+#include <ostream>
 #include "eeprom.h"
 #include "utilities.h"
+#include "LoraMac.h"
+
+
+#define EEPROM_NV_SIZE  128
 
 typedef enum NvVar {
 	FIRST_VAR = 0,
@@ -92,10 +97,8 @@ public:
   typename Eeprom::address_type next() const { return addr; }
 };
 
-#define STORE_BEGIN 0
-#define STORE_END 128
-
-
+#define STORE_BEGIN (0 + sizeof(LoRaMacNvmData_t))
+#define STORE_END (STORE_BEGIN + EEPROM_NV_SIZE)
 
 // Nonvolatile storage layout manager for byte-eraseable devices.
 class NvStore
@@ -106,7 +109,6 @@ public:
   const Eeprom::address_type base = STORE_BEGIN;          // start address of first record in EEPROM
   const Eeprom::address_type end = STORE_END;           // end of available EEPROM
 
-  const size_t maxNameLen = 16;  // maximum record name length
   NvStore()
   : eeprom(Eeprom::Instance()){ }
   virtual ~NvStore() = default;
@@ -119,7 +121,7 @@ public:
 
   static NvStore& Instance();
   
-  Eeprom::address_type open(const NvVar& name, void* buf)
+  virtual Eeprom::address_type open(const NvVar& name, void* buf)
   {
 
     if(name < NvVar::NV_LAST_VAR) {
@@ -133,7 +135,7 @@ public:
     	return end + 1;
   }
 
-  bool update(const NvVar& name, const void* buf)
+  virtual bool update(const NvVar& name, const void* buf)
   {
       NvField payload(eeprom, open(name, nullptr));
       return payload.write(buf, registry[name]);
@@ -148,9 +150,10 @@ public:
 		}buf = {};
 		DBG("id:%i adr: %i, val: %li size: %i\n", i, open((NvVar)i, buf.bytes), buf.dword,  NvStore::registry[i]);
 	}
-}
+  }
+  friend std::ostream& operator<<(std::ostream& os, const NvStore& st);
 };
-
+std::ostream& operator<<(std::ostream& os, const NvStore& st);
 
 template<typename T>
 using is_class_enum = std::integral_constant<
@@ -172,64 +175,41 @@ class NvProperty
 public:
   const TT min;
   const TT max;
-  /*
-  template <typename U = T, std::enable_if_t<std::is_enum_v<U>>* = nullptr>
-  constexpr explicit NvProperty(const U& mint, const U& maxt, const U& defVal,  const NvVar& id):
-	value(to_underlying(defVal)),
-	addr(NvStore::Instance().open(id, &value)),
-	id(id),
-	min(to_underlying(mint)),
-	max(to_underlying(maxt))
-  {
-	  DBG("st %p\n", (void*)&NvStore::Instance());
-	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
-	  if((value > max) || (value < min)) {
-		  if(NvStore::Instance().update(id, &defVal)){
-			  value = to_underlying(defVal);
-			  DBG("default set\n");
-		  } else {
-			  DBG("default fail \n");
-		  }
-	  } else {
-		  DBG("%i skip\n",addr);
-	  }
-  }
-  template <typename U = T, std::enable_if_t<!std::is_enum_v<U> && std::is_integral_v<U>>* = nullptr>
-
-  constexpr explicit */
   NvProperty(const T& min, const T& max, const T& defVal,  const NvVar& id):
-	value(defVal),
-	addr(NvStore::Instance().open(id, &value)),
-	id(id),
-	min(min),
-	max(max)
+  	value(defVal),
+  	addr(NvStore::Instance().open(id, &value)),
+  	id(id),
+  	min(min),
+  	max(max)
   {
-	  DBG("st %p\n", (void*)&NvStore::Instance());
-	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
-	  if((value > max) || (value < min)) {
-		  if(NvStore::Instance().update(id, &defVal)){
-			  value = defVal;
-			  DBG("default set\n");
-		  } else {
-			  DBG("default fail \n");
-		  }
-	  } else {
-		  DBG("%i skip\n",addr);
-	  }
+  	  DBG("st %p\n", (void*)&NvStore::Instance());
+  	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
+  	  if((value > max) || (value < min)) {
+  		  if(NvStore::Instance().update(id, &defVal)){
+  			  value = defVal;
+  			  DBG("default set\n");
+  		  } else {
+  			  DBG("default fail \n");
+  		  }
+  	  } else {
+  		  DBG("%i skip\n",addr);
+  	  }
   }
 
   operator const T& () const {
-	  return value;
+  	return value;
   }
 
   const T& operator = (const T& v)
-  { 
-	value = std::clamp(v, min, max);
+  {
+    value = std::clamp(v, min, max);
     NvStore::Instance().update(id, &value);
     return value;
   }
-};  
 
-
-
-
+  friend std::ostream& operator<<(std::ostream& os, const NvProperty<T> & nvp)
+  {
+	  os << "id:" << nvp.id << " addr:" << nvp.addr << " val:" << nvp.value << " min:" << nvp.min << " max: " << nvp.max;
+  	  return os << std::endl;
+  }
+};

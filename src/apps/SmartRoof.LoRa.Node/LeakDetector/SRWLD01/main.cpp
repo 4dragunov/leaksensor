@@ -27,6 +27,8 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <time.h>
+
+#include "../../../../boards/SRWLD01/mav.h"
 #include "../firmwareVersion.h"
 #include "../../common/githubVersion.h"
 #include "utilities.h"
@@ -146,8 +148,7 @@ typedef enum
     LORAMAC_HANDLER_TX_ON_EVENT,
 }LmHandlerTxEvents_t;
 
-extern ChannelConfig gChannelConfig[ADC_CHANNEL_COUNT];
-extern ChannelPins gChannelsPins[ADC_CHANNEL_COUNT];
+
 /*!
  * User application data
  */
@@ -189,23 +190,18 @@ static TimerEvent_t Led2Timer;
  */
 static TimerEvent_t LedBeaconTimer;
 
+void StartTaskModBus(void const * argument);
 osThreadId modbusTaskHandle;
-uint32_t modbusTaskBuffer[ 256 ];
-osStaticThreadDef_t modbusTaskControlBlock;
+osThreadDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 256);
 
+void StartTaskOneWire(void const * argument);
 osThreadId oneWireTaskHandle;
-uint32_t oneWireTaskBuffer[ 256 ];
-osStaticThreadDef_t oneWireTaskControlBlock;
+osThreadDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 256);
 
+void StartTaskDefault(void const * argument);
 osThreadId defaultTaskHandle;
-uint32_t defaultTaskBuffer[ 256 ];
-osStaticThreadDef_t defaultTaskControlBlock;
+osThreadDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 256);
 
-
-
-osThreadId timerTestTaskHandle;
-uint32_t timerTestTaskBuffer[ 128 ];
-osStaticThreadDef_t timerTestTaskControlBlock;
 
 static uint8_t ds18b20Sensors = 0;
 int16_t ds18b20SensorTemp[8] = {};
@@ -249,11 +245,13 @@ enum class Index:std::underlying_type_t<ModBus::Index>{
 			WL_18,//ro
 			WL_19,//ro
 			WL_20,//ro
-			COUNT
+			COUNT,
+			END = COUNT
 		};
+typedef enum_iterator<ModBus::Register::Index, static_cast<ModBus::Register::Index>(Index::WL_1), static_cast<ModBus::Register::Index>(Index::WL_20)> wl_iterator;
 
 ModBus::Registers modbusRegisters = {
-		{static_cast<ModBus::Index>(Index::DS18B20_RESOLUTION), ModBus::Register({std::ref(ds18b20_resolution)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::DS18B20_RESOLUTION), ModBus::Register(static_cast<ModBus::Register::Index>(Index::DS18B20_RESOLUTION), {std::ref(ds18b20_resolution)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -263,7 +261,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_REGION),           ModBus::Register({std::ref(gActiveRegion)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_REGION),           ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_REGION), {std::ref(gActiveRegion)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -273,7 +271,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_TX_DUTYCYCLE),     ModBus::Register({std::ref(gLoraAppTxDutyCycle)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_TX_DUTYCYCLE),     ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_TX_DUTYCYCLE), {std::ref(gLoraAppTxDutyCycle)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -283,7 +281,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_TX_DUTYCYCLE_RND), ModBus::Register({std::ref(gLoraAppTxDutyCycleRnd)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_TX_DUTYCYCLE_RND), ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_TX_DUTYCYCLE_RND), {std::ref(gLoraAppTxDutyCycleRnd)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -293,7 +291,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_DEFAULT_DATARATE), ModBus::Register({std::ref(gLoraDefaultDatarate)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_DEFAULT_DATARATE), ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_DEFAULT_DATARATE), {std::ref(gLoraDefaultDatarate)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -303,7 +301,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_ADR_STATE),        ModBus::Register({std::ref(gLoraAdrState)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_ADR_STATE),        ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_ADR_STATE), {std::ref(gLoraAdrState)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -313,7 +311,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Index>(Index::LORA_APP_PORT),         ModBus::Register({std::ref(gLoraAppPort)}, ModBus::Register::Access::RW,
+		{static_cast<ModBus::Register::Index>(Index::LORA_APP_PORT),         ModBus::Register(static_cast<ModBus::Register::Index>(Index::LORA_APP_PORT), {std::ref(gLoraAppPort)}, ModBus::Register::Access::RW,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -324,7 +322,7 @@ ModBus::Registers modbusRegisters = {
 				})
 		},
 
-		{static_cast<ModBus::Index>(Index::TEMP_SENSORS),          ModBus::Register({ModBus::Register::RefValue<uint8_t>{ds18b20Sensors, 0, 8}}, ModBus::Register::Access::RO,
+		{static_cast<ModBus::Register::Index>(Index::TEMP_SENSORS),          ModBus::Register(static_cast<ModBus::Register::Index>(Index::TEMP_SENSORS), {ModBus::Register::RefValue<uint8_t>{ds18b20Sensors, 0, 8}}, ModBus::Register::Access::RO,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
@@ -458,103 +456,33 @@ typedef struct {
 	time_t timestamp;
 } ThermalSensorsData ;
 
-osPoolDef(ThermalSensorsDataPool, 1, ThermalSensorsData);                    // Define memory pool
-osPoolId  gThermalSensorsDataPool;
+osMailQDef(ThermalSensors, 1, ThermalSensorsData);                    // Define mail queue
+osMailQId  gThermalSensorsMq;
 
-osMessageQDef(ThermalSensorsDataBox, 1, ThermalSensorsData);              // Define message queue
-osMessageQId  gThermalSensorsDataBox;
-
-osPoolDef(LeakSensorsDataPool, 1, LeakSensorsData);                    // Define memory pool
-osPoolId  gLeakSensorsDataPool;
-
-osMessageQDef(LeakSensorsDataBox, 1, LeakSensorsData);              // Define message queue
-osMessageQId  gLeakSensorsDataBox;
-
-void SetChannels(ChannelPins* active_channel, uint8_t val) {
-    // Перебираем все каналы и подаем высокий логический уровень на неактивные
-    for (int i = 0; i < 20; i++) {
-        if (&gChannelsPins[i] != active_channel) {
-            GpioWrite(&gChannelsPins[i].ptp, val);
-            GpioWrite(&gChannelsPins[i].ntp, val);
-        }
-    }
-}
-
-
-void ToggleCurrentDirection(Gpio_t *pin1, Gpio_t *pin2, uint16_t time_delay) {
-    for (int i = 0; i < 5; i++) {
-        GpioWrite(pin1, 1);
-        GpioWrite(pin2, 0);
-        osDelay(time_delay);
-        GpioWrite(pin1, 0);
-        GpioWrite(pin2, 1);
-        osDelay(time_delay);
-    }
-    GpioWrite(pin1, 0);
-    GpioWrite(pin2, 0);
-    osDelay(time_delay);
-}
-
-uint16_t ProcessChannel(ChannelPins* channel) {
-    const int num_measurements = 12;
-    uint16_t adc_values[num_measurements];
-    float sum = 0;
-    uint16_t max_value = 0;
-    uint16_t min_value = 0xFFFF; // �?нициализируем минимальное значение максимальным возможным
-
-    // Устанавливаем высокий логический уровень на неиспользуемые каналы
-    SetChannels(channel, 1);
-
-
-    for (int i = 0; i < num_measurements; i++) {
-        ToggleCurrentDirection(&channel->ptp, &channel->ntp, 30);
-        GpioWrite(&gChannelsPins[i].ntp, 1); // подача высокого уровня перед АЦП
-       // HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_SET); //led on
-        osDelay(10);
-
-        // Считывание значения АЦП
-
-        adc_values[i] = AdcReadChannel( &channel->ap);
-
-        sum += adc_values[i];
-        if (adc_values[i] > max_value) {
-            max_value = adc_values[i];
-        }
-        if (adc_values[i] < min_value) {
-            min_value = adc_values[i];
-        }
-
-        GpioWrite(&channel->ptp, 0); // подача низкого уровня перед АЦП
-        osDelay(10);
-    }
-
-    uint16_t average = (uint16_t)round(sum / num_measurements);
-    // Сброс логического уровня на неиспользуемых каналах после измерения
-    SetChannels(channel, 0);
-    return average;
-}
-
-
+osMailQDef(LeakSensors, 1, LeakSensorsData);                    // Define memory pool
+osMailQId  gLeakSensorsMq;
 
 
 void StartTaskModBus(void const * argument)
 {
   /* USER CODE BEGIN StartTaskModBus */
 
-
+	ModBus::Register::Index Index;
 
 	for(size_t sensor = 0; sensor < ds18b20Sensors ; sensor++){
 
-		modbusRegisters.emplace(static_cast<ModBus::Index>(to_underlying(Index::TEMP_1) + sensor),
-				ModBus::Register({ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
+		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::TEMP_1) + sensor);
+		modbusRegisters.emplace(Index,
+				ModBus::Register(Index, {ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
 	}
-
-	modbusRegisters.emplace(static_cast<ModBus::Index>(Index::WL_SENSORS), ModBus::Register({ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
+	Index = static_cast<ModBus::Register::Index>(Index::WL_SENSORS);
+	modbusRegisters.emplace(Index, ModBus::Register(Index, {ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
 
 
 	for(size_t sensor = 0; sensor < gLeakSensorCount; sensor++) {
-		modbusRegisters.emplace(static_cast<ModBus::Index>(to_underlying(Index::WL_1) + sensor),
-				ModBus::Register({ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
+		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::WL_1) + sensor);
+		modbusRegisters.emplace(Index,
+				ModBus::Register(Index, {ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
 	}
 
 	Gpio_t dePin;
@@ -566,10 +494,18 @@ void StartTaskModBus(void const * argument)
 	for(;;)
 	{
 
-		osDelay(500);
-		GpioWrite( &Led1, 1 );
-		GpioWrite( &Led2, 1 );
-		TimerStart( &Led2Timer );
+		osEvent ev = osMailGet(DataSampler::Instance(), osWaitForever);
+
+
+
+		if(ev.status == osEventMail) {
+			Samples *s = static_cast<Samples *>(ev.value.p);
+			size_t j = 0;
+			for(auto i :wl_iterator()) {
+				(*slave)[(int)i] = s[(int)i].data.ch.wl[j++];
+			}
+			osMailFree(DataSampler::Instance(), ev.value.p);
+		}
 	}
   /* USER CODE END StartTaskModBus */
 }
@@ -699,7 +635,7 @@ void StartTaskOneWire(void const * argument)
     		DBG("Temp ready\n");
     		//gLoraAppPort.store.dump();
     		DBG("Heap %i\n",xPortGetFreeHeapSize());
-    		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osPoolAlloc(gThermalSensorsDataPool));
+    		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osMailAlloc(gThermalSensorsMq, osWaitForever));
     		if(sensorData) {
 				for(uint8_t s = 0; s < ds18b20Sensors; s++) {
 					OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &sensorData->data[s]);
@@ -712,7 +648,7 @@ void StartTaskOneWire(void const * argument)
 				}
 				sensorData->sensors = ds18b20Sensors;
 				time(&sensorData->timestamp);
-				osMessagePut(gThermalSensorsDataBox, (uint32_t)sensorData, osWaitForever);  // Send Message
+				osMailPut(gThermalSensorsMq, (void*)sensorData);  // Send Message
     		}// Cooperative multitasking
 
         }else {
@@ -725,22 +661,6 @@ void StartTaskOneWire(void const * argument)
  }
 }
 
-
-void StartTaskLeakMeter(void const * argument)
-{
-	BoardInitPeriph( );
-
-	while( 1 ){
-		LeakSensorsData* leakSensorsData = static_cast<LeakSensorsData*>(osPoolAlloc(gLeakSensorsDataPool));
-
-		for (int i = 0; i < ADC_CHANNEL_COUNT; i++) {
-			leakSensorsData->data[i] = ProcessChannel(&gChannelsPins[i]);
-		}
-		leakSensorsData->sensors = ADC_CHANNEL_COUNT;
-		time(&leakSensorsData->timestamp);
-		osMessagePut(gThermalSensorsDataBox, (uint32_t)leakSensorsData, osWaitForever);  // Send Message
-	}
-}
 
 #ifdef TEST
 static void keyCallback(void* context ){
@@ -774,27 +694,21 @@ void StartTaskTimerTest(void const * argument)
 int main( void )
 {
     BoardInitMcu( );
+    //Not needed but for compatibility
+    osKernelInitialize();   // pre initialize CMSIS-RTOS
 
-    osKernelInitialize();                    // initialize CMSIS-RTOS
-
-    osThreadStaticDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 256, modbusTaskBuffer, &modbusTaskControlBlock);
     modbusTaskHandle = osThreadCreate(osThread(modbusTask), NULL);
 
-    //osThreadStaticDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 128, oneWireTaskBuffer, &oneWireTaskControlBlock);
-   // oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
+    oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
 
-    //osThreadStaticDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
-    //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    // create mail queues
+    gThermalSensorsMq = osMailCreate(osMailQ(ThermalSensors), NULL);
 
- //   osThreadStaticDef(timerTestTask, StartTaskTimerTest, osPriorityNormal, 0, 128, timerTestTaskBuffer, &timerTestTaskControlBlock);
-//    timerTestTaskHandle = osThreadCreate(osThread(timerTestTask), NULL);
+    gLeakSensorsMq = osMailCreate(osMailQ(LeakSensors), NULL);
 
-	gThermalSensorsDataPool = osPoolCreate(osPool(ThermalSensorsDataPool));                 // create memory pool
-	gThermalSensorsDataBox = osMessageCreate(osMessageQ(ThermalSensorsDataBox), NULL);  // create msg queue
+	DBG("Heap %i\n", xPortGetFreeHeapSize());
 
-	gLeakSensorsDataPool = osPoolCreate(osPool(LeakSensorsDataPool));                 // create memory pool
-	gLeakSensorsDataBox = osMessageCreate(osMessageQ(LeakSensorsDataBox), NULL);  // create msg queue
-	DBG("Heap %i\n",xPortGetFreeHeapSize());
     osKernelStart();
 
     while(1) {
@@ -933,19 +847,19 @@ static void PrepareTxFrame( void )
 
     CayenneLppReset( );
 
-    evt = osMessageGet(gLeakSensorsDataBox, osWaitForever);  // wait for message
-    if (evt.status == osEventMessage) {
+    evt = osMailGet(gLeakSensorsMq, osWaitForever);  // wait for message
+    if (evt.status == osEventMail) {
     	LeakSensorsData *leakSensorsData = static_cast<LeakSensorsData*>(evt.value.p);
 
     	CayenneLppAddDigitalInput(channel++, leakSensorsData->sensors );
     	for(int i = 0; i < 20; i++) {
     		CayenneLppAddRelativeHumidity(channel++, leakSensorsData->data[i] * 100 / 254 );
     	}
-    	osPoolFree(gLeakSensorsDataPool, leakSensorsData);
+    	osMailFree(gLeakSensorsMq, leakSensorsData);
 	}
 
-    evt = osMessageGet(gThermalSensorsDataBox, osWaitForever);  // wait for message
-    if (evt.status == osEventMessage) {
+    evt = osMailGet(gThermalSensorsMq, osWaitForever);  // wait for message
+    if (evt.status == osEventMail) {
     	ThermalSensorsData *thermalSensorsData = static_cast<ThermalSensorsData *>(evt.value.p);
 
     	CayenneLppAddDigitalInput(channel++, thermalSensorsData->sensors );
@@ -953,9 +867,8 @@ static void PrepareTxFrame( void )
     	for(int i = 0; i < thermalSensorsData->sensors; i++) {
     		CayenneLppAddTemperature( channel++, thermalSensorsData->data[i] * 100 / 254 );
     	}
-        osPoolFree(gThermalSensorsDataPool, thermalSensorsData);
+        osMailFree(gThermalSensorsMq, thermalSensorsData);
     }
-
 
     CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
    // CayenneLppAddAnalogOutput( channel++, BoardGetModbusId( ) * 100 / 254 );

@@ -22,10 +22,13 @@
 #include <vector>
 #include <functional>
 #include <variant>
-
+#include <ostream>
+#include "utilities.h"
 #include "nonvol.h"
 
 namespace ModBus {
+
+#define COMMA ,
 
 #define T35  5              // Timer T35 period (in ticks) for end frame detection.
 #define MAX_BUFFER  128	    // Maximum size for the communication buffer in bytes.
@@ -144,6 +147,12 @@ class Register {
 	    using type = std::variant<Ts1..., Ts2...>;
 	};
 public:
+	friend std::ostream& operator<<(std::ostream&, const ModBus::Register&);
+	enum class Index: uint8_t {
+		BEGIN = 0,
+		END
+	};
+
 	enum class Access{
 				RO,
 				RW,
@@ -162,7 +171,7 @@ public:
 		return value;
 	}
 
-	const T& operator = (const T& v) {
+	T& operator = (const T& v) {
 		value = std::clamp(v, min, max);
 		return value;
 	}
@@ -250,7 +259,7 @@ public:
 	const OnChanged defaultOnChanged = [](const Register *reg){};
 	const OnAccessError defaultOnAccessError = [](const Register *reg){};
 	Register();
-	Register(Register::ValuesType values,
+	Register(Register::Index idx, Register::ValuesType values,
 			Register::Access acc = Register::Access::RW,
 			Register::GetterType getter = [](const Register::ValuesType &vs)->uint16_t{return 0;},
 			Register::SetterType setter = [](Register::ValuesType &vs, const uint16_t value){},
@@ -265,9 +274,11 @@ public:
 	virtual const uint16_t& operator &= (const uint16_t& value);
 	virtual const uint16_t& operator |= (const uint16_t& value);
 	const Access  acces;
+
 protected:
 
 private:
+	Register::Index mIdx;
 	ValuesType mValues;
 	GetterType mGetter;
 	SetterType mSetter;
@@ -275,14 +286,18 @@ private:
 	OnAccessError mOnAccessError;
 };
 
-enum class Index: uint8_t {
-	IDENT,
-	BAUD_RATE_AND_WORD_LEN,
-	STOP_BITS_AND_PARITY,//rw - nv
-	END
+enum class Index: std::underlying_type_t<ModBus::Register::Index> {
+		BEGIN =  static_cast<std::underlying_type_t<ModBus::Register::Index>>(ModBus::Register::Index::END),
+		IDENT = BEGIN,
+		BAUD_RATE_AND_WORD_LEN,
+		STOP_BITS_AND_PARITY,//rw - nv
+		END
 };
+#define REGISTER(idx, val, acc, set, get) static_cast<ModBus::Register::Index>(idx), ModBus::Register(static_cast<ModBus::Register::Index>(idx), {val}, acc, set, get)
 
-using Registers = std::map<Index, Register>;
+std::ostream& operator<<(std::ostream&, const ModBus::Register&);
+
+using Registers = std::map<Register::Index, Register>;
 
 /**
  * @class ModBusQuery
@@ -445,6 +460,7 @@ public:
 	BusBuffer& busBuffer() {return mBufferRX;}
 	uint8_t &  dataRX() {return mDataRX;}
 	Registers& registers() {return mRegs;}
+	Register& operator[](const size_t idx) {return mRegs[static_cast<Register::Index>(idx)];}
 };
 
 extern uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers

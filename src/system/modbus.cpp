@@ -6,7 +6,7 @@
  */
 #include <type_traits>
 #include <cassert>
-
+#include <ostream>
 #include "modbus.h"
 #include "task.h"
 #include "queue.h"
@@ -55,6 +55,7 @@ extern "C" void vTimerCallbackTimeout(TimerHandle_t *pxTimer);
 
 Register::Register():
 	acces(Register::Access::RW),
+	mIdx(Register::Index::END),
 	mValues(),
 	mGetter(defaultGetter),
 	mSetter(defaultSetter),
@@ -64,13 +65,15 @@ Register::Register():
 
 }
 
-Register::Register(Register::ValuesType values,
+Register::Register(Register::Index idx,Register::ValuesType values,
 		Register::Access acces,
 		Register::GetterType getter,
 		Register::SetterType setter,
 		Register::OnChanged changed,
 		Register::OnAccessError error):
+
 	acces(acces),
+	mIdx(idx),
 	mValues(values),
 	mGetter(getter),
 	mSetter(setter),
@@ -113,6 +116,30 @@ const uint16_t& Register::operator &= (const uint16_t& value)
 const uint16_t& Register::operator |= (const uint16_t& value)
 {
 	return (*this |= value) ;
+}
+
+template<typename T>
+std::ostream& operator<<(typename std::enable_if<std::is_enum<T>::value, std::ostream>::type& stream, const T& e)
+{
+    return stream << static_cast<typename std::underlying_type<T>::type>(e);
+}
+
+template<typename T>
+std::ostream& operator<<(std::ostream& str, const ModBus::Register::RefValue<T>& reg)
+{
+
+	return str << std::endl;
+}
+
+
+std::ostream& operator<<(std::ostream& str, const ModBus::Register& reg)
+{
+	str << "reg: " << reg.mIdx << " acc: "  << reg.acces << " val: " << (uint16_t)reg.mValues.size();
+	for(const auto& v : reg.mValues)
+	{
+		str << "R:"<< streamer(v) << " ";
+	}
+	return str << std::endl;
 }
 
 /* Ring Buffer functions */
@@ -176,7 +203,6 @@ const uint8_t fctsupported[] =
 };
 
 
-
 ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, Registers &regs):
 		mType(type),
 		mUart(uart),
@@ -198,9 +224,9 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 		mState(),
 		mBufferRX()
 {
-	if(mType ==ModBusType::Slave) {
 
-		mRegs.emplace(Index::IDENT, Register({mId}, Register::Access::RW,
+	if(mType ==ModBusType::Slave) {
+		mRegs.emplace(REGISTER(Index::IDENT, mId, Register::Access::RW,
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
 			return std::get<Register::nv8_ref>(nvp[0]).get();
@@ -210,7 +236,7 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 			return value;
 		}));
 
-		mRegs.emplace(Index::BAUD_RATE_AND_WORD_LEN, Register({mBaudRate, mWordLen}, Register::Access::RW,
+		mRegs.emplace(REGISTER(Index::BAUD_RATE_AND_WORD_LEN, {mBaudRate COMMA mWordLen}, Register::Access::RW,
 
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
@@ -226,7 +252,7 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 			return v;
 		}));
 
-		mRegs.emplace(Index::STOP_BITS_AND_PARITY,  Register({mStopBits, mParity},Register::Access::RW,
+		mRegs.emplace(REGISTER(Index::STOP_BITS_AND_PARITY, {mStopBits COMMA mParity}, Register::Access::RW,
 
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
@@ -537,13 +563,13 @@ Error ModbusHandler::SendQuery(Query_t q)
 	    mBufferSize = 6;
 	    break;
 	case FunctionCode::WRITE_COIL:
-	    mBuffer[to_underlying( Message::NB_HI) ]      = (( q.reg[(Index)0]> 0) ? 0xff : 0);
+	    mBuffer[to_underlying( Message::NB_HI) ]      = (( q.reg[(Register::Index)0]> 0) ? 0xff : 0);
 	    mBuffer[to_underlying( Message::NB_LO) ]      = 0;
 	    mBufferSize = 6;
 	    break;
 	case FunctionCode::WRITE_REGISTER:
-	    mBuffer[ to_underlying(Message::NB_HI) ]      = highByte( q.reg[(Index)0]);
-	    mBuffer[to_underlying( Message::NB_LO) ]      = lowByte( q.reg[(Index)0]);
+	    mBuffer[ to_underlying(Message::NB_HI) ]      = highByte( q.reg[(Register::Index)0]);
+	    mBuffer[to_underlying( Message::NB_LO) ]      = lowByte( q.reg[(Register::Index)0]);
 	    mBufferSize = 6;
 	    break;
 	case FunctionCode::WRITE_MULTIPLE_COILS: // TODO: implement "sending coils"
@@ -564,11 +590,11 @@ Error ModbusHandler::SendQuery(Query_t q)
 	    {
 	        if(i%2)
 	        {
-	        	mBuffer[ mBufferSize ] = lowByte( q.reg[ (Index)(i/2 )] );
+	        	mBuffer[ mBufferSize ] = lowByte( q.reg[ (Register::Index)(i/2 )] );
 	        }
 	        else
 	        {
-	        	mBuffer[  mBufferSize ] = highByte( q.reg[(Index)( i/2) ] );
+	        	mBuffer[  mBufferSize ] = highByte( q.reg[(Register::Index)( i/2) ] );
 
 	        }
 	        mBufferSize++;
@@ -584,9 +610,9 @@ Error ModbusHandler::SendQuery(Query_t q)
 	    for (uint16_t i=0; i< q.coilsNo; i++)
 	    {
 
-	        mBuffer[  mBufferSize ] = highByte(  q.reg[(Index) i ] );
+	        mBuffer[  mBufferSize ] = highByte(  q.reg[(Register::Index) i ] );
 	        mBufferSize++;
-	        mBuffer[  mBufferSize ] = lowByte( q.reg[(Index) i ] );
+	        mBuffer[  mBufferSize ] = lowByte( q.reg[(Register::Index) i ] );
 	        mBufferSize++;
 	    }
 	    break;
@@ -720,12 +746,12 @@ void ModbusHandler::get_FC1(ModbusHandler *modH)
 
         if(i%2)
         {
-        	modH->mRegs[(Index)(i/2)]= word(modH->mBuffer[i+byte], lowByte(modH->mRegs[(Index)(i/2)]));
+        	modH->mRegs[(Register::Index)(i/2)]= word(modH->mBuffer[i+byte], lowByte(modH->mRegs[(Register::Index)(i/2)]));
         }
         else
         {
 
-        	modH->mRegs[(Index)(i/2)]= word(highByte(modH->mRegs[(Index)(i/2)]), modH->mBuffer[i+byte]);
+        	modH->mRegs[(Register::Index)(i/2)]= word(highByte(modH->mRegs[(Register::Index)(i/2)]), modH->mBuffer[i+byte]);
         }
 
      }
@@ -744,7 +770,7 @@ void ModbusHandler::get_FC3(ModbusHandler *modH)
 
     for (i=0; i< modH->mBuffer[ 2 ] /2; i++)
     {
-    	modH->mRegs[  (Index)i ] = word(modH->mBuffer[ byte ], modH->mBuffer[ byte +1 ]);
+    	modH->mRegs[  (Register::Index)i ] = word(modH->mBuffer[ byte ], modH->mBuffer[ byte +1 ]);
         byte += 2;
     }
 }
@@ -1077,7 +1103,7 @@ int8_t ModbusHandler::process_FC1(ModbusHandler *modH )
         bitWrite(
         	modH->mBuffer[ modH->mBufferSize ],
             bitsno,
-		    bitRead( modH->mRegs[ (Index)currentRegister ], currentBit ) );
+		    bitRead( modH->mRegs[ (Register::Index)currentRegister ], currentBit ) );
         bitsno ++;
 
         if (bitsno > 7)
@@ -1116,9 +1142,9 @@ int8_t ModbusHandler::process_FC3(ModbusHandler *modH)
 
     for (i = startAdd; i < startAdd + regsno; i++)
     {
-    	modH->mBuffer[ modH->mBufferSize ] = highByte(modH->mRegs[ (Index)i]);
+    	modH->mBuffer[ modH->mBufferSize ] = highByte(modH->mRegs[ (Register::Index)i]);
     	modH->mBufferSize++;
-    	modH->mBuffer[ modH->mBufferSize ] = lowByte(modH->mRegs[ (Index)i]);
+    	modH->mBuffer[ modH->mBufferSize ] = lowByte(modH->mRegs[ (Register::Index)i]);
     	modH->mBufferSize++;
     }
     copyBufferSize = modH->mBufferSize +2;
@@ -1140,7 +1166,7 @@ int8_t ModbusHandler::process_FC5( ModbusHandler *modH )
 
     // write to coil
     bitWrite(
-    	modH->mRegs[  (Index)currentRegister ],
+    	modH->mRegs[  (Register::Index)currentRegister ],
         currentBit,
 		modH->mBuffer[ to_underlying(Message::NB_HI) ] == 0xff );
 
@@ -1160,7 +1186,7 @@ int8_t ModbusHandler::process_FC6(ModbusHandler *modH )
     uint8_t copyBufferSize;
     uint16_t val = word( modH->mBuffer[ to_underlying(Message::NB_HI) ], modH->mBuffer[ to_underlying(Message::NB_LO) ] );
 
-    modH->mRegs[ (Index) add ] = val;
+    modH->mRegs[ (Register::Index) add ] = val;
 
     // keep the same header
     modH->mBufferSize = to_underlying(PACKET_SIZE::RESPONSE);
@@ -1197,7 +1223,7 @@ int8_t ModbusHandler::process_FC15( ModbusHandler *modH )
         bTemp = bitRead(
         			modH->mBuffer[ frameByte ],
                     bitsno );
-        auto &reg = modH->mRegs[ (Index) currentRegister ];
+        auto &reg = modH->mRegs[ (Register::Index) currentRegister ];
         bitWrite(
             reg,
             currentBit,
@@ -1239,8 +1265,8 @@ int8_t ModbusHandler::process_FC16(ModbusHandler *modH )
         temp = word(
         		modH->mBuffer[ (to_underlying(Message::BYTE_CNT) + 1) + i * 2 ],
 				modH->mBuffer[ (to_underlying(Message::BYTE_CNT) + 2) + i * 2 ]);
-        if(modH->mRegs.find((Index)(startAdd + i)) != modH->mRegs.end()) {
-        	modH->mRegs[(Index) (startAdd + i) ] = temp;
+        if(modH->mRegs.find((Register::Index)(startAdd + i)) != modH->mRegs.end()) {
+        	modH->mRegs[(Register::Index) (startAdd + i) ] = temp;
         }
     }
     copyBufferSize = modH->mBufferSize +2;

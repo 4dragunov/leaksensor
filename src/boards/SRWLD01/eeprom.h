@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <cmsis_os.h>
 
 #ifdef __cplusplus
 #include <algorithm>
@@ -50,6 +51,7 @@ private:
   Eeprom(Eeprom const&)= delete;
   Eeprom& operator= (Eeprom const&)= delete;
   static bool mInitialized;
+  osMutexId mRwLock;
 };
 uint16_t eepromReadWord(uint32_t addr);
 bool eepromWriteWord(uint32_t addr, uint16_t data_in);
