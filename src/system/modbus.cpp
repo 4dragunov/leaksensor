@@ -249,6 +249,7 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 
 			std::get<Register::nv8_ref>(nvp[0]).get() = ( v >> 8 ) & 0xff;
 			std::get<Register::nv8_ref>(nvp[1]).get() = ( v >> 0 ) & 0xff;
+			SetLine();
 			return v;
 		}));
 
@@ -258,12 +259,14 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 		{
 			uint16_t result = std::get<Register::nv8_ref>(nvp[0]).get() << 8 |
 							 (std::get<Register::nv8_ref>(nvp[1]).get() & 0xff);
+
 			return result;
 		},
 		[&](Register::ValuesType &nvp, const uint16_t v)->uint16_t
 		{
 			std::get<Register::nv8_ref>(nvp[0]).get() = ( v >> 8 ) & 0xff;
 			std::get<Register::nv8_ref>(nvp[1]).get() = ( v >> 0 ) & 0xff;
+			SetLine();
 			return v;
 		}));
 	}
@@ -330,7 +333,7 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 
 void ModbusHandler::SetLine()
 {
-	UartConfig( mUart, RX_TX, SYNC, mBaudRate, static_cast<WordLength_t>((uint8_t)mWordLen),static_cast<StopBits_t>((uint8_t)mStopBits), static_cast<Parity_t>((uint8_t)mParity), NO_FLOW_CTRL );
+	UartConfig( mUart, RX_TX, SYNC, 115200/mBaudRate, static_cast<WordLength_t>((uint8_t)mWordLen),static_cast<StopBits_t>((uint8_t)mStopBits), static_cast<Parity_t>((uint8_t)mParity), NO_FLOW_CTRL );
 }
 
 void ModbusHandler::Start()
