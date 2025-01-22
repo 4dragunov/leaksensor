@@ -192,7 +192,7 @@ static TimerEvent_t LedBeaconTimer;
 
 void StartTaskModBus(void const * argument);
 osThreadId modbusTaskHandle;
-osThreadDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 256);
+osThreadDef(modbusTask, StartTaskModBus, osPriorityNormal, 0, 512);
 
 void StartTaskOneWire(void const * argument);
 osThreadId oneWireTaskHandle;
@@ -487,7 +487,7 @@ void StartTaskModBus(void const * argument)
 
 	Gpio_t dePin;
 	GpioInit(&dePin, PD_4, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-	auto slave = std::make_unique<ModBusSlave>(&Usart2, &dePin, 10, modbusRegisters);
+	auto slave = std::make_unique<ModBusSlave>(&Usart2, &dePin, 1, modbusRegisters);
   /* Infinite loop */
 
 	slave->Start();
