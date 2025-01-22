@@ -68,6 +68,7 @@ void AdcMcuConfig( Adc_t *obj )
 	h->Init.DataAlign = ADC_DATAALIGN_RIGHT;
 	h->Init.NbrOfConversion = 1;
     HAL_ADC_Init( h );
+    HAL_ADCEx_Calibration_Start(h);
 }
 
 uint16_t AdcMcuReadChannel( Adc_t *obj )
