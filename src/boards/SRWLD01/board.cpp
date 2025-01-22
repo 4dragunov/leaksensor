@@ -321,17 +321,6 @@ void BoardGetUniqueId( uint8_t *id )
     id[0] = ( ( *( uint32_t* )ID2 ) );
 }
 
-void configureTimerForRunTimeStats(void){
-	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-	DWT->CYCCNT = 0;
-	DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-}
-
-unsigned long getRunTimeCounterValue(void)
-{
-	return DWT->CYCCNT;
-}
-
 /*!
  * Factory power supply
  */
@@ -368,12 +357,51 @@ unsigned long getRunTimeCounterValue(void)
 #define BATTERY_LORAWAN_MIN_LEVEL 1
 #define BATTERY_LORAWAN_EXT_PWR 0
 
-#define COMPUTE_TEMPERATURE( TS_ADC_DATA, VDDA_APPLI )                                                          \
-    ( ( ( ( ( ( ( int32_t )( ( TS_ADC_DATA * VDDA_APPLI ) / VDDA_TEMP_CAL ) - ( int32_t ) TEMP30_CAL_ADDR ) ) * \
-            ( int32_t )( 110 - 30 ) )                                                                           \
-          << 8 ) /                                                                                              \
-        ( int32_t )( TEMP110_CAL_ADDR - TEMP30_CAL_ADDR ) ) +                                                   \
-      ( 30 << 8 ) )
+#define VDD_APPLI                      ((uint32_t) 3300)   /* Value of analog voltage supply Vdda (unit: mV) */
+#define RANGE_12BITS                   ((uint32_t) 4095)   /* Max value with a full range of 12 bits */
+#define INTERNAL_TEMPSENSOR_V25        ((int32_t)1430)         /* Internal temperature sensor, parameter V25 (unit: mV). Refer to device datasheet for min/typ/max values. */
+#define INTERNAL_TEMPSENSOR_AVGSLOPE   ((int32_t)4300)         /* Internal temperature sensor, parameter Avg_Slope (unit: uV/DegCelsius). Refer to device datasheet for min/typ/max values. */
+/* This calibration parameter is intended to calculate the actual VDDA from Vrefint ADC measurement. */
+
+/**
+  * @brief  Computation of temperature (unit: degree Celsius) from the internal
+  *         temperature sensor measurement by ADC.
+  *         Computation is using temperature sensor standard parameters (refer
+  *         to device datasheet).
+  *         Computation formula:
+  *         Temperature = (VTS - V25)/Avg_Slope + 25
+  *         with VTS = temperature sensor voltage
+  *              Avg_Slope = temperature sensor slope (unit: uV/DegCelsius)
+  *              V25 = temperature sensor @25degC and Vdda 3.3V (unit: mV)
+  *         Calculation validity conditioned to settings:
+  *          - ADC resolution 12 bits (need to scale value if using a different
+  *            resolution).
+  *          - Power supply of analog voltage Vdda 3.3V (need to scale value
+  *            if using a different analog voltage supply value).
+  * @param TS_ADC_DATA: Temperature sensor digital value measured by ADC
+  * @retval None
+  */
+#define COMPUTATION_TEMPERATURE_STD_PARAMS(TS_ADC_DATA)                        \
+  ((((int32_t)(INTERNAL_TEMPSENSOR_V25 - (((TS_ADC_DATA) * VDD_APPLI) / RANGE_12BITS)   \
+     ) * 1000                                                                  \
+    ) / INTERNAL_TEMPSENSOR_AVGSLOPE                                           \
+   ) + 25                                                                      \
+  )
+
+/**
+  * @brief  Computation of voltage (unit: mV) from ADC measurement digital
+  *         value on range 12 bits.
+  *         Calculation validity conditioned to settings:
+  *          - ADC resolution 12 bits (need to scale value if using a different
+  *            resolution).
+  *          - Power supply of analog voltage Vdda 3.3V (need to scale value
+  *            if using a different analog voltage supply value).
+  * @param ADC_DATA: Digital value measured by ADC
+  * @retval None
+  */
+#define COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(ADC_DATA)                        \
+  ( (ADC_DATA) * VDD_APPLI / RANGE_12BITS)
+
 
 static uint16_t BatteryVoltage = BATTERY_MAX_LEVEL;
 
@@ -385,7 +413,7 @@ uint16_t BoardBatteryMeasureVoltage( void )
     vref = AdcReadChannel( &AdcVref );
 
     // Compute and return the Voltage in millivolt
-    return ( ( ( uint32_t ) VDDA_VREFINT_CAL * VREFINT_CAL ) / vref );
+    return COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(vref);
 }
 
 uint32_t BoardGetBatteryVoltage( void )
@@ -435,7 +463,7 @@ float BoardGetTemperature( void )
     tempRaw = AdcReadChannel( &AdcTempSens );
 
     // Compute and return the temperature in degree celcius * 256
-    return COMPUTE_TEMPERATURE( tempRaw, BatteryVoltage ) / 256.0;
+    return COMPUTATION_TEMPERATURE_STD_PARAMS( tempRaw);
 }
 
 static void BoardUnusedIoInit( void )
