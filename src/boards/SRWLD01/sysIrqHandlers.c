@@ -47,6 +47,12 @@ void HardFault_Handler_C( unsigned int *args )
     volatile unsigned int stacked_lr;
     volatile unsigned int stacked_pc;
     volatile unsigned int stacked_psr;
+    volatile unsigned long _CFSR ;
+    volatile unsigned long _HFSR ;
+    volatile unsigned long _DFSR ;
+    volatile unsigned long _AFSR ;
+    volatile unsigned long _BFAR ;
+    volatile unsigned long _MMAR ;
 
     stacked_r0 = ( ( unsigned long) args[0] );
     stacked_r1 = ( ( unsigned long) args[1] );
@@ -58,6 +64,26 @@ void HardFault_Handler_C( unsigned int *args )
     stacked_pc = ( ( unsigned long) args[6] );
     stacked_psr = ( ( unsigned long) args[7] );
 
+    // Configurable Fault Status Register
+    // Consists of MMSR, BFSR and UFSR
+    _CFSR = (*((volatile unsigned long *)(0xE000ED28))) ;
+
+    // Hard Fault Status Register
+    _HFSR = (*((volatile unsigned long *)(0xE000ED2C))) ;
+
+    // Debug Fault Status Register
+    _DFSR = (*((volatile unsigned long *)(0xE000ED30))) ;
+
+    // Auxiliary Fault Status Register
+    _AFSR = (*((volatile unsigned long *)(0xE000ED3C))) ;
+
+    // Read the Fault Address Registers. These may not contain valid values.
+    // Check BFARVALID/MMARVALID to see if they are valid values
+    // MemManage Fault Address Register
+    _MMAR = (*((volatile unsigned long *)(0xE000ED34))) ;
+    // Bus Fault Address Register
+    _BFAR = (*((volatile unsigned long *)(0xE000ED38))) ;
+
     ( void )stacked_r0;
     ( void )stacked_r1;
     ( void )stacked_r2;
@@ -67,8 +93,14 @@ void HardFault_Handler_C( unsigned int *args )
     ( void )stacked_lr ;
     ( void )stacked_pc ;
     ( void )stacked_psr;
+    (void) _CFSR ;
+    (void) _HFSR ;
+    (void) _DFSR ;
+    (void) _AFSR ;
+    (void) _BFAR ;
+    (void) _MMAR ;
 
-    while( 1 );
+    __asm("BKPT #0\n") ; // Break into the debugger
 }
 
 #if defined(__CC_ARM)
