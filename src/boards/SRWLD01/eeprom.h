@@ -44,7 +44,19 @@ public:
   bool read(address_type addr, T& t) {
 	return read(base + addr, (data_type*) &t, std::max(1u, sizeof(t)/sizeof(data_type)));
   }
+  bool WriteWord(uint32_t addr, uint16_t data_in);
+  uint16_t ReadWord(uint32_t addr);
+protected:
+  uint16_t PageTransfer(uint16_t VirtAddress, uint16_t Data);
+  uint16_t VerifyPageFullWriteVariable(uint16_t VirtAddress, uint16_t Data);
+  uint16_t FindValidPage(uint8_t Operation);
+  uint16_t Format(void);
+  uint16_t WriteVariable(uint16_t VirtAddress, uint16_t Data);
+  uint16_t ReadVariable(uint16_t VirtAddress, uint16_t* Data);
+  bool VerifyPageFullyErased(uint32_t Address);
+  uint16_t Init(void);
 
+  uint32_t GetLength(void);
 private:
   Eeprom();
   virtual ~Eeprom();
@@ -52,6 +64,8 @@ private:
   Eeprom& operator= (Eeprom const&)= delete;
   static bool mInitialized;
   osMutexId mRwLock;
+  /* Global variable used to store variable value in read sequence */
+  uint16_t DataVar;
 };
 uint16_t eepromReadWord(uint32_t addr);
 bool eepromWriteWord(uint32_t addr, uint16_t data_in);
