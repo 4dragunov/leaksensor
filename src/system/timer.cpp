@@ -78,11 +78,6 @@ operator TimerTime_t() const
 	return (TimerTime_t)(tv_sec * 1000000 +  tv_usec)/ 1000;
 }
 
-operator struct timeval&()
-{
-	return *this;
-}
-
 TimerTime(const TimerTime_t&r):timeval(){
 	tv_sec = r/1000;
 	tv_usec = (r - (tv_sec * 1000));
@@ -257,15 +252,15 @@ void TimerIrqHandler( void )
     RtcTimerContext_t newct = RtcTimerContext;
     uint32_t deltaContext = now - old; // intentional wrap around
 
-    printf("Fact: %i \n", deltaContext);
-    printf("old: sec:%i usec:%i\n", (uint32_t)oldct.Time.tv_sec,  (uint32_t)oldct.Time.tv_usec);
-    printf("new: sec:%i usec:%i\n", (uint32_t)newct.Time.tv_sec,  (uint32_t)newct.Time.tv_usec);
+    printf("Fact: %li \n", deltaContext);
+    printf("old: sec:%li usec:%li\n", (uint32_t)oldct.Time.tv_sec,  (uint32_t)oldct.Time.tv_usec);
+    printf("new: sec:%li usec:%li\n", (uint32_t)newct.Time.tv_sec,  (uint32_t)newct.Time.tv_usec);
     // Update timeStamp based upon new Time Reference
     // because delta context should never exceed 2^32
 
 
     // Execute immediately the alarm callback
-    if ( cur = (TimerEvent_t* )TimerListHead )
+    if ( (cur = (TimerEvent_t* )TimerListHead) )
     {
     	do{
     		if( cur->Timestamp > deltaContext ){
