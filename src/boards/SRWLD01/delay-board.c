@@ -22,10 +22,21 @@
  *
  * \author    Johannes Bruder ( STACKFORCE )
  */
+
+#include <stdbool.h>
 #include "cmsis_os.h"
 #include "delay-board.h"
+#include "stm32f1xx.h"
+
+inline bool isInterrupt()
+{
+    return (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) != 0 ;
+}
 
 void DelayMsMcu( uint32_t ms )
 {
-   osDelay( ms );
+	if(isInterrupt())
+		HAL_Delay(ms);
+	else
+		osDelay( ms );
 }
