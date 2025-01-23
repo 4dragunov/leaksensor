@@ -173,13 +173,13 @@ void SX1276Reset( void )
     SX1276SetBoardTcxo( true );
 
     // Set RESET pin to 0
-    GpioInit( &SX1276.Reset, RADIO_RESET, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+    GpioInit( &SX1276.Reset, RADIO_RESET, PIN_OUTPUT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
 
     // Wait 1 ms
     DelayMs( 1 );
 
     // Configure RESET as input
-    GpioInit( &SX1276.Reset, RADIO_RESET, PIN_INPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1 );
+    GpioInit( &SX1276.Reset, RADIO_RESET, PIN_OUTPUT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 
     // Wait 6 ms
     DelayMs( 6 );
