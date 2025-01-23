@@ -207,16 +207,16 @@ void BoardInitMcu( void )
 	printf("APB2=%li\n", HAL_RCC_GetPCLK2Freq());
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
-    SpiInit( &SX126x.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS );
+    SpiInit( &SX126x.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
     SX126xIoInit( );
 #elif defined( LR1110MB1XXS )
-    SpiInit( &LR1110.spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS );
+    SpiInit( &LR1110.spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
     lr1110_board_init_io( &LR1110 );
 #elif defined( SX1272MB2DAS )
-    SpiInit( &SX1272.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS );
+    SpiInit( &SX1272.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
     SX1272IoInit( );
 #elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
-    SpiInit( &SX1276.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS );
+    SpiInit( &SX1276.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
     SX1276IoInit( );
 #endif
 

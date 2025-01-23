@@ -39,6 +39,11 @@ typedef enum
     SPI_2,
 }SpiId_t;
 
+typedef enum {
+	MASTER = 0,
+	SLAVE
+}SpiMode_t;
+
 /*!
  * SPI object type definition
  */
@@ -63,7 +68,7 @@ typedef struct Spi_s
  * \param [IN] sclk SPI SCLK pin name to be used
  * \param [IN] nss  SPI NSS pin name to be used
  */
-void SpiInit( Spi_t *obj, SpiId_t spiId, PinNames mosi, PinNames miso, PinNames sclk, PinNames nss );
+void SpiInit( Spi_t *obj, SpiId_t spiId, PinNames mosi, PinNames miso, PinNames sclk, PinNames nss, SpiMode_t mode);
 
 /*!
  * \brief De-initializes the SPI object and MCU peripheral
@@ -83,7 +88,7 @@ void SpiDeInit( Spi_t *obj );
  * \param [IN] cpha  Clock phase
  * \param [IN] slave When set the peripheral acts in slave mode
  */
-void SpiFormat( Spi_t *obj, int8_t bits, int8_t cpol, int8_t cpha, int8_t slave );
+void SpiFormat( Spi_t *obj, int8_t bits, int8_t cpol, int8_t cpha, SpiMode_t mode );
 
 /*!
  * \brief Sets the SPI speed

@@ -28,7 +28,7 @@
 
 static SPI_HandleTypeDef SpiHandle[2];
 
-void SpiInit( Spi_t *obj, SpiId_t spiId, PinNames mosi, PinNames miso, PinNames sclk, PinNames nss )
+void SpiInit( Spi_t *obj, SpiId_t spiId, PinNames mosi, PinNames miso, PinNames sclk, PinNames nss, SpiMode_t mode)
 {
     CRITICAL_SECTION_BEGIN( );
 
@@ -39,40 +39,38 @@ void SpiInit( Spi_t *obj, SpiId_t spiId, PinNames mosi, PinNames miso, PinNames 
         __HAL_RCC_SPI1_FORCE_RESET( );
         __HAL_RCC_SPI1_RELEASE_RESET( );
         __HAL_RCC_SPI1_CLK_ENABLE( );
-
         SpiHandle[spiId].Instance = ( SPI_TypeDef* )SPI1_BASE;
-
-        GpioInit( &obj->Mosi, mosi, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Miso, miso, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Sclk, sclk, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Nss, nss, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
     }
     else
     {
         __HAL_RCC_SPI2_FORCE_RESET( );
         __HAL_RCC_SPI2_RELEASE_RESET( );
         __HAL_RCC_SPI2_CLK_ENABLE( );
-
         SpiHandle[spiId].Instance = ( SPI_TypeDef* )SPI2_BASE;
-
-        GpioInit( &obj->Mosi, mosi, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Miso, miso, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Sclk, sclk, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
-        GpioInit( &obj->Nss, nss, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
+    }
+    GpioInit( &obj->Mosi, mosi, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
+    GpioInit( &obj->Miso, miso, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
+    GpioInit( &obj->Sclk, sclk, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
+    if(nss == PB_12 ) {
+    	GpioInit( &obj->Nss, nss, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
+    }else {
+    	GpioInit( &obj->Nss, nss, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 1 );
+    	SpiHandle[spiId].Init.NSS = SPI_NSS_SOFT;
     }
 
     if( nss == NC )
     {
         SpiHandle[spiId].Init.NSS = SPI_NSS_SOFT;
-        SpiFormat( obj, SPI_DATASIZE_8BIT, SPI_POLARITY_LOW, SPI_PHASE_1EDGE, 0 );
+
     }
-    else
-    {
-        SpiFormat( obj, SPI_DATASIZE_8BIT, SPI_POLARITY_LOW, SPI_PHASE_1EDGE, 1 );
-    }
+    SpiFormat( obj, SPI_DATASIZE_8BIT, SPI_POLARITY_LOW, SPI_PHASE_1EDGE, mode );
+
     SpiFrequency( obj, 10000000 );
 
-    HAL_SPI_Init( &SpiHandle[spiId] );
+    if(HAL_SPI_Init( &SpiHandle[spiId] )!= HAL_OK)
+    {
+        assert_param( LMN_STATUS_ERROR );
+    }
 
     CRITICAL_SECTION_END( );
 }
@@ -87,7 +85,7 @@ void SpiDeInit( Spi_t *obj )
     GpioInit( &obj->Nss, obj->Nss.pin, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 1 );
 }
 
-void SpiFormat( Spi_t *obj, int8_t bits, int8_t cpol, int8_t cpha, int8_t slave )
+void SpiFormat( Spi_t *obj, int8_t bits, int8_t cpol, int8_t cpha, SpiMode_t mode )
 {
     SpiHandle[obj->SpiId].Init.Direction = SPI_DIRECTION_2LINES;
     if( bits == SPI_DATASIZE_8BIT )
@@ -105,15 +103,13 @@ void SpiFormat( Spi_t *obj, int8_t bits, int8_t cpol, int8_t cpha, int8_t slave 
     SpiHandle[obj->SpiId].Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
     SpiHandle[obj->SpiId].Init.CRCPolynomial = 7;
     SpiHandle[obj->SpiId].Init.NSS = SPI_NSS_SOFT;
+    if (mode == MASTER) {
+    	SpiHandle[obj->SpiId].Init.Mode = SPI_MODE_MASTER;
+    }else{
+    	SpiHandle[obj->SpiId].Init.Mode = SPI_MODE_SLAVE;
+    }
 
-    if( slave == 0 )
-    {
-        SpiHandle[obj->SpiId].Init.Mode = SPI_MODE_MASTER;
-    }
-    else
-    {
-        SpiHandle[obj->SpiId].Init.Mode = SPI_MODE_SLAVE;
-    }
+
 }
 
 void SpiFrequency( Spi_t *obj, uint32_t hz )
@@ -154,7 +150,7 @@ uint16_t SpiInOut( Spi_t *obj, uint16_t outData )
     CRITICAL_SECTION_BEGIN( );
     //while( __HAL_SPI_GET_FLAG( &SpiHandle[obj->SpiId], SPI_FLAG_TXE ) == RESET );
    // SpiHandle[obj->SpiId].Instance->DR = ( uint16_t ) ( outData & 0xFF );
-    if(HAL_SPI_TransmitReceive( &SpiHandle[obj->SpiId], outData, rxData, 1, 100) != HAL_OK)
+    if(HAL_SPI_TransmitReceive( &SpiHandle[obj->SpiId], &outData, &rxData, 1, 100) != HAL_OK)
     {
     	assert_param( LMN_STATUS_ERROR );
     }
