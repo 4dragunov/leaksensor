@@ -71,8 +71,11 @@ osMutexDef (RwLock);
 Eeprom::Eeprom():mRwLock(osMutexCreate(osMutex(RwLock)))
 {
 	if(!mInitialized) {
-		HAL_FLASH_Unlock();
-		mInitialized = (EE_Init() == HAL_OK);
+		if(HAL_FLASH_Unlock() == HAL_OK) {
+			if(EE_Init() == HAL_OK){
+				mInitialized = true;
+			}
+		}
 	}
 }
 
@@ -89,8 +92,6 @@ Eeprom::~Eeprom() {
 Eeprom& Eeprom::Instance()
 {
    static Eeprom s;
-   printf("epr s %p\n",&Eeprom::Instance);
-   DBG("epr ss %p\n",(void*)&s);
    return s;
 }
 
