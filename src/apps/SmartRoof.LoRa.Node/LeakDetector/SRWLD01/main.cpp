@@ -397,9 +397,9 @@ static LmHandlerCallbacks_t LmHandlerCallbacks =
 
 static LmHandlerParams_t LmHandlerParams =  {
         .Region = (LoRaMacRegion_t)(uint8_t)gActiveRegion,
-        .AdrEnable = gLoraAdrState,
+        .AdrEnable = (bool) gLoraAdrState,
         .IsTxConfirmed = LORAWAN_DEFAULT_CONFIRMED_MSG_STATE,
-        .TxDatarate = gLoraDefaultDatarate,
+        .TxDatarate = (int8_t)gLoraDefaultDatarate,
         .PublicNetworkEnable = LORAWAN_PUBLIC_NETWORK,
         .DutyCycleEnabled = LORAWAN_DUTYCYCLE_ON,
         .DataBufferMaxSize = LORAWAN_APP_DATA_BUFFER_MAX_SIZE,
@@ -547,9 +547,9 @@ void StartTaskDefault(void const * argument)
     TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
     LmHandlerParams =   {
         .Region = (LoRaMacRegion_t)(uint8_t)gActiveRegion,
-        .AdrEnable = gLoraAdrState,
+        .AdrEnable = (bool)gLoraAdrState,
         .IsTxConfirmed = LORAWAN_DEFAULT_CONFIRMED_MSG_STATE,
-        .TxDatarate = gLoraDefaultDatarate,
+        .TxDatarate = (int8_t)gLoraDefaultDatarate,
         .PublicNetworkEnable = LORAWAN_PUBLIC_NETWORK,
         .DutyCycleEnabled = LORAWAN_DUTYCYCLE_ON,
         .DataBufferMaxSize = LORAWAN_APP_DATA_BUFFER_MAX_SIZE,
@@ -632,9 +632,9 @@ void StartTaskOneWire(void const * argument)
     	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
 
     	if(gDs18b20.waitTempReady(0) == osOK) {
-    		DBG("Temp ready\n");
+    	//	DBG("Temp ready\n");
     		//gLoraAppPort.store.dump();
-    		DBG("Heap %i\n",xPortGetFreeHeapSize());
+    		//DBG("Heap %i\n",xPortGetFreeHeapSize());
     		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osMailAlloc(gThermalSensorsMq, osWaitForever));
     		if(sensorData) {
 				for(uint8_t s = 0; s < ds18b20Sensors; s++) {
