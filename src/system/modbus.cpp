@@ -32,7 +32,7 @@ constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
     return static_cast<typename std::underlying_type<E>::type>(e);
 }
 
-ModbusHandler *mHandlers[MAX_M_HANDLERS];
+volatile ModbusHandler *mHandlers[MAX_M_HANDLERS];
 
 
 ///Queue Modbus telegrams for master
@@ -47,7 +47,7 @@ osThreadDef(ModbusSlaveTask, ModbusHandler::SlaveTask, osPriorityNormal, MAX_M_H
 //Semaphore to access the Modbus Data
 osSemaphoreDef(ModBusSp);
 
-uint8_t numberHandlers = 0;
+volatile uint8_t numberHandlers = 0;
 
 extern "C" void vTimerCallbackT35(TimerHandle_t *pxTimer);
 extern "C" void vTimerCallbackTimeout(TimerHandle_t *pxTimer);
@@ -331,14 +331,14 @@ ModbusHandler::ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const
 	  mHandlers[numberHandlers++] = this;
 }
 
-void ModbusHandler::SetLine()
+void ModbusHandler::SetLine(const uint32_t baudrate, const WordLength_t wordLength, const StopBits_t stopBits, const Parity_t parity)
 {
-	UartConfig( mUart, RX_TX, SYNC, 115200/mBaudRate, static_cast<WordLength_t>((uint8_t)mWordLen),static_cast<StopBits_t>((uint8_t)mStopBits), static_cast<Parity_t>((uint8_t)mParity), NO_FLOW_CTRL );
+	UartConfig( mUart, RX_TX, SYNC, baudrate, wordLength, stopBits, parity, NO_FLOW_CTRL );
 }
 
-void ModbusHandler::Start()
+void ModbusHandler::Start( )
 {
-	SetLine();
+	SetLine(115200/mBaudRate, static_cast<WordLength_t>((uint8_t)mWordLen),static_cast<StopBits_t>((uint8_t)mStopBits), static_cast<Parity_t>((uint8_t)mParity));
 	if (mDePin != NULL )
     {
        // return RS485 transceiver to receive mode

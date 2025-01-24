@@ -443,7 +443,7 @@ public:
 	virtual ~ModbusHandler(){};
 
 	void Start();
-	virtual void SetLine();
+	virtual void SetLine(const uint32_t baudrate = 9600, const WordLength_t wordLength=UART_8_BIT, const StopBits_t stopBits = UART_1_STOP_BIT, const Parity_t parity = NO_PARITY);
 
 	void setTimeOut( uint16_t timeOut); //!<write communication watch-dog timer
 	uint16_t getTimeOut(); //!<get communication watch-dog timer value
@@ -463,8 +463,8 @@ public:
 	Register& operator[](const size_t idx) {return mRegs[static_cast<Register::Index>(idx)];}
 };
 
-extern uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
-extern ModbusHandler *mHandlers[MAX_M_HANDLERS];
+extern volatile uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
+extern volatile ModbusHandler *mHandlers[MAX_M_HANDLERS];
 
 
 namespace Master {
