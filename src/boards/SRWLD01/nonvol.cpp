@@ -31,7 +31,6 @@ const uint8_t NvStore::registry[NV_LAST_VAR] = {
 NvStore& NvStore::Instance()
 {
       static NvStore s;
-      DBG("nvs s %p\n",(void*)&NvStore::Instance);
       DBG("nvs ss %p\n",(void*)&s);
       DBG("nvs ee %p\n",(void*)&s.eeprom);
       return s;
