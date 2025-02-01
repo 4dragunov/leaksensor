@@ -16,10 +16,8 @@
 #include <sys/time.h>
 #include "sensors.h"
 
-#define ADC_CHANNEL_COUNT 20
-#define MAV_WINDOW 4
 
-const ChannelConfig gChannelConfig[ADC_CHANNEL_COUNT] = {
+const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT] = {
 
     {// канал 1
      .toggle_pin1 = PE_12,
@@ -163,44 +161,40 @@ const ChannelConfig gChannelConfig[ADC_CHANNEL_COUNT] = {
     }
 };
 
-ChannelPins gChannelsPins[CHANNEL_COUNT];
+ChannelPins gChannelsPins[WL_CHANNEL_COUNT];
 
 Samples DataSampler::mSamples = {};
 
 Channel::Limits default_wl_limits{0, 100, false, Channel::Units::VOLTAGE,  1.0};
-Channel::Limits default_vref_limits{0, 100, false, Channel::Units::VOLTAGE,  1.0};
-Channel::Limits default_ts_limits{0, 100, false, Channel::Units::TEMPERATURE,  1.0};
-
-Channel ch(gChannelsPins[0],  DataSampler::mSamples.data.raw[0],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit);
+//Channel::Limits default_vref_limits{0, 100, false, Channel::Units::VOLTAGE,  1.0};
+//Channel::Limits default_ts_limits{0, 100, false, Channel::Units::TEMPERATURE,  1.0};
 
 DataSampler::Channels DataSampler::mChannels ={
 
-		Channel(gChannelsPins[0],  DataSampler::mSamples.data.raw[0],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[1],  DataSampler::mSamples.data.raw[1],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[2],  DataSampler::mSamples.data.raw[2],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[3],  DataSampler::mSamples.data.raw[3],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[4],  DataSampler::mSamples.data.raw[4],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[5],  DataSampler::mSamples.data.raw[5],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[6],  DataSampler::mSamples.data.raw[6],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[7],  DataSampler::mSamples.data.raw[7],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[8],  DataSampler::mSamples.data.raw[8],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[9],  DataSampler::mSamples.data.raw[9],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[10],  DataSampler::mSamples.data.raw[10],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[11],  DataSampler::mSamples.data.raw[11],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[12],  DataSampler::mSamples.data.raw[12],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[13],  DataSampler::mSamples.data.raw[13],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[14],  DataSampler::mSamples.data.raw[14],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[15],  DataSampler::mSamples.data.raw[15],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[16],  DataSampler::mSamples.data.raw[16],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[17],  DataSampler::mSamples.data.raw[17],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[18],  DataSampler::mSamples.data.raw[18],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[19],  DataSampler::mSamples.data.raw[19],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[20],  DataSampler::mSamples.data.raw[20],  Channel::Type::VREF, default_vref_limits, DataSampler::OnChannelLimit),
-		Channel(gChannelsPins[21],  DataSampler::mSamples.data.raw[21],  Channel::Type::TS, default_ts_limits, DataSampler::OnChannelLimit),
+		Channel(0, gChannelsPins[0],  DataSampler::mSamples.data.raw[0],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(1, gChannelsPins[1],  DataSampler::mSamples.data.raw[1],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(2, gChannelsPins[2],  DataSampler::mSamples.data.raw[2],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(3, gChannelsPins[3],  DataSampler::mSamples.data.raw[3],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(4, gChannelsPins[4],  DataSampler::mSamples.data.raw[4],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(5, gChannelsPins[5],  DataSampler::mSamples.data.raw[5],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(6, gChannelsPins[6],  DataSampler::mSamples.data.raw[6],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(7, gChannelsPins[7],  DataSampler::mSamples.data.raw[7],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(8, gChannelsPins[8],  DataSampler::mSamples.data.raw[8],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(9, gChannelsPins[9],  DataSampler::mSamples.data.raw[9],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(10, gChannelsPins[10],  DataSampler::mSamples.data.raw[10],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(11, gChannelsPins[11],  DataSampler::mSamples.data.raw[11],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(12, gChannelsPins[12],  DataSampler::mSamples.data.raw[12],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(13, gChannelsPins[13],  DataSampler::mSamples.data.raw[13],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(14, gChannelsPins[14],  DataSampler::mSamples.data.raw[14],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(15, gChannelsPins[15],  DataSampler::mSamples.data.raw[15],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(16, gChannelsPins[16],  DataSampler::mSamples.data.raw[16],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(17, gChannelsPins[17],  DataSampler::mSamples.data.raw[17],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(18, gChannelsPins[18],  DataSampler::mSamples.data.raw[18],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit),
+		Channel(19, gChannelsPins[19],  DataSampler::mSamples.data.raw[19],  Channel::Type::WL, default_wl_limits, DataSampler::OnChannelLimit)
 };
 
 
-osThreadDef(samplerTask, DataSampler::SamplerTask, osPriorityNormal, 0, 128);
+osThreadDef(samplerTask, DataSampler::SamplerTask, osPriorityNormal, 0, 256);
 osMailQDef (samplesMq, 1, Samples);  // Declare mail queue
 
 bool operator==(const Gpio_t& lhs, const Gpio_t& rhs)
@@ -215,7 +209,8 @@ bool operator==(const Adc_t& lhs, const Adc_t& rhs)
 		   (lhs.AdcInput == rhs.AdcInput);
 }
 
-Channel::Channel(ChannelPins &pins, uint16_t &val, Type type, Limits limits, OnLimit onLimit):
+Channel::Channel(const uint8_t id, ChannelPins &pins, uint16_t &val, Type type, Limits limits, OnLimit onLimit):
+		id(id),
 		pins(pins),
 		val(val),
 		type(type),
@@ -233,7 +228,7 @@ uint16_t&  Channel::Measure(){
 
 void Channel::SetChannels(const ChannelPins& active_channel, uint8_t val) {
     // Перебираем все каналы и подаем высокий логический уровень на неактивные
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < WL_CHANNEL_COUNT; i++) {
         if (gChannelsPins[i] != active_channel) {
             GpioWrite(&gChannelsPins[i].ptp, val);
             GpioWrite(&gChannelsPins[i].ntp, val);
@@ -257,7 +252,7 @@ void Channel::ToggleCurrentDirection(const Gpio_t &pin1, const Gpio_t &pin2, uin
 }
 
 uint16_t Channel::Process(const ChannelPins& channel) {
-    const int num_measurements = 12;
+    const int num_measurements = 2;
     uint16_t adc_values[num_measurements];
     float sum = 0;
     uint16_t max_value = 0;
@@ -313,24 +308,26 @@ return mSamplesMq;
 }
 
 void DataSampler::DeInit(){
-	for(int i = 0; i < ADC_CHANNEL_COUNT; i++)
+	for(int i = 0; i < WL_CHANNEL_COUNT; i++)
 	   AdcDeInit( &gChannelsPins[i].ap );
 }
 
 void DataSampler::SamplerTask(void const * argument)
 {
 	DataSampler *sampler = (DataSampler*)argument;
+	DBG("ADC Sampler started\n");
 	while( 1 ){
 		Samples* sensorsData = (Samples*)osMailAlloc(*sampler, osWaitForever);
+		if(sensorsData) {
+			for (int i = 0; i < WL_CHANNEL_COUNT; i++) {
+				mChannels[i].Measure();
+			}
+			*sensorsData = sampler->mMav.Filter(&sampler->samples());
 
-		for (int i = 0; i < CHANNEL_COUNT; i++) {
-			mChannels[i].Measure();
+			gettimeofday(&sensorsData->timestamp,0);
+			sampler->mTs = sensorsData->timestamp;
+			osMailPut(*sampler, (void*)sensorsData);
 		}
-		*sensorsData = sampler->mMav.Filter(&sampler->samples());
-
-		gettimeofday(&sensorsData->timestamp,0);
-		sampler->mTs = sensorsData->timestamp;
-		osMailPut(*sampler, (void*)sensorsData);
 	}
 }
 
@@ -341,16 +338,16 @@ void DataSampler::OnChannelLimit(const Channel *ch)
 
 void DataSampler::DoOnChannelLimit(const Channel *ch)
 {
-
+	DBG("Channel %d reached limit %i\n", ch->id, ch->val);
 }
 
 void setSamplerate(struct timeval &tv)
 {
-
+	DBG("Sample rate changed\n");
 }
 
 struct timeval getSamplerate(void)
 {
-
+	DBG("Sample rate:\n");
 }
 

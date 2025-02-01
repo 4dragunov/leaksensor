@@ -18,7 +18,7 @@
 #include "mav.h"
 #include <cmsis_os.h>
 
-#define CHANNEL_COUNT 20
+#define WL_CHANNEL_COUNT 20
 #define MAV_WINDOW 4
 
 typedef struct {
@@ -64,7 +64,7 @@ struct Channel{
 	    float    div;
 	}Limits;
 
-	Channel(ChannelPins &pins, uint16_t &val, Type type, Limits limits, OnLimit onLimit = nullptr);
+	Channel(const uint8_t id, ChannelPins &pins, uint16_t &val, Type type, Limits limits, OnLimit onLimit = nullptr);
 	virtual ~Channel() = default;
 
 	uint16_t&  Measure();
@@ -72,7 +72,7 @@ struct Channel{
 	void SetChannels(const ChannelPins& active_channel, uint8_t val);
 	void ToggleCurrentDirection(const Gpio_t &pin1, const Gpio_t &pin2, uint16_t time_delay);
 	operator uint16_t&() {return Measure();}
-
+    const uint8_t id;
 	ChannelPins &pins;
 	uint16_t &val;
 	Type type;
@@ -83,9 +83,9 @@ struct Channel{
 
 typedef struct Samples{
 	union Data{
-		std::array<uint16_t, CHANNEL_COUNT + 1 + 1> raw;
+		std::array<uint16_t, WL_CHANNEL_COUNT + 1 + 1> raw;
 		struct {
-			std::array<uint16_t, CHANNEL_COUNT>  wl;
+			std::array<uint16_t, WL_CHANNEL_COUNT>  wl;
 			int16_t Ts;
 			uint16_t Vref;
 		} ch;
@@ -171,7 +171,7 @@ typedef struct Samples{
 class DataSampler {
 	friend void SamplerTask(void const * argument);
 public:
-	 typedef std::array<Channel, CHANNEL_COUNT + 1 + 1> Channels;
+	 typedef std::array<Channel, WL_CHANNEL_COUNT> Channels;
 
 	 static DataSampler &Instance() {
 		 static DataSampler instance;
@@ -204,8 +204,8 @@ protected:
 	 DataSampler();
 	 virtual ~DataSampler();
 };
-extern const ChannelConfig gChannelConfig[CHANNEL_COUNT];
-extern  ChannelPins gChannelsPins[CHANNEL_COUNT];
+extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT];
+extern  ChannelPins gChannelsPins[WL_CHANNEL_COUNT];
 #endif
 
 
