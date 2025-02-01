@@ -32,7 +32,7 @@
  *
  * \param [IN] uart UART interface object used by the command line interface
  */
-void CliProcess( Uart_t* uart );
+void CliProcess(FILE* f );
 
 #ifdef __cplusplus
 }

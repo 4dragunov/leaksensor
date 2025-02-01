@@ -24,22 +24,14 @@
 
 #define TIMEOUT 100
 
-void CliProcess( Uart_t* uart )
+void CliProcess( FILE * f )
 {
-    uint8_t data = 0;
-
-    if( UartGetChar( uart, &data, TIMEOUT ) == 0 )
+	int data = getc(f);
+    if( data != EOF )
     {
-        if( data == '\x1B' )
-        { // Escape character has been received
-            printf( "ESC + " );
-            while( UartGetChar( uart, &data, TIMEOUT ) != 0 )
-            {
-            }
-            printf( "%c\n", data );
             if( data == 'N' )
             { // N character has been received
-                data = 0;
+                data = EOF;
                 // Reset NVM
                 if( NvmDataMgmtFactoryReset( ) == true )
                 {
@@ -53,6 +45,5 @@ void CliProcess( Uart_t* uart )
                 printf( "\n\nPLEASE RESET THE END-DEVICE\n\n" );
                 while( 1 );
             }
-        }
     }
 }

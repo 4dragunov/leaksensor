@@ -47,6 +47,7 @@
 #include "board-config.h"
 #include "nonvol.h"
 #include "utilities.h"
+#include "NvmDataMgmt.h"
 
 #define TEST
 
@@ -125,7 +126,7 @@ using namespace ModBus::Slave;
 #define UART_BUFFER_SIZE 256
 
 
-NvProperty<uint8_t> gActiveRegion(LORAMAC_REGION_AS923, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
+NvProperty<uint8_t> gActiveRegion(LORAMAC_REGION_EU868, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
 
 NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_resolution(to_underlying(OneWire::DS18B20::Resolution::SR9BITS),
 		to_underlying(OneWire::DS18B20::Resolution::SR12BITS),
@@ -175,20 +176,8 @@ static bool AppLedStateOn = false;
  */
 static TimerEvent_t TxTimer;
 
-/*!
- * Timer to handle the state of LED1
- */
-static TimerEvent_t Led1Timer;
-
-/*!
- * Timer to handle the state of LED2
- */
-static TimerEvent_t Led2Timer;
-
-/*!
- * Timer to handle the state of LED beacon indicator
- */
-static TimerEvent_t LedBeaconTimer;
+osSemaphoreDef(UplinkSem);
+osSemaphoreId gUplinkSem;
 
 void StartTaskModBus(void const * argument);
 osThreadId modbusTaskHandle;
@@ -207,6 +196,8 @@ static uint8_t ds18b20Sensors = 0;
 int16_t ds18b20SensorTemp[8] = {};
 uint16_t gLeakSensorData[20] = {};
 uint8_t  gLeakSensorCount = 20;
+
+std::unique_ptr<ModBusSlave> gSlave;
 
 enum class Index:std::underlying_type_t<ModBus::Index>{
 			DS18B20_RESOLUTION = static_cast<std::underlying_type_t<ModBus::Index>>(ModBus::Index::END),
@@ -365,17 +356,22 @@ static void OnTxTimerEvent( void* context );
 /*!
  * Function executed on Led 1 Timeout event
  */
-static void OnLed1TimerEvent( void* context );
+static void OnLed1TimerEvent(const void* context );
 
 /*!
  * Function executed on Led 2 Timeout event
  */
-static void OnLed2TimerEvent( void* context );
+static void OnLed2TimerEvent(const void* context );
+
+/*!
+ * Function executed on Led 3 Timeout event
+ */
+static void OnLed3TimerEvent(const void* context );
 
 /*!
  * \brief Function executed on Beacon timer Timeout event
  */
-static void OnLedBeaconTimerEvent( void* context );
+static void OnLedBeaconTimerEvent(const void* context );
 
 static LmHandlerCallbacks_t LmHandlerCallbacks =
 {
@@ -423,8 +419,6 @@ static LmhpComplianceParams_t LmhpComplianceParams =
  */
 static volatile uint8_t IsMacProcessPending = 0;
 
-static volatile uint8_t IsTxFramePending = 0;
-
 static volatile uint32_t TxPeriodicity = 0;
 
 /*!
@@ -432,6 +426,42 @@ static volatile uint32_t TxPeriodicity = 0;
  */
 extern Gpio_t Led1; // Tx
 extern Gpio_t Led2; // Rx
+extern Gpio_t Led3;
+/*!
+ * Timer to handle the state of LED1
+ */
+osTimerDef(Led1Timer, OnLed1TimerEvent);
+static osTimerId Led1Timer;
+#define LED1_TIMER_TIMEOUT 25
+/*!
+ * Timer to handle the state of LED2
+ */
+osTimerDef(Led2Timer, OnLed2TimerEvent);
+static osTimerId Led2Timer;
+#define LED2_TIMER_TIMEOUT 25
+
+/*!
+ * Timer to handle the state of LED3
+ */
+osTimerDef(Led3Timer, OnLed3TimerEvent);
+static osTimerId Led3Timer;
+#define LED3_TIMER_TIMEOUT 25
+
+/*!
+ * Timer to handle the state of LED beacon indicator
+ */
+osTimerDef(LedBeaconTimer, OnLedBeaconTimerEvent);
+static osTimerId LedBeaconTimer;
+#define LED_BEACON_TIMER_TIMEOUT 5000
+
+static struct Leds{
+	Gpio_t &pio;
+	osTimerId &timer;
+	uint16_t   timeout;
+}gLeds[] = {{Led1, Led1Timer, LED1_TIMER_TIMEOUT}, {Led2, Led2Timer, LED2_TIMER_TIMEOUT}, {Led3, Led3Timer, LED3_TIMER_TIMEOUT}};
+
+#define LED_SWITCH_ON(led) {GpioWrite( &gLeds[led].pio, LED_ON ); osTimerStart( gLeds[led].timer, gLeds[led].timeout );}
+#define LED_SWITCH_OFF(led)    {osTimerStop( gLeds[led].timer ); GpioWrite( &gLeds[led].pio, LED_OFF );}
 
 /*!
  * UART object used for command line interface handling
@@ -487,22 +517,21 @@ void StartTaskModBus(void const * argument)
 
 	Gpio_t dePin;
 	GpioInit(&dePin, PD_4, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-	auto slave = std::make_unique<ModBusSlave>(&Usart2, &dePin, 1, modbusRegisters);
-  /* Infinite loop */
-
-	slave->Start();
+	gSlave = std::make_unique<ModBusSlave>(&Usart2, &dePin, 1, modbusRegisters);
+    assert(gSlave);
+    Eeprom &eeprom = Eeprom::Instance();
+	gSlave->Start();
+	 /* Infinite loop */
 	for(;;)
 	{
-
 		osEvent ev = osMailGet(DataSampler::Instance(), osWaitForever);
-
-
-
 		if(ev.status == osEventMail) {
+			DBG("Free eeprom %i\n", eeprom.free);
+			DBG("MB MAIL\n");
 			Samples *s = static_cast<Samples *>(ev.value.p);
 			size_t j = 0;
 			for(auto i :wl_iterator()) {
-				(*slave)[(int)i] = s[(int)i].data.ch.wl[j++];
+				(*gSlave)[(int)i] = s[(int)i].data.ch.wl[j++];
 			}
 			osMailFree(DataSampler::Instance(), ev.value.p);
 		}
@@ -523,25 +552,19 @@ void UpdateHadlerProps(){
 void StartTaskDefault(void const * argument)
 {
   /* USER CODE BEGIN StartTaskLeakMeter */
-	TimerInit( &Led1Timer, OnLed1TimerEvent );
-	TimerSetValue( &Led1Timer, 25 );
+	Led1Timer = osTimerCreate( osTimer(Led1Timer), osTimerOnce, NULL );
 
-	TimerInit( &Led2Timer, OnLed2TimerEvent );
-	TimerSetValue( &Led2Timer, 25 );
+	Led2Timer = osTimerCreate( osTimer(Led2Timer), osTimerOnce, NULL );
 
-	TimerInit( &LedBeaconTimer, OnLedBeaconTimerEvent );
-	TimerSetValue( &LedBeaconTimer, 5000 );
+	Led3Timer = osTimerCreate( osTimer(Led3Timer), osTimerOnce, NULL );
 
-
+	LedBeaconTimer = osTimerCreate( osTimer(LedBeaconTimer), osTimerOnce, NULL );
 
     const Version_t appVersion = { .Value = FIRMWARE_VERSION };
     const Version_t gitHubVersion = { .Value = GITHUB_VERSION };
     DisplayAppInfo( "periodic-uplink-lpp",
                     &appVersion,
                     &gitHubVersion );
-
-
-
 
     // Initialize transmission periodicity variable
     TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
@@ -557,17 +580,14 @@ void StartTaskDefault(void const * argument)
         .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
     };
 
-
-
+    BoardInitPeriph(); // init lora in task context
 
     if ( LmHandlerInit( &LmHandlerCallbacks, &LmHandlerParams ) != LORAMAC_HANDLER_SUCCESS )
     {
         printf( "LoRaMac wasn't properly initialized\n" );
-        // Fatal error, endless loop.
-        while ( 1 )
-        {
-        	assert(0);
-        }
+        Eeprom::erase();
+        NvmDataMgmtFactoryReset( );
+        BoardResetMcu();
     }
 
     // Set system maximum tolerated rx error in milliseconds
@@ -584,8 +604,8 @@ void StartTaskDefault(void const * argument)
   for(;;)
   {
 
-    // Process characters sent over the command line interface
-          //CliProcess( &Usart2 );
+          // Process characters sent over the command line interface
+          CliProcess( stdin );
           // Processes the LoRaMac events
           LmHandlerProcess( );
 
@@ -621,8 +641,6 @@ void StartTaskDefault(void const * argument)
 /* USER CODE END Header_StartTaskOneWire */
 void StartTaskOneWire(void const * argument)
 {
-
-
   for(;;)
   {
     if(!ds18b20Sensors) {
@@ -632,10 +650,9 @@ void StartTaskOneWire(void const * argument)
     	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
 
     	if(gDs18b20.waitTempReady(0) == osOK) {
-    	//	DBG("Temp ready\n");
-    		//gLoraAppPort.store.dump();
+    		//	DBG("Temp ready\n");
     		//DBG("Heap %i\n",xPortGetFreeHeapSize());
-    		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osMailAlloc(gThermalSensorsMq, osWaitForever));
+    		ThermalSensorsData* sensorData = static_cast<ThermalSensorsData*>(osMailCAlloc(gThermalSensorsMq, osWaitForever));
     		if(sensorData) {
 				for(uint8_t s = 0; s < ds18b20Sensors; s++) {
 					OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &sensorData->data[s]);
@@ -649,7 +666,9 @@ void StartTaskOneWire(void const * argument)
 				sensorData->sensors = ds18b20Sensors;
 				time(&sensorData->timestamp);
 				osMailPut(gThermalSensorsMq, (void*)sensorData);  // Send Message
-    		}// Cooperative multitasking
+    		}else{
+    			osDelay(200);
+    		}
 
         }else {
         	DBG("temp wait error\n");
@@ -693,24 +712,28 @@ void StartTaskTimerTest(void const * argument)
  */
 int main( void )
 {
+	//Not needed but for compatibility
+	osKernelInitialize();   // pre initialize CMSIS-RTOS
     BoardInitMcu( );
-    //Not needed but for compatibility
-    osKernelInitialize();   // pre initialize CMSIS-RTOS
 
     modbusTaskHandle = osThreadCreate(osThread(modbusTask), NULL);
+    assert(modbusTaskHandle);
 
     oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
-
+    assert(oneWireTaskHandle);
     defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    assert(defaultTaskHandle);
     // create mail queues
     gThermalSensorsMq = osMailCreate(osMailQ(ThermalSensors), NULL);
-
+    assert(gThermalSensorsMq);
     gLeakSensorsMq = osMailCreate(osMailQ(LeakSensors), NULL);
+    assert(gLeakSensorsMq);
+    // create semaphores
+    gUplinkSem = osSemaphoreCreate(osSemaphore(UplinkSem), 1);
+    assert(gUplinkSem);
 
 	DBG("Heap %i\n", xPortGetFreeHeapSize());
-
     osKernelStart();
-
     while(1) {
     	assert(0);
     }
@@ -776,8 +799,7 @@ static void OnRxData( LmHandlerAppData_t* appData, LmHandlerRxParams_t* params )
     }
 
     // Switch LED 2 ON for each received downlink
-    GpioWrite( &Led2, 1 );
-    TimerStart( &Led2Timer );
+    LED_SWITCH_ON(LedsType::LED2);
 }
 
 static void OnClassChange( DeviceClass_t deviceClass )
@@ -800,13 +822,13 @@ static void OnBeaconStatusChange( LoRaMacHandlerBeaconParams_t* params )
     {
         case LORAMAC_HANDLER_BEACON_RX:
         {
-            TimerStart( &LedBeaconTimer );
+            osTimerStart( LedBeaconTimer, LED_BEACON_TIMER_TIMEOUT );
             break;
         }
         case LORAMAC_HANDLER_BEACON_LOST:
         case LORAMAC_HANDLER_BEACON_NRX:
         {
-            TimerStop( &LedBeaconTimer );
+            osTimerStop( LedBeaconTimer );
             break;
         }
         default:
@@ -842,13 +864,14 @@ static void PrepareTxFrame( void )
     {
         return;
     }
-
+    DBG("not busy\n");
     AppData.Port = LORAWAN_APP_PORT;
 
     CayenneLppReset( );
 
     evt = osMailGet(gLeakSensorsMq, osWaitForever);  // wait for message
     if (evt.status == osEventMail) {
+    	DBG("LS MAIL\n");
     	LeakSensorsData *leakSensorsData = static_cast<LeakSensorsData*>(evt.value.p);
 
     	CayenneLppAddDigitalInput(channel++, leakSensorsData->sensors );
@@ -860,6 +883,7 @@ static void PrepareTxFrame( void )
 
     evt = osMailGet(gThermalSensorsMq, osWaitForever);  // wait for message
     if (evt.status == osEventMail) {
+    	DBG("TS MAIL\n");
     	ThermalSensorsData *thermalSensorsData = static_cast<ThermalSensorsData *>(evt.value.p);
 
     	CayenneLppAddDigitalInput(channel++, thermalSensorsData->sensors );
@@ -879,8 +903,7 @@ static void PrepareTxFrame( void )
     if( LmHandlerSend( &AppData, LmHandlerParams.IsTxConfirmed ) == LORAMAC_HANDLER_SUCCESS )
     {
         // Switch LED 1 ON
-        GpioWrite( &Led1, 1 );
-        TimerStart( &Led1Timer );
+    	LED_SWITCH_ON(LedsType::LED1);
     }
 }
 
@@ -907,12 +930,7 @@ static void StartTxProcess( LmHandlerTxEvents_t txEvent )
 
 static void UplinkProcess( void )
 {
-    uint8_t isPending = 0;
-    CRITICAL_SECTION_BEGIN( );
-    isPending = IsTxFramePending;
-    IsTxFramePending = 0;
-    CRITICAL_SECTION_END( );
-    if( isPending == 1 )
+    if(osSemaphoreWait(gUplinkSem, osWaitForever) == osOK)
     {
         PrepareTxFrame( );
     }
@@ -924,9 +942,9 @@ static void OnTxPeriodicityChanged( uint32_t periodicity )
 
     if( TxPeriodicity == 0 )
     { // Revert to application default periodicity
-       //TODO:!! TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
+       TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
     }
-
+    DBG("%s\n", __FUNCTION__);
     // Update timer periodicity
     TimerStop( &TxTimer );
     TimerSetValue( &TxTimer, TxPeriodicity );
@@ -935,6 +953,7 @@ static void OnTxPeriodicityChanged( uint32_t periodicity )
 
 static void OnTxFrameCtrlChanged( LmHandlerMsgTypes_t isTxConfirmed )
 {
+	DBG("%s\n", __FUNCTION__);
     LmHandlerParams.IsTxConfirmed = isTxConfirmed;
 }
 
@@ -950,7 +969,7 @@ static void OnTxTimerEvent( void* context )
 {
     TimerStop( &TxTimer );
 
-    IsTxFramePending = 1;
+    osSemaphoreRelease(gUplinkSem);//release semaphore as they created as available
 
     // Schedule next transmission
     TimerSetValue( &TxTimer, TxPeriodicity );
@@ -960,30 +979,33 @@ static void OnTxTimerEvent( void* context )
 /*!
  * Function executed on Led 1 Timeout event
  */
-static void OnLed1TimerEvent( void* context )
+static void OnLed1TimerEvent(const void* context )
 {
-    TimerStop( &Led1Timer );
-    // Switch LED 1 OFF
-    GpioWrite( &Led1, 0 );
+    LED_SWITCH_OFF(LedsType::LED1);
 }
 
 /*!
  * Function executed on Led 2 Timeout event
  */
-static void OnLed2TimerEvent( void* context )
+static void OnLed2TimerEvent(const void* context )
 {
-    TimerStop( &Led2Timer );
     // Switch LED 2 OFF
-    GpioWrite( &Led2, 0 );
+    LED_SWITCH_OFF(LedsType::LED2);
 }
 
 /*!
+ * Function executed on Led 2 Timeout event
+ */
+static void OnLed3TimerEvent(const void* context )
+{
+    // Switch LED 2 OFF
+    LED_SWITCH_OFF(LedsType::LED3);
+}
+/*!
  * \brief Function executed on Beacon timer Timeout event
  */
-static void OnLedBeaconTimerEvent( void* context )
+static void OnLedBeaconTimerEvent(const void* context )
 {
-    GpioWrite( &Led2, 1 );
-    TimerStart( &Led2Timer );
-
-    TimerStart( &LedBeaconTimer );
+    LED_SWITCH_ON(LedsType::LED2);
+    osTimerStart( LedBeaconTimer, LED_BEACON_TIMER_TIMEOUT );
 }
