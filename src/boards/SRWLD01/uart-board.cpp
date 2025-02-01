@@ -65,7 +65,7 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 {
     obj->UartId = uartId;
     obj->handle = &UartHandle[uartId];
-
+    DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( uartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -106,7 +106,7 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
         	}
         };
         GpioInit( &obj->Tx, tx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-        GpioInit( &obj->Rx, rx, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
+        GpioInit( &obj->Rx, rx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
         switch(obj->UartId) {
         	case USART_1: {
         		if(tx == PB_6 && rx == PB_7){
@@ -126,6 +126,7 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 
 void UartMcuConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
 {
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( obj->UartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -236,6 +237,7 @@ void UartMcuConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baud
 
 void UartMcuDeInit( Uart_t *obj )
 {
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( obj->UartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -288,6 +290,7 @@ void UartMcuDeInit( Uart_t *obj )
 
 uint8_t UartMcuPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )
 {
+	//DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( obj->UartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -298,29 +301,42 @@ uint8_t UartMcuPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )
     }
     else
     {
-        if((obj->fifo==FIFO && IsFifoFull( &obj->FifoTx ) == false )||
-           (obj->fifo==SYNC && IsFifoEmpty( &obj->FifoTx ) == true ))
+#ifndef USART_SUPPORT_RTOS
+        if(obj->fifo == SYNC) {
+        	auto ret = HAL_UART_Transmit((UART_HandleTypeDef*)obj->handle, &data, 1, timeout);
+        	DBG("result:%i\n",ret);
+        	return ret;
+        }
+        else
+#endif
+        if(!IsFifoFull( &obj->FifoTx ))
         {
-        	if(obj->fifo == SYNC)
-        		return HAL_UART_Transmit((UART_HandleTypeDef*)obj->handle, &data, 1, timeout);
-
         	CRITICAL_SECTION_BEGIN( );
             FifoPush( &obj->FifoTx, data );
             // Trig UART Tx interrupt to start sending the FIFO contents.
             __HAL_UART_ENABLE_IT( &UartHandle[obj->UartId], UART_IT_TC );
             CRITICAL_SECTION_END( );
-            if(obj->fifo==SYNC ) {
-            	uint32_t res = osSemaphoreWait (obj->txSem, timeout);
-            	return res;
-            }
-            return 0; // OK
+#ifdef USART_SUPPORT_RTOS
+         if(obj->fifo == SYNC) {
+        	 auto ret = osSemaphoreWait(obj->txSem, timeout) ; // OK
+        	// DBG("txSem result:%i: %s\n", ret, ret==osOK? "ok": "fail");
+        	 return ret != osOK;
+         }
+         else
+         {
+        	// DBG("ok\n");
+        	 return 0;
+         }
+#endif
         }
-        return 1; // Busy
+     DBG("%s fail\n",__FUNCTION__);
+     return 1; // Busy
     }
 }
 
 uint8_t UartMcuGetChar( Uart_t *obj, uint8_t *data , uint32_t timeout )
 {
+	//DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( obj->UartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -331,30 +347,29 @@ uint8_t UartMcuGetChar( Uart_t *obj, uint8_t *data , uint32_t timeout )
     }
     else
     {
-    	//if(obj->fifo == SYNC)
-    	//	return HAL_UART_Receive((UART_HandleTypeDef*)obj->handle, data, 1, timeout);
-
-		CRITICAL_SECTION_BEGIN( );
-    	if( IsFifoEmpty( &obj->FifoRx ) && obj->fifo == SYNC)
-    		if(osSemaphoreWait (obj->rxSem, timeout) != osOK ){
-    			return osErrorOS;
-    		}
-
-        if( IsFifoEmpty( &obj->FifoRx ) == false )
+#ifndef USART_SUPPORT_RTOS
+    	if(obj->fifo == SYNC){
+    		auto ret = HAL_UART_Receive((UART_HandleTypeDef*)obj->handle, data, 1, timeout);
+    		DBG("result:%i\n",ret);
+    	    return ret;
+    	}
+#endif
+        if(osSemaphoreWait(obj->rxSem, timeout) == osOK)
         {
+        	CRITICAL_SECTION_BEGIN( );
             *data = FifoPop( &obj->FifoRx );
             CRITICAL_SECTION_END( );
+            //DBG("ok\n");
             return 0;
-        }else {
-        	//TODO:change this
         }
-        CRITICAL_SECTION_END( );
+        DBG("%s fail\n",__FUNCTION__);
         return 1;
     }
 }
 
 uint8_t UartMcuPutBuffer( Uart_t *obj, uint8_t *buffer, uint16_t size , uint32_t timeout )
 {
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     if( obj->UartId == UART_USB_CDC )
     {
 #if defined( USE_USB_CDC )
@@ -389,7 +404,7 @@ uint8_t UartMcuPutBuffer( Uart_t *obj, uint8_t *buffer, uint16_t size , uint32_t
 uint8_t UartMcuGetBuffer( Uart_t *obj, uint8_t *buffer, uint16_t size, uint16_t *nbReadBytes , uint32_t timeout )
 {
     uint16_t localSize = 0;
-
+    DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
     while( localSize < size )
     {
         if( UartGetChar( obj, buffer + localSize ,timeout) == 0 )
@@ -412,9 +427,9 @@ uint8_t UartMcuGetBuffer( Uart_t *obj, uint8_t *buffer, uint16_t size, uint16_t 
 }
 
 bool UartMcuWaitReady(Uart_t *obj, uint32_t millisec){
-
+	DBG("%s uart %i\n",__FUNCTION__, obj->UartId);
 	do {
-	  if (HAL_UART_GetState(&UartHandle[obj->UartId]) == HAL_UART_STATE_READY)
+	  if ((HAL_UART_GetState(&UartHandle[obj->UartId]) & HAL_UART_STATE_READY) == HAL_UART_STATE_READY)
 		  return true;
 	  else
 	    osDelay(1);
@@ -422,60 +437,47 @@ bool UartMcuWaitReady(Uart_t *obj, uint32_t millisec){
 	return false;
 }
 
-uint8_t UartMcuGetBufferToIdle( Uart_t *obj, uint8_t *buffer, uint16_t size, uint16_t *nbReadBytes , uint32_t timeout)
-{
-	while(timeout--) {
-		if(HAL_UARTEx_ReceiveToIdle_DMA(&UartHandle[obj->UartId], buffer, size ) != HAL_OK)
-		{
-			osDelay(1);
-		}
-		else {
-			 __HAL_DMA_DISABLE_IT(UartHandle[obj->UartId].hdmarx, DMA_IT_HT);
-			break;
-		}
-	}
-	//wait if sync data needed
-     if(nbReadBytes) {
-    	if(osSemaphoreWait(obj->rxSem, timeout) == osOK) {
-    		//TODO:assign nbReadBytes
-    		return 0;// ok
-    	}
-    	else {
-    		nbReadBytes = 0;
-    		return 1;
-    	}
-     }
-	return !timeout;
-}
 
 uint32_t UartMcuGetBaudrate(const Uart_t *obj)
 {
+	//DBG("%s uart %i\n",__FUNCTION__, obj->UartId);
 	return UartHandle[obj->UartId].Init.BaudRate;
 }
 
 bool UartMcuSetBaudrate(const Uart_t *obj, uint32_t baudrate)
 {
-	/*
-	UartHandle[obj->UartId].Init.BaudRate = baudrate;
-	return HAL_UART_Init(&UartHandle[obj->UartId]) == HAL_OK;
-*/
-	__HAL_UART_DISABLE(&UartHandle[obj->UartId]);
+
+	//DBG("%s uart:%i to %li\n",__FUNCTION__, obj->UartId, baudrate);
+	//__HAL_UART_DISABLE(&UartHandle[obj->UartId]);
 	uint32_t bus_clk = (obj->UartId == USART_1)? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
-	UartHandle[obj->UartId].Instance->BRR = UART_BRR_SAMPLING16(bus_clk, baudrate);
-	__HAL_UART_ENABLE(&UartHandle[obj->UartId]);
+	auto brr = UART_BRR_SAMPLING16(bus_clk, baudrate);
+	//DBG("uart:%i old brr %li new %li\n",obj->UartId, UartHandle[obj->UartId].Instance->BRR, brr);
+	UartHandle[obj->UartId].Instance->BRR = brr;
+	//__HAL_UART_ENABLE(&UartHandle[obj->UartId]);
+
 	return  true;
 }
 
 void UartMcuAbortReceive(const Uart_t *obj) {
-  HAL_UART_AbortReceive_IT(&UartHandle[obj->UartId]);
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
+	HAL_UART_AbortReceive_IT(&UartHandle[obj->UartId]);
 }
 
 void UartMcuEnableTransmitter(const Uart_t *obj)
 {
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
 	HAL_HalfDuplex_EnableTransmitter(&UartHandle[obj->UartId]);
 }
 
+void UartMcuEnableReciever(const Uart_t *obj)
+{
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
+	HAL_HalfDuplex_EnableReceiver(&UartHandle[obj->UartId]);
+}
+
+
 bool UartMcuLastByteSendOut(const Uart_t *obj, uint32_t timeout){
+	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
 #if defined(STM32H7)  || defined(STM32F3) || defined(STM32L4) || defined(STM32L082xx) || defined(STM32F7) || defined(STM32WB) || defined(STM32G070xx) || defined(STM32F0) || defined(STM32G431xx) || defined(STM32H5)
 	while(timeout-- && (UartHandle[obj->UartId].Instance->ISR & USART_ISR_TC) ==0 )
 #else
@@ -488,75 +490,66 @@ bool UartMcuLastByteSendOut(const Uart_t *obj, uint32_t timeout){
 	return timeout;
 }
 
-void UartMcuEnableReciever(const Uart_t *obj)
-{
-	HAL_HalfDuplex_EnableReceiver(&UartHandle[obj->UartId]);
-}
-
-extern "C"  void ModBus_ErrorCallback(UART_HandleTypeDef *huart);
-extern "C"  void ModBus_RxCpltCallback(UART_HandleTypeDef *UartHandle);
-extern "C" void ModBus_TxCpltCallback(UART_HandleTypeDef *huart);
+void ModBus_ErrorCallback(Uart_t *huart);
+void ModBus_RxCpltCallback(Uart_t *huart);
+void ModBus_TxCpltCallback(Uart_t *huart);
 
 extern "C" void HAL_UART_TxCpltCallback( UART_HandleTypeDef *handle )
 {
 	UartId_t uart = IdByHandle(handle);
-	if(uart != UART_NONE && UartsRegistered[uart]) {
-		if( !IsFifoEmpty( &UartsRegistered[uart]->FifoTx ) )
-		{
-			TxData[uart] = FifoPop( &UartsRegistered[uart]->FifoTx );
-			//  Write one byte to the transmit data register
-			HAL_UART_Transmit_IT( &UartHandle[uart], &TxData[uart], 1 );
-		}
-
+	//DBG("%s %i\n",__FUNCTION__, uart);
+	if( !IsFifoEmpty( &UartsRegistered[uart]->FifoTx ) )
+	{
+		TxData[uart] = FifoPop( &UartsRegistered[uart]->FifoTx );
+		//  Write one byte to the transmit data register
+		HAL_UART_Transmit_IT( &UartHandle[uart], &TxData[uart], 1 );
+	}
+	else{
 		if( UartsRegistered[uart]->IrqNotify != NULL )
 		{
-			UartsRegistered[uart]->IrqNotify( UART_NOTIFY_TX );
+			UartsRegistered[uart]->IrqNotify(UartsRegistered[uart], UART_NOTIFY_TX );
 		}
-		if(osKernelRunning())
-			osSemaphoreRelease (UartsRegistered[uart]->txSem);
-	}else
-	{
-		ModBus_TxCpltCallback(handle);
+#ifdef USART_SUPPORT_RTOS
+		osSemaphoreRelease(UartsRegistered[uart]->txSem);
+#endif
 	}
 }
 
 extern "C" void HAL_UART_RxCpltCallback( UART_HandleTypeDef *handle )
 {
-	UartId_t uart = IdByHandle(handle);
-	if(uart != UART_NONE && UartsRegistered[uart]) {
-		if( !IsFifoFull( &UartsRegistered[uart]->FifoRx ) )
-		{
-			// Read one byte from the receive data register
-			FifoPush( &UartsRegistered[uart]->FifoRx, RxData[uart] );
-		}
 
-		if( UartsRegistered[uart]->IrqNotify != NULL )
-		{
-			UartsRegistered[uart]->IrqNotify( UART_NOTIFY_RX );
-		}
-		if(osKernelRunning())
-			osSemaphoreRelease (UartsRegistered[uart]->rxSem);
-		HAL_UART_Receive_IT( &UartHandle[uart], &RxData[uart], 1 );
-	}else
+	UartId_t uart = IdByHandle(handle);
+	//DBG("%s %i\n",__FUNCTION__, uart);
+	if( !IsFifoFull( &UartsRegistered[uart]->FifoRx ) )
 	{
-		ModBus_RxCpltCallback(handle);
+			// Read one byte from the receive data register
+		FifoPush( &UartsRegistered[uart]->FifoRx, RxData[uart] );
 	}
+
+	if( UartsRegistered[uart]->IrqNotify != NULL )
+	{
+		UartsRegistered[uart]->IrqNotify(UartsRegistered[uart], UART_NOTIFY_RX );
+	}
+#ifdef USART_SUPPORT_RTOS
+	osSemaphoreRelease(UartsRegistered[uart]->rxSem);
+#endif
+	HAL_UART_Receive_IT( &UartHandle[uart], &RxData[uart], 1 );
 }
 
 extern "C" void HAL_UART_ErrorCallback( UART_HandleTypeDef *handle )
 {
 	UartId_t uart = IdByHandle(handle);
+	//DBG("%s %i\n",__FUNCTION__, uart);
 	if(UartHandle[uart].Instance) {
 		HAL_UART_Receive_IT( &UartHandle[uart], &RxData[uart], 1 );
-	}else
-		ModBus_ErrorCallback(handle);
+	}
 }
 
 void USART_IRQHandler(const UartId_t usart )
 {
     // [BEGIN] Workaround to solve an issue with the HAL drivers not managing the uart state correctly.
     uint32_t tmpFlag = 0, tmpItSource = 0;
-
+    //DBG("%s\n",__FUNCTION__);
     tmpFlag = __HAL_UART_GET_FLAG( &UartHandle[usart], UART_FLAG_TC );
     tmpItSource = __HAL_UART_GET_IT_SOURCE( &UartHandle[usart], UART_IT_TC );
     // UART in mode Transmitter end

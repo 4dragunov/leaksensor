@@ -124,10 +124,6 @@ typedef union {
 	uint32_t u32;
 } byteFields ;
 
-
-
-
-
 // helper type for the visitor #4
 template<class... Ts>
 struct overloaded : Ts... { using Ts::operator()...; };
@@ -377,8 +373,9 @@ template<typename T, uint8_t S>
  * Modbus handler structure
  * Contains all the variables required for Modbus daemon operation
  */
-class ModbusHandler
+class Modbus
 {
+	friend void ModBus_RxCpltCallback(Uart_t *huart);
 	ModBusType mType;
 	Uart_t *mUart; //HAL Serial Port handler
 	NvProperty<uint8_t> mId;        //!< 0=master, 1..247=slave number
@@ -408,39 +405,39 @@ class ModbusHandler
 	//Task
     osThreadId mTaskHandle;
 	//Timer RX Modbus
-	xTimerHandle mTimerT35;
+    osTimerId mTimerT35;
 	//Timer MasterTimeout
-	xTimerHandle mTimerTimeout;
+    osTimerId mTimerTimeout;
 	//Semaphore for Modbus data
 	osSemaphoreId mSpHandle;
 	// RX ring buffer for USART
 	RingBuffer<uint8_t,static_cast<unsigned char>(MAX_BUFFER)> mBufferRX;
 
-	static void sendTxBuffer(ModbusHandler *mh);
+	void sendTxBuffer();
 	int16_t getRxBuffer();
-	static uint8_t validateAnswer(ModbusHandler *mh);
-	static void buildException( uint8_t exception, ModbusHandler *mh );
-	static uint8_t validateRequest(ModbusHandler *mh);
+	uint8_t validateAnswer();
+	void buildException( uint8_t exception);
+	uint8_t validateRequest();
 	static uint16_t word(uint8_t H, uint8_t l);
 	static uint16_t calcCRC(uint8_t *Buffer, uint8_t u8length);
-	static void get_FC1(ModbusHandler *mh);
-	static void get_FC3(ModbusHandler *mh);
-	static int8_t process_FC1(ModbusHandler *mh);
-	static int8_t process_FC3(ModbusHandler *mh);
-	static int8_t process_FC5(ModbusHandler *mh);
-	static int8_t process_FC6(ModbusHandler *mh);
-	static int8_t process_FC15(ModbusHandler *mh);
-	static int8_t process_FC16(ModbusHandler *mh);
-	static void vTimerCallbackT35(TimerHandle_t *pxTimer);
-	static void vTimerCallbackTimeout(TimerHandle_t *pxTimer);
+	void get_FC1();
+	void get_FC3();
+	int8_t process_FC1();
+	int8_t process_FC3();
+	int8_t process_FC5();
+	int8_t process_FC6();
+	int8_t process_FC15();
+	int8_t process_FC16();
+	static void vTimerCallbackT35(void const * arg);
+	static void vTimerCallbackTimeout(void const * arg);
 	Error SendQuery(Query_t q);
 
 public:
 	typedef  RingBuffer<uint8_t,static_cast<unsigned char>(MAX_BUFFER)> BusBuffer;
 
 	// Function prototypes
-	ModbusHandler(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, Registers &regs);
-	virtual ~ModbusHandler(){};
+	Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, Registers &regs);
+	virtual ~Modbus(){};
 
 	void Start();
 	virtual void SetLine(const uint32_t baudrate = 9600, const WordLength_t wordLength=UART_8_BIT, const StopBits_t stopBits = UART_1_STOP_BIT, const Parity_t parity = NO_PARITY);
@@ -450,13 +447,13 @@ public:
 	bool getTimeOutState(); //!<get communication watch-dog timer state
 	void Query(Query_t mq ); // put a query in the queue tail
 	void QueryInject(Query_t mq); //put a query in the queue head
-	static void SlaveTask(void *argument); //slave
-	static void MasterTask(void *argument); //master
+	void DoSlaveTask(); //slave
+	void DoMasterTask(); //master
 	static void MasterTask(const void *argument);
 	static void SlaveTask(const void *argument);
-	void * port() {return mUart;}
+	Uart_t* port() {return mUart;}
 	osThreadId taskHandle() {return mTaskHandle;}
-	xTimerHandle t35TimerHandle() {return mTimerT35;}
+	osTimerId  &t35TimerHandle() {return mTimerT35;}
 	BusBuffer& busBuffer() {return mBufferRX;}
 	uint8_t &  dataRX() {return mDataRX;}
 	Registers& registers() {return mRegs;}
@@ -464,15 +461,15 @@ public:
 };
 
 extern volatile uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
-extern volatile ModbusHandler *mHandlers[MAX_M_HANDLERS];
+extern volatile Modbus *mHandlers[MAX_M_HANDLERS];
 
 
 namespace Master {
 
-class ModBusMaster:public ModbusHandler {
+class ModBusMaster:public Modbus {
 public:
 
-	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Master, 0, regs) {
+	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):Modbus(uart, dePin, ModBusType::Master, 0, regs) {
 
 	}
 	virtual ~ModBusMaster()=default;
@@ -481,16 +478,20 @@ public:
 
 namespace Slave {
 
-class ModBusSlave:public ModbusHandler {
+class ModBusSlave:public Modbus {
 public:
 
-	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):ModbusHandler(uart, dePin, ModBusType::Slave, id, regs) {
+	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):Modbus(uart, dePin, ModBusType::Slave, id, regs) {
 	}
 	virtual ~ModBusSlave()=default;
 };
 } //namespace Slave
 
 } //namespace ModBus
+
+extern void ModBus_IrqNotify(Uart_t *uart, UartNotifyId_t type);
+extern void ModBus_TxCpltCallback(Uart_t *huart);
+extern void ModBus_RxCpltCallback(Uart_t *huart);
 
 #endif // __cplusplus
 

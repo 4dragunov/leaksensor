@@ -20,11 +20,14 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
+#include <assert.h>
 #include "uart-board.h"
 #include "uart.h"
 
+#ifdef USART_SUPPORT_RTOS
 osSemaphoreDef(rxSem);
 osSemaphoreDef(txSem);
+#endif
 
 const char *gUsartNames[] = {
 		FOREACH_USART(GENERATE_STRING)
@@ -34,12 +37,16 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 {
     if( obj->IsInitialized == false )
     {
-    	const char usartName[20];
-
+#ifdef USART_SUPPORT_RTOS
     	obj->rxSem = osSemaphoreCreate(osSemaphore(rxSem), 1);
+    	assert(obj->rxSem);
     	vQueueAddToRegistry( obj->rxSem, "rxSem" );
     	obj->txSem = osSemaphoreCreate(osSemaphore(txSem), 1);
+    	assert(obj->txSem);
     	vQueueAddToRegistry( obj->txSem, "txSem"  );
+    	osSemaphoreWait(obj->rxSem, osWaitForever);
+    	osSemaphoreWait(obj->txSem, osWaitForever);
+#endif
         obj->IsInitialized = true;
         UartMcuInit( obj, uartId, tx, rx );
     }
@@ -54,8 +61,10 @@ void UartDeInit( Uart_t *obj )
 {
     obj->IsInitialized = false;
     UartMcuDeInit( obj );
+#ifdef USART_SUPPORT_RTOS
     osSemaphoreDelete(obj->rxSem);
     osSemaphoreDelete(obj->txSem);
+#endif
 }
 
 uint8_t UartPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )

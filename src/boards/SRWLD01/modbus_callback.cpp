@@ -13,6 +13,7 @@
 #include "modbus.h"
 
 using namespace ModBus;
+
 /**
  * @brief
  * This is the callback for HAL interrupts of UART TX used by Modbus library.
@@ -21,29 +22,29 @@ using namespace ModBus;
  * Modbus functionality.
  * @ingroup UartHandle UART HAL handler
  */
+void ModBus_IrqNotify(Uart_t *uart, UartNotifyId_t type) {
+	if(type == UART_NOTIFY_TX)
+		ModBus_TxCpltCallback(uart);
+	else
+		ModBus_RxCpltCallback(uart);
+}
 
-extern "C" void ModBus_TxCpltCallback(UART_HandleTypeDef *huart)
+void ModBus_TxCpltCallback(Uart_t *huart)
 {
 	/* Modbus RTU TX callback BEGIN */
-	bool processed = false;
+
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	for (int i = 0; i < numberHandlers; i++ )
 	{
-	   	if (const_cast<ModbusHandler*>(mHandlers[i])->port() == huart  )
+	   	if (const_cast<Modbus*>(mHandlers[i])->port() == huart->handle  )
 	   	{
-	   		processed = true;
 	   		// notify the end of TX
-	   		xTaskNotifyFromISR(const_cast<ModbusHandler*>(mHandlers[i])->taskHandle(), 0, eNoAction, &xHigherPriorityTaskWoken);
+	   		xTaskNotifyFromISR(const_cast<Modbus*>(mHandlers[i])->taskHandle(), 0, eNoAction, &xHigherPriorityTaskWoken);
 	   		break;
 	   	}
 	}
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
-	if(!processed) {
-
-	}
 }
-
-
 
 /**
  * @brief
@@ -53,31 +54,28 @@ extern "C" void ModBus_TxCpltCallback(UART_HandleTypeDef *huart)
  * Modbus functionality.
  * @ingroup UartHandle UART HAL handler
  */
-extern "C"  void ModBus_RxCpltCallback(UART_HandleTypeDef *huart)
+void ModBus_RxCpltCallback(Uart_t *huart)
 {
-	bool processed = false;
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
 	/* Modbus RTU RX callback BEGIN */
     for (int i = 0; i < numberHandlers; i++ )
     {
-    	if (const_cast<ModbusHandler*>(mHandlers[i])->port() == huart  )
+    	if (const_cast<Modbus*>(mHandlers[i])->port() == huart->handle  )
     	{
-    		processed = true;
-    		const_cast<ModbusHandler*>(mHandlers[i])->busBuffer().Add(const_cast<ModbusHandler*>(mHandlers[i])->dataRX());
-    		HAL_UART_Receive_IT(huart, &const_cast<ModbusHandler*>(mHandlers[i])->dataRX(), 1);
-    		xTimerResetFromISR(const_cast<ModbusHandler*>(mHandlers[i])->t35TimerHandle(), &xHigherPriorityTaskWoken);
+    		while(!UartGetChar(const_cast<Modbus*>(mHandlers[i])->port(), &const_cast<Modbus*>(mHandlers[i])->dataRX(), T35))
+    			const_cast<Modbus*>(mHandlers[i])->busBuffer().Add(const_cast<Modbus*>(mHandlers[i])->dataRX());
 
+    		HAL_UART_Receive_IT(static_cast<UART_HandleTypeDef*>(huart->handle), &const_cast<Modbus*>(mHandlers[i])->dataRX(), 1);
+
+    		osTimerStart(const_cast<Modbus*>(mHandlers[i])->t35TimerHandle(), T35);
     		break;
     	}
     }
     portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
-    if(!processed) {
-
-    }
 }
 
-
+#if  ENABLE_USART_DMA ==  1
 
 /*
  * DMA requires to handle callbacks for special communication modes of the HAL
@@ -86,25 +84,22 @@ extern "C"  void ModBus_RxCpltCallback(UART_HandleTypeDef *huart)
  * */
 
 
-extern "C"  void ModBus_ErrorCallback(UART_HandleTypeDef *huart)
+extern "C"  void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
 	bool processed = false;
 
 	for (int i = 0; i < numberHandlers; i++ )
 	{
-    	if (const_cast<ModbusHandler*>(mHandlers[i])->port() == huart  )
+    	if (const_cast<Modbus*>(mHandlers[i])->port() == huart  )
     	{
     		processed = true;
-    		while(HAL_UARTEx_ReceiveToIdle_DMA(huart, const_cast<ModbusHandler*>(mHandlers[i])->busBuffer().buffer(), MAX_BUFFER) != HAL_OK)
+    		while(HAL_UARTEx_ReceiveToIdle_DMA(huart, const_cast<Modbus*>(mHandlers[i])->busBuffer().buffer(), MAX_BUFFER) != HAL_OK)
     		{
     			HAL_UART_DMAStop(huart);
     		}
 			__HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT); // we don't need half-transfer interrupt
     		break;
     	}
-   }
-   if(!processed) {
-
    }
 }
 
@@ -116,30 +111,26 @@ extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t S
 	/* Modbus RTU RX callback BEGIN */
 	for (int i = 0; i < numberHandlers; i++ )
 	{
-		if (const_cast<ModbusHandler*>(mHandlers[i])->port() == huart  )
+		if (const_cast<Modbus*>(mHandlers[i])->port() == huart  )
 		{
 			processed = true;
 			if(Size) //check if we have received any byte
 			{
-				const_cast<ModbusHandler*>(mHandlers[i])->busBuffer().available(Size);
-				const_cast<ModbusHandler*>(mHandlers[i])->busBuffer().overflow(false);
+				const_cast<Modbus*>(mHandlers[i])->busBuffer().available(Size);
+				const_cast<Modbus*>(mHandlers[i])->busBuffer().overflow(false);
 
-				while(HAL_UARTEx_ReceiveToIdle_DMA(huart,  const_cast<ModbusHandler*>(mHandlers[i])->busBuffer().buffer(), MAX_BUFFER) != HAL_OK)
+				while(HAL_UARTEx_ReceiveToIdle_DMA(huart,  const_cast<Modbus*>(mHandlers[i])->busBuffer().buffer(), MAX_BUFFER) != HAL_OK)
 				{
 					HAL_UART_DMAStop(huart);
 
 				}
 				__HAL_DMA_DISABLE_IT(huart->hdmarx, DMA_IT_HT); // we don't need half-transfer interrupt
 
-				xTaskNotifyFromISR(const_cast<ModbusHandler*>(mHandlers[i])->taskHandle(), 0 , eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+				xTaskNotifyFromISR(const_cast<Modbus*>(mHandlers[i])->taskHandle(), 0 , eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
 			}
 			break;
 		}
 	}
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
-	if(!processed) {
-
-	}
 }
-
-
+#endif

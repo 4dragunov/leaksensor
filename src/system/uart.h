@@ -33,6 +33,7 @@ extern "C"
 #include "fifo.h"
 #include "gpio.h"
 
+#define USART_SUPPORT_RTOS
 /*!
  * UART peripheral ID
  */
@@ -85,7 +86,7 @@ typedef enum
 /*!
  * UART object type definition
  */
-typedef struct
+typedef struct Uart_t
 {
     UartId_t UartId;
     bool IsInitialized;
@@ -93,11 +94,13 @@ typedef struct
     Gpio_t Rx;
     Fifo_t FifoTx;
     Fifo_t FifoRx;
+#ifdef USART_SUPPORT_RTOS
     osSemaphoreId rxSem;
     osSemaphoreId txSem;
+#endif
     FifoMode_t fifo;
     void *handle;
-   void ( *IrqNotify )( UartNotifyId_t id );
+   void ( *IrqNotify )(struct Uart_t *uart, UartNotifyId_t id );
 }Uart_t;
 
 /*!
