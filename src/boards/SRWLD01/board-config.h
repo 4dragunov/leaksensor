@@ -72,15 +72,24 @@
 
 //#define RADIO_ANT_SWITCH
 
-#define LED_1                                       PF_11
-#define LED_2                                       PF_12
-
 // Debug pins definition.
 //#define RADIO_DBG_PIN_TX                            PB_0
 //#define RADIO_DBG_PIN_RX                            PA_4
 
 #endif
 
+#define LED_1                                       PF_11
+#define LED_2                                       PF_12
+#define LED_3                                       PG_0
+
+typedef enum {
+	LED1 = 0,
+	LED2,
+	LED3
+} LedsType;
+
+#define LED_ON  1
+#define LED_OFF 0
 #define OSC_LSE_IN                                  PC_14
 #define OSC_LSE_OUT                                 PC_15
 
