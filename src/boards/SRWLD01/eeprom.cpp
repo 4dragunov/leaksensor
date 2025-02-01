@@ -5,864 +5,440 @@
 #include "nonvol.h"
 #include "utilities.h"
 
-extern uint32_t __emulated_eeprom_start[];
+extern uint32_t _emulated_eeprom_start[];
+extern uint32_t _EEPROM_PAGES[];
 
-#define EEPROM_PAGE0_ADDR   ((uint32_t)__emulated_eeprom_start)
-#define EEPROM_PAGE1_ADDR   ((uint32_t)EEPROM_PAGE0_ADDR + FLASH_PAGE_SIZE)
-#define EEPROM_LENGTH       (2048/sizeof(uint32_t))
+#define PAGE_SIZE        (uint32_t)FLASH_PAGE_SIZE  /* Page size */
+#define PAGES            ((uint32_t)_EEPROM_PAGES)
+#define PAGE_0_ADDRESS   ((uint32_t)_emulated_eeprom_start)
+#define PAGE_1_ADDRESS   ((uint32_t)_emulated_eeprom_start + (PAGES * PAGE_SIZE))
 
-/* Define the size of the sectors to be used */
-#define PAGE_SIZE               (uint32_t)FLASH_PAGE_SIZE  /* Page size */
+#define FLASH_READ(address) static_cast<uint32_t>(*(__IO uint32_t*)address)
 
-/* EEPROM start address in Flash */
-#define EEPROM_START_ADDRESS  ((uint32_t)EEPROM_PAGE0_ADDR) /* EEPROM emulation start address */
+/* Variables  */
 
-/* Pages 0 and 1 base and end addresses */
-#define PAGE0_BASE_ADDRESS    ((uint32_t)(EEPROM_PAGE0_ADDR + 0x0000))
-#define PAGE0_END_ADDRESS     ((uint32_t)(EEPROM_PAGE0_ADDR + (PAGE_SIZE - 1)))
-#define PAGE0_ID               PAGE0_BASE_ADDRESS
-
-#define PAGE1_BASE_ADDRESS    ((uint32_t)(EEPROM_PAGE1_ADDR + 0x0000))
-#define PAGE1_END_ADDRESS     ((uint32_t)(EEPROM_PAGE1_ADDR + PAGE_SIZE - 1))
-#define PAGE1_ID               PAGE1_BASE_ADDRESS
-
-/* Used Flash pages for EEPROM emulation */
-#define PAGE0                 ((uint16_t)0x0000)
-#define PAGE1                 ((uint16_t)0x0001)
-
-/* No valid page define */
-#define NO_VALID_PAGE         ((uint16_t)0x00AB)
-
-/* Page status definitions */
-#define ERASED                ((uint16_t)0xFFFF)     /* Page is empty */
-#define RECEIVE_DATA          ((uint16_t)0xEEEE)     /* Page is marked to receive data */
-#define VALID_PAGE            ((uint16_t)0x0000)     /* Page containing valid data */
-
-/* Valid pages in read and write defines */
-#define READ_FROM_VALID_PAGE  ((uint8_t)0x00)
-#define WRITE_IN_VALID_PAGE   ((uint8_t)0x01)
-
-/* Page full define */
-#define PAGE_FULL             ((uint8_t)0x80)
-
-/* Variables' number */
-#define NB_OF_VAR             ((uint16_t)EEPROM_LENGTH)
-
-/* Exported types ------------------------------------------------------------*/
-/* Exported macro ------------------------------------------------------------*/
-/* Exported functions ------------------------------------------------------- */
-uint16_t EE_Init(void);
-uint16_t EE_ReadVariable(uint16_t VirtAddress, uint16_t* Data);
-uint16_t EE_WriteVariable(uint16_t VirtAddress, uint16_t Data);
-
-static HAL_StatusTypeDef EE_Format(void);
-static uint16_t EE_FindValidPage(uint8_t Operation);
-static uint16_t EE_VerifyPageFullWriteVariable(uint16_t VirtAddress, uint16_t Data);
-static uint16_t EE_PageTransfer(uint16_t VirtAddress, uint16_t Data);
-static uint16_t EE_VerifyPageFullyErased(uint32_t Address);
-
+uint32_t Eeprom::pageAddress[Eeprom::PageIdx::PAGES_NUM] = {PAGE_0_ADDRESS, PAGE_1_ADDRESS};
+Eeprom::PageState Eeprom::pageStates[Eeprom::PageIdx::PAGES_NUM] = {Eeprom::PageState::CLEAR, Eeprom::PageState::CLEAR};
 
 bool Eeprom::mInitialized = false;
-const Eeprom::address_type Eeprom::base = EEPROM_START;          // start address of first record in EEPROM
-const Eeprom::address_type Eeprom::end = EEPROM_SIZE;           // end of available EEPROM
+const Eeprom::address Eeprom::base = 0;          // start address of first record in EEPROM
+const Eeprom::address Eeprom::pages = PAGES;
+const Eeprom::address Eeprom::end =  (((PAGES * PAGE_SIZE) - sizeof(Eeprom::page_state_record)) / sizeof(Eeprom::data_record));           // end of available EEPROM
+const Eeprom::address Eeprom::size = Eeprom::end - Eeprom::base;
+Eeprom::address Eeprom::free = Eeprom::size;
+
+size_t Eeprom::erase_time = 0;
+size_t Eeprom::read_time = 0;
+size_t Eeprom::write_time = 0;
+size_t Eeprom::transfer_time = 0;
+
+const Eeprom::page_state_record Eeprom::pageStateValues[PageState::STATE_COUNT - 1] = { std::numeric_limits<Eeprom::page_state_record>::max(),
+											std::numeric_limits<Eeprom::page_state_record>::min(),
+											std::numeric_limits<Eeprom::page_state_record>::max()/0x03};
+const char* Eeprom::pageStateNames[STATE_COUNT] = {"Clear", "Active", "Receiving", "Undefined"};
 
 osMutexDef (RwLock);
 
-Eeprom::Eeprom():mRwLock(osMutexCreate(osMutex(RwLock)))
+/******************************************************************************/
+Eeprom::Eeprom():mRwLock(osRecursiveMutexCreate(osMutex(RwLock)))
+
 {
 	if(!mInitialized) {
-		HAL_Init();
-		if(HAL_FLASH_Unlock() == HAL_OK) {
-			if(Init() == HAL_OK){
-				mInitialized = true;
-			}
-		}
+		mInitialized = (Init() == Result::OK);
 	}
 }
 
-
+/******************************************************************************/
 Eeprom::~Eeprom() {
-	if (mRwLock != nullptr)  {
-		osStatus status = osMutexDelete(mRwLock);
-	    if (status != osOK)  {
-	          assert(0);
-	        }
-	  }
+	if (mRwLock)  {
+	    // assert(osMutexDelete(mRwLock) == osOK);
+	}
 }
 
+/******************************************************************************/
 Eeprom& Eeprom::Instance()
 {
-   static Eeprom s;
-   return s;
+   volatile static Eeprom s;
+   return const_cast<Eeprom&>(s);
 }
-
-bool Eeprom::read(Eeprom::address_type addr, Eeprom::data_type* buf, size_t length){
+/******************************************************************************/
+Eeprom::Result Eeprom::read(const Eeprom::address addr, Eeprom::data* buf, size_t length){
 
 
  //	  assert_param(addr < this->size);
  //	  assert_param(buf);
  //	  assert_param(length > 0);
-
    if( mInitialized )
    {
-		size_t i = 0;
-		osMutexWait(mRwLock, osWaitForever);
+	    Eeprom::address i = 0;
+
 		do
 		{
-			buf[i] = ReadWord((uint32_t)addr + i);
+			if(read(addr + i, &buf[i]) != Result::OK) {
+				return Eeprom::Result::ERROR;;
+			}
 			i++;
 		} while(--length);
-		osMutexRelease(mRwLock);
-    return true;
+		return Result::OK;
    }else
-	  return false;
+	  return Eeprom::Result::ERROR;;
 }
 
-bool Eeprom::write(Eeprom::address_type addr, const Eeprom::data_type* buf, size_t length){
+/******************************************************************************/
+Eeprom::Result Eeprom::write(const Eeprom::address addr, const Eeprom::data* buf, size_t length){
 	//	  assert_param(addr < this->size);
 	//	  assert_param(buf);
 	//	  assert_param(length > 0);
-	bool ret = true;
    if( Eeprom::mInitialized )
    {
-		  osMutexWait(mRwLock, osWaitForever);
-		  size_t i = 0;
-		  do
-		  {
-			ret = WriteWord((uint32_t)addr + i, buf[i]);
-			i++;
-			if (ret == false)
-			{
-			  break;
-			}
-		  }while(--length);
-		  osMutexRelease(mRwLock);
-		  return ret;
+	   Eeprom::address i = 0;
+
+	   do
+	   {
+		   if (write((uint32_t)addr + i, buf[i]) != Result::OK){
+
+				return Eeprom::Result::ERROR;
+		   }
+		   i++;
+	   }while(--length);
+	   return Result::OK;
    }
    else
-	  return false;
+	   return Eeprom::Result::ERROR;
 }
 
+/******************************************************************************/
+Eeprom::Result Eeprom::WriteRecord(const uint32_t address, const Eeprom::address varId, const Eeprom::data varValue)
+{
+  Eeprom::Result res = Result::OK;
+  HAL_StatusTypeDef flashRes = HAL_OK;
+  Eeprom::data_record dataRecord = static_cast<Eeprom::data_record>((Eeprom::data)varValue << std::numeric_limits<typename Eeprom::address>::digits) | (Eeprom::address)varId;
+
+  HAL_FLASH_Unlock();
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, dataRecord);
+  HAL_FLASH_Lock();
+  if (flashRes != HAL_OK)
+  {
+    res = Result::ERROR;
+  }
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
+{
+  Eeprom::Result res = Result::ERROR;
+  PageIdx activePage = PageIdx::PAGE_0;
+
+  osRecursiveMutexWait(mRwLock, osWaitForever);
+  if (GetActivePageIdx(&activePage) == Result::OK)
+  {
+	  auto read_time_start = osKernelSysTick();
+	  uint32_t startAddr = pageAddress[activePage] + sizeof(Eeprom::page_state_record);
+	  uint32_t endAddr = pageAddress[activePage] + (PAGES * PAGE_SIZE) - sizeof(Eeprom::data_record);
+	  uint32_t addr = endAddr;
+	  Eeprom::address empty = 0;
+
+	  while (addr >= startAddr)
+	  {
+		data_record idData = FLASH_READ(addr);
+
+		Eeprom::address rvid = (idData & std::numeric_limits<Eeprom::address>::max());
+		if (rvid == varId)
+		{
+		  *varValue = (idData >> std::numeric_limits<Eeprom::address>::digits);
+		  res =  Result::OK;
+		  free = empty;
+		  read_time = osKernelSysTick() - read_time_start;
+		  break;
+		}
+		else
+		{
+		  addr -= sizeof(Eeprom::data_record);
+		  if(rvid == std::numeric_limits<Eeprom::address>::max())
+			  empty++;
+		}
+	  }
+  }
+  osRecursiveMutexRelease(mRwLock);
+  return  res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::PageTransfer(const PageIdx activePage, const Eeprom::address eepromAddress, Eeprom::data eepromData)
+{
+  Eeprom::Result res = Result::OK;
+  PageIdx oldPage, newPage;
+  auto start = osKernelSysTick();
+  oldPage = activePage;
+  newPage = (PageIdx)(1 - activePage);
+
+  res = SetPageState(newPage, PageState::RECEIVING_DATA); // write status to the begining of the page
+
+  if (res != Result::OK)
+  {
+    return res;
+  }
+
+  uint32_t recordAddr = pageAddress[newPage] + sizeof(Eeprom::page_state_record);//first record
+  res = WriteRecord(recordAddr, eepromAddress, eepromData);
+
+  if (res != Result::OK)
+  {
+    return res;
+  }
+
+  recordAddr += sizeof(Eeprom::data_record);
+
+  for (Eeprom::address eepAddr = 0; eepAddr < Eeprom::size; eepAddr++)
+  {
+    if (eepAddr != eepromAddress) //skip new data record as already written above
+    {
+      Eeprom::data eepData = 0;
+      res = read(eepAddr, &eepData);
+
+      if (res == Result::OK)
+      {
+        res = WriteRecord(recordAddr, eepAddr, eepData);
+
+        if (res != Result::OK)
+        {
+          return res;
+        }
+
+        recordAddr += sizeof(Eeprom::data_record);
+      }
+    }
+  }
+
+  res = ClearPage(oldPage);
+
+  if (res != Result::OK)
+  {
+    return res;
+  }
+
+  res = SetPageState(newPage, PageState::ACTIVE);
+  transfer_time = osKernelSysTick() - start;
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::write(const Eeprom::address eepromAddress, const Eeprom::data data)
+{
+  Eeprom::Result res = Result::ERROR;
+  Eeprom::address occuped = 0;
+  Eeprom::data available = 0;
+  PageIdx activePage = PageIdx::PAGE_0;
+
+  osRecursiveMutexWait(mRwLock, osWaitForever);
+  if (GetActivePageIdx(&activePage) == Result::OK)
+  {
+	  auto write_time_start = osKernelSysTick();
+	  res = read(eepromAddress, &available);
+
+	  if((res == Result::OK && available != data) ||  res == Result::ERROR) {//data not the same value or not found
+
+		  uint32_t startAddr = pageAddress[activePage] +  sizeof(Eeprom::page_state_record);
+		  uint32_t endAddr = pageAddress[activePage] + (PAGES * PAGE_SIZE) - sizeof(Eeprom::data_record); //points to the last record
+		  uint32_t addr = startAddr;
+
+		  while (addr <= endAddr)
+		  {
+			uint32_t idData = FLASH_READ(addr);
+			if (idData == pageStateValues[PageState::CLEAR])
+			{
+				res =  WriteRecord(addr, eepromAddress, data);
+				free = end - occuped - 1;
+				write_time = osKernelSysTick() - write_time_start;
+				osRecursiveMutexRelease(mRwLock);
+				return res;
+			}
+			else
+			{
+			  addr += sizeof(Eeprom::data_record);
+			  occuped++;
+			}
+		  }
+		  res = PageTransfer(activePage, eepromAddress, data);
+	  }
+  }
+  osRecursiveMutexRelease(mRwLock);
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::RestorePageData(const PageIdx oldPage, const PageIdx newPage)
+{
+	Eeprom::Result res = Result::OK;
+	DBG("eeprom %s old:%i new:%i\n",__FUNCTION__, oldPage, newPage);
+	Eeprom::data_record last_record = FLASH_READ(pageAddress[newPage] + sizeof(Eeprom::page_state_record));
+	Eeprom::address eep_address = (last_record & std::numeric_limits<Eeprom::address>::max());
+	Eeprom::data eep_data = (last_record >> std::numeric_limits<Eeprom::address>::digits);
+	res = ClearPage(newPage);
+	if((res == Result::OK) && (eep_address != (last_record & std::numeric_limits<Eeprom::address>::max())))
+		res = PageTransfer(oldPage, eep_address, eep_data);
+	return res;
+}
+
+/******************************************************************************/
+Eeprom::PageState Eeprom::ReadPageState(const Eeprom::PageIdx idx)
+{
+  auto stateValue = FLASH_READ(pageAddress[idx]);
+  for (uint8_t pageState = 0; pageState < STATE_COUNT - 1; pageState++)
+	  if(pageStateValues[pageState] == stateValue)
+		  return static_cast<Eeprom::PageState>(pageState);
+  return Eeprom::PageState::UNDEFINED;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::SetPageState(const Eeprom::PageIdx idx, const Eeprom::PageState state)
+{
+  Eeprom::Result res = Result::OK;
+  HAL_StatusTypeDef flashRes = HAL_OK;
+  DBG("eeprom %s page:%i state:%s\n",__FUNCTION__, idx, pageStateNames[state]);
+  assert(state < Eeprom::PageState::UNDEFINED);
+  HAL_FLASH_Unlock();
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, pageAddress[idx], pageStateValues[state]);
+  HAL_FLASH_Lock();
+
+  if (flashRes != HAL_OK)
+  {
+	res = Result::ERROR;
+  }else
+	pageStates[idx] = state;
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::ClearPage(const Eeprom::PageIdx idx)
+{
+  Eeprom::Result res = Result::OK;
+
+  FLASH_EraseInitTypeDef erase;
+  DBG("eeprom %s page:%i\n",__FUNCTION__, idx);
+  erase.TypeErase = FLASH_TYPEERASE_PAGES;
+  erase.Banks = FLASH_BANK_1;
+  erase.PageAddress = pageAddress[idx];
+  erase.NbPages = PAGES;
+
+  HAL_StatusTypeDef flashRes = HAL_OK;
+  uint32_t pageError = 0;
+
+  HAL_FLASH_Unlock();
+  flashRes = HAL_FLASHEx_Erase(&erase, &pageError);
+  HAL_FLASH_Lock();
+
+  if (flashRes != HAL_OK)
+  {
+	DBG("pageError %li\n",pageError);
+    res = Result::ERROR;
+    return res;
+  }
+  return SetPageState(idx, CLEAR);
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::erase()
+{
+  Eeprom::Result res = Result::OK;
+  DBG("eeprom %s\n",__FUNCTION__);
+  auto start = osKernelSysTick();
+  for (uint8_t i = 0; i < PAGES_NUM; i++)
+  {
+    res = ClearPage((PageIdx)i);
+    if (res != Result::OK)
+    {
+      return res;
+    }
+  }
+  res = SetPageState(PAGE_0, ACTIVE);
+  erase_time = osKernelSysTick() - start;
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::GetActivePageIdx(Eeprom::PageIdx *idx)
+{
+  Eeprom::Result res = Result::OK;
+
+  for (uint8_t i = 0; i < PAGES_NUM; i++)
+  {
+    pageStates[i] = ReadPageState((PageIdx)i);
+  }
+
+  if ((pageStates[PAGE_0] == ACTIVE) && (pageStates[PAGE_1] != ACTIVE))
+  {
+    *idx = PAGE_0;
+  }
+  else
+  {
+    if ((pageStates[PAGE_1] == ACTIVE) && (pageStates[PAGE_0] != ACTIVE))
+    {
+      *idx = PAGE_1;
+    }
+    else
+    {
+      res = Result::ERROR;
+    }
+  }
+
+  return res;
+}
+
+/******************************************************************************/
+Eeprom::Result Eeprom::Init()
+{
+  Eeprom::Result res = Result::OK;
+  DBG("eeprom %s\n",__FUNCTION__);
+
+  for (uint8_t i = 0; i < PAGES_NUM; i++)
+  {
+	pageStates[i] = ReadPageState((PageIdx)i);
+	DBG("eeprom page:%i state:%s\n", i, pageStateNames[i]);
+  }
+
+  if (((pageStates[PAGE_0] == CLEAR) && (pageStates[PAGE_1] == CLEAR)) ||
+      ((pageStates[PAGE_0] == ACTIVE) && (pageStates[PAGE_1] == ACTIVE)) ||
+      ((pageStates[PAGE_0] == RECEIVING_DATA) && (pageStates[PAGE_1] == RECEIVING_DATA)))
+  {
+    res = erase();
+    if (res != Result::OK)
+    {
+      return res;
+    }
+    res = SetPageState(PAGE_0, ACTIVE);
+  }else
+  if ((pageStates[PAGE_0] == RECEIVING_DATA) && (pageStates[PAGE_1] == CLEAR))
+  {
+    res = SetPageState(PAGE_0, ACTIVE);
+  }else
+  if ((pageStates[PAGE_0] == CLEAR) && (pageStates[PAGE_1] == RECEIVING_DATA))
+  {
+	res = SetPageState(PAGE_1, ACTIVE);
+  }else
+  if ((pageStates[PAGE_0] == RECEIVING_DATA) && (pageStates[PAGE_1] == ACTIVE))
+  {
+	res = RestorePageData(PAGE_1, PAGE_0);
+  }else
+  if ((pageStates[PAGE_0] == ACTIVE) && (pageStates[PAGE_1] == RECEIVING_DATA))
+  {
+	res = RestorePageData(PAGE_0, PAGE_1);
+  }
+  return res;
+}
+/******************************************************************************/
 extern "C" bool eepromInit()
 {
-	return (&Eeprom::Instance() != nullptr);
+	return Eeprom::Instance().initialized();
 }
-
-extern "C" bool eepromWrite(uint16_t addr, const void* buf, size_t length)
+/******************************************************************************/
+extern "C" bool eepromWrite(const uint16_t addr, const uint8_t* buf, const size_t length)
 {
-	return Eeprom::Instance().write(addr, (Eeprom::data_type*)buf, length);
+	return Eeprom::Instance().write(addr, (Eeprom::data*)buf, length) == Eeprom::Result::OK;
 }
-
-extern "C" bool eepromRead(uint16_t addr, const void* buf, size_t length)
+/******************************************************************************/
+extern "C" bool eepromRead(const uint16_t addr, uint8_t* buf, const size_t length)
 {
-	return Eeprom::Instance().read(addr, (Eeprom::data_type*)const_cast<void*>(buf), length);
+	return Eeprom::Instance().read(addr, (Eeprom::data*)buf, length) == Eeprom::Result::OK;
 }
-
-uint16_t  Eeprom::ReadWord(uint32_t addr)
-{
-  uint16_t read_value;
-
-
-  if( Eeprom::mInitialized == false ) return 0;
-
-  HAL_FLASH_Unlock();
-
-  ReadVariable((uint16_t)addr,  &read_value);
-
-  return read_value;
-}
-
-bool Eeprom::WriteWord(uint32_t addr, uint16_t data_in)
-{
-  if( Eeprom::mInitialized == false ) return false;
-
-  HAL_FLASH_Unlock();
-
-  if (WriteVariable(addr, data_in) == HAL_OK)
-  {
-    return true;
-  }
-  else
-  {
-    return false;
-  }
-}
-
-
-uint32_t Eeprom::GetLength(void)
-{
-  if( Eeprom::mInitialized == false ) return 0;
-
-  return NB_OF_VAR;
-}
-
-
-/**
-  * @brief  Restore the pages to a known good state in case of page's status
-  *   corruption after a power loss.
-  * @param  None.
-  * @retval - Flash error code: on write Flash error
-  *         - FLASH_COMPLETE: on success
-  */
-uint16_t Eeprom::Init(void)
-{
-  uint16_t pagestatus0 = 6, pagestatus1 = 6;
-  uint16_t varidx = 0;
-  uint16_t eepromstatus = 0, readstatus = 0;
-  int16_t x = -1;
-  HAL_StatusTypeDef  flashstatus;
-  uint32_t page_error = 0;
-  FLASH_EraseInitTypeDef s_eraseinit;
-
-
-  /* Get Page0 status */
-  pagestatus0 = (*(__IO uint16_t*)PAGE0_BASE_ADDRESS);
-  /* Get Page1 status */
-  pagestatus1 = (*(__IO uint16_t*)PAGE1_BASE_ADDRESS);
-
-  /* Fill EraseInit structure*/
-  s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-  s_eraseinit.PageAddress = PAGE0_ID;
-  s_eraseinit.NbPages     = 1;
-
-  /* Check for invalid header states and repair if necessary */
-  switch (pagestatus0)
-  {
-    case ERASED:
-      if (pagestatus1 == VALID_PAGE) /* Page0 erased, Page1 valid */
-      {
-          /* Erase Page0 */
-        if(!VerifyPageFullyErased(PAGE0_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-      }
-      else if (pagestatus1 == RECEIVE_DATA) /* Page0 erased, Page1 receive */
-      {
-        /* Erase Page0 */
-        if(!VerifyPageFullyErased(PAGE0_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-        /* Mark Page1 as valid */
-        flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, PAGE1_BASE_ADDRESS, VALID_PAGE);
-        /* If program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-      }
-      else /* First EEPROM access (Page0&1 are erased) or invalid state -> format EEPROM */
-      {
-        /* Erase both Page0 and Page1 and set Page0 as valid page */
-        flashstatus = (HAL_StatusTypeDef)Format();
-
-        /* If erase/program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-      }
-      break;
-
-    case RECEIVE_DATA:
-      if (pagestatus1 == VALID_PAGE) /* Page0 receive, Page1 valid */
-      {
-        /* Transfer data from Page1 to Page0 */
-        for (varidx = 0; varidx < NB_OF_VAR; varidx++)
-        {
-          if (( *(__IO uint16_t*)(PAGE0_BASE_ADDRESS + 6)) == varidx)
-          {
-            x = varidx;
-          }
-          if (varidx != x)
-          {
-            /* Read the last variables' updates */
-            readstatus = ReadVariable(varidx, &DataVar);
-            /* In case variable corresponding to the virtual address was found */
-            if (readstatus != 0x1)
-            {
-              /* Transfer the variable to the Page0 */
-              eepromstatus = VerifyPageFullWriteVariable(varidx, DataVar);
-              /* If program operation was failed, a Flash error code is returned */
-              if (eepromstatus != HAL_OK)
-              {
-                return eepromstatus;
-              }
-            }
-          }
-        }
-        /* Mark Page0 as valid */
-        flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, PAGE0_BASE_ADDRESS, VALID_PAGE);
-        /* If program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-        s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-        s_eraseinit.PageAddress = PAGE1_ID;
-        s_eraseinit.NbPages     = 1;
-        /* Erase Page1 */
-        if(!VerifyPageFullyErased(PAGE1_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-      }
-      else if (pagestatus1 == ERASED) /* Page0 receive, Page1 erased */
-      {
-        s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-        s_eraseinit.PageAddress = PAGE1_ID;
-        s_eraseinit.NbPages     = 1;
-        /* Erase Page1 */
-        if(!VerifyPageFullyErased(PAGE1_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-        /* Mark Page0 as valid */
-        flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, PAGE0_BASE_ADDRESS, VALID_PAGE);
-        /* If program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-      }
-      else /* Invalid state -> format eeprom */
-      {
-        /* Erase both Page0 and Page1 and set Page0 as valid page */
-        flashstatus = (HAL_StatusTypeDef)Format();
-        /* If erase/program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-      }
-      break;
-
-    case VALID_PAGE:
-      if (pagestatus1 == VALID_PAGE) /* Invalid state -> format eeprom */
-      {
-        /* Erase both Page0 and Page1 and set Page0 as valid page */
-        flashstatus = (HAL_StatusTypeDef)Format();
-        /* If erase/program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-      }
-      else if (pagestatus1 == ERASED) /* Page0 valid, Page1 erased */
-      {
-        s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-        s_eraseinit.PageAddress = PAGE1_ID;
-        s_eraseinit.NbPages     = 1;
-        /* Erase Page1 */
-        if(!VerifyPageFullyErased(PAGE1_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-      }
-      else /* Page0 valid, Page1 receive */
-      {
-        /* Transfer data from Page0 to Page1 */
-        for (varidx = 0; varidx < NB_OF_VAR; varidx++)
-        {
-          if ((*(__IO uint16_t*)(PAGE1_BASE_ADDRESS + 6)) == varidx)
-          {
-            x = varidx;
-          }
-          if (varidx != x)
-          {
-            /* Read the last variables' updates */
-            readstatus = ReadVariable(varidx, &DataVar);
-            /* In case variable corresponding to the virtual address was found */
-            if (readstatus != 0x1)
-            {
-              /* Transfer the variable to the Page1 */
-              eepromstatus = VerifyPageFullWriteVariable(varidx, DataVar);
-              /* If program operation was failed, a Flash error code is returned */
-              if (eepromstatus != HAL_OK)
-              {
-                return eepromstatus;
-              }
-            }
-          }
-        }
-        /* Mark Page1 as valid */
-        flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, PAGE1_BASE_ADDRESS, VALID_PAGE);
-        /* If program operation was failed, a Flash error code is returned */
-        if (flashstatus != HAL_OK)
-        {
-          return flashstatus;
-        }
-        s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-        s_eraseinit.PageAddress = PAGE0_ID;
-        s_eraseinit.NbPages     = 1;
-        /* Erase Page0 */
-        if(!VerifyPageFullyErased(PAGE0_BASE_ADDRESS))
-        {
-          flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-          /* If erase operation was failed, a Flash error code is returned */
-          if (flashstatus != HAL_OK)
-          {
-            return flashstatus;
-          }
-        }
-      }
-      break;
-
-    default:  /* Any other state -> format eeprom */
-      /* Erase both Page0 and Page1 and set Page0 as valid page */
-      flashstatus = (HAL_StatusTypeDef)Format();
-      /* If erase/program operation was failed, a Flash error code is returned */
-      if (flashstatus != HAL_OK)
-      {
-        return flashstatus;
-      }
-      break;
-  }
-
-  return HAL_OK;
-}
-
-/**
-  * @brief  Verify if specified page is fully erased.
-  * @param  Address: page address
-  *   This parameter can be one of the following values:
-  *     @arg PAGE0_BASE_ADDRESS: Page0 base address
-  *     @arg PAGE1_BASE_ADDRESS: Page1 base address
-  * @retval page fully erased status:
-  *           - 0: if Page not erased
-  *           - 1: if Page erased
-  */
-bool Eeprom::VerifyPageFullyErased(uint32_t Address)
-{
-  bool readstatus = true;
-  uint16_t addressvalue = 0x5555;
-
-  /* Check each active page address starting from end */
-  while (Address <= PAGE0_END_ADDRESS)
-  {
-    /* Get the current location content to be compared with virtual address */
-    addressvalue = (*(__IO uint16_t*)Address);
-
-    /* Compare the read address with the virtual address */
-    if (addressvalue != ERASED)
-    {
-
-      /* In case variable value is read, reset readstatus flag */
-      readstatus = false;
-
-      break;
-    }
-    /* Next address location */
-    Address = Address + 4;
-  }
-
-  /* Return readstatus value: (0: Page not erased, 1: Page erased) */
-  return readstatus;
-}
-
-/**
-  * @brief  Returns the last stored variable data, if found, which correspond to
-  *   the passed virtual address
-  * @param  VirtAddress: Variable virtual address
-  * @param  Data: Global variable contains the read variable value
-  * @retval Success or error status:
-  *           - 0: if variable was found
-  *           - 1: if the variable was not found
-  *           - NO_VALID_PAGE: if no valid page was found.
-  */
-uint16_t Eeprom::ReadVariable(uint16_t VirtAddress, uint16_t* Data)
-{
-  uint16_t validpage = PAGE0;
-  uint16_t addressvalue = 0x5555, readstatus = 1;
-  uint32_t address = EEPROM_START_ADDRESS, PageStartAddress = EEPROM_START_ADDRESS;
-
-  /* Get active Page for read operation */
-  validpage = FindValidPage(READ_FROM_VALID_PAGE);
-
-  /* Check if there is no valid page */
-  if (validpage == NO_VALID_PAGE)
-  {
-    return  NO_VALID_PAGE;
-  }
-
-  /* Get the valid Page start Address */
-  PageStartAddress = (uint32_t)(EEPROM_START_ADDRESS + (uint32_t)(validpage * PAGE_SIZE));
-
-  /* Get the valid Page end Address */
-  address = (uint32_t)((EEPROM_START_ADDRESS - 2) + (uint32_t)((1 + validpage) * PAGE_SIZE));
-
-  /* Check each active page address starting from end */
-  while (address > (PageStartAddress + 2))
-  {
-    /* Get the current location content to be compared with virtual address */
-    addressvalue = (*(__IO uint16_t*)address);
-
-    /* Compare the read address with the virtual address */
-    if (addressvalue == VirtAddress)
-    {
-      /* Get content of Address-2 which is variable value */
-      *Data = (*(__IO uint16_t*)(address - 2));
-
-      /* In case variable value is read, reset readstatus flag */
-      readstatus = 0;
-
-      break;
-    }
-    else
-    {
-      /* Next address location */
-      address = address - 4;
-    }
-  }
-
-  /* Return readstatus value: (0: variable exist, 1: variable doesn't exist) */
-  return readstatus;
-}
-
-/**
-  * @brief  Writes/upadtes variable data in EEPROM.
-  * @param  VirtAddress: Variable virtual address
-  * @param  Data: 16 bit data to be written
-  * @retval Success or error status:
-  *           - FLASH_COMPLETE: on success
-  *           - PAGE_FULL: if valid page is full
-  *           - NO_VALID_PAGE: if no valid page was found
-  *           - Flash error code: on write Flash error
-  */
-uint16_t Eeprom::WriteVariable(uint16_t VirtAddress, uint16_t Data)
-{
-  uint16_t Status = 0;
-
-  /* Write the variable virtual address and value in the EEPROM */
-  Status = VerifyPageFullWriteVariable(VirtAddress, Data);
-
-  /* In case the EEPROM active page is full */
-  if (Status == PAGE_FULL)
-  {
-    /* Perform Page transfer */
-    Status = PageTransfer(VirtAddress, Data);
-  }
-
-  /* Return last operation status */
-  return Status;
-}
-
-/**
-  * @brief  Erases PAGE and PAGE1 and writes VALID_PAGE header to PAGE
-  * @param  None
-  * @retval Status of the last operation (Flash write or erase) done during
-  *         EEPROM formating
-  */
-uint16_t Eeprom::Format(void)
-{
-  HAL_StatusTypeDef flashstatus = HAL_OK;
-  uint32_t page_error = 0;
-  FLASH_EraseInitTypeDef s_eraseinit;
-
-  s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-  s_eraseinit.PageAddress = PAGE0_ID;
-  s_eraseinit.NbPages     = 1;
-
-  HAL_FLASH_Unlock();
-
-  /* Erase Page0 */
-  if(!VerifyPageFullyErased(PAGE0_BASE_ADDRESS))
-  {
-    flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-    /* If erase operation was failed, a Flash error code is returned */
-    if (flashstatus != HAL_OK)
-    {
-      return flashstatus;
-    }
-  }
-  /* Set Page0 as valid page: Write VALID_PAGE at Page0 base address */
-  flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, PAGE0_BASE_ADDRESS, VALID_PAGE);
-  /* If program operation was failed, a Flash error code is returned */
-  if (flashstatus != HAL_OK)
-  {
-    return flashstatus;
-  }
-
-  s_eraseinit.PageAddress = PAGE1_ID;
-  /* Erase Page1 */
-  if(!VerifyPageFullyErased(PAGE1_BASE_ADDRESS))
-  {
-    flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-    /* If erase operation was failed, a Flash error code is returned */
-    if (flashstatus != HAL_OK)
-    {
-      return flashstatus;
-    }
-  }
-
-  return HAL_OK;
-}
-
-/**
-  * @brief  Find valid Page for write or read operation
-  * @param  Operation: operation to achieve on the valid page.
-  *   This parameter can be one of the following values:
-  *     @arg READ_FROM_VALID_PAGE: read operation from valid page
-  *     @arg WRITE_IN_VALID_PAGE: write operation from valid page
-  * @retval Valid page number (PAGE or PAGE1) or NO_VALID_PAGE in case
-  *   of no valid page was found
-  */
-uint16_t Eeprom::FindValidPage(uint8_t Operation)
-{
-  uint16_t pagestatus0 = 6, pagestatus1 = 6;
-
-  /* Get Page0 actual status */
-  pagestatus0 = (*(__IO uint16_t*)PAGE0_BASE_ADDRESS);
-
-  /* Get Page1 actual status */
-  pagestatus1 = (*(__IO uint16_t*)PAGE1_BASE_ADDRESS);
-
-  /* Write or read operation */
-  switch (Operation)
-  {
-    case WRITE_IN_VALID_PAGE:   /* ---- Write operation ---- */
-      if (pagestatus1 == VALID_PAGE)
-      {
-        /* Page0 receiving data */
-        if (pagestatus0 == RECEIVE_DATA)
-        {
-          return PAGE0;         /* Page0 valid */
-        }
-        else
-        {
-          return PAGE1;         /* Page1 valid */
-        }
-      }
-      else if (pagestatus0 == VALID_PAGE)
-      {
-        /* Page1 receiving data */
-        if (pagestatus1 == RECEIVE_DATA)
-        {
-          return PAGE1;         /* Page1 valid */
-        }
-        else
-        {
-          return PAGE0;         /* Page0 valid */
-        }
-      }
-      else
-      {
-        return NO_VALID_PAGE;   /* No valid Page */
-      }
-
-    case READ_FROM_VALID_PAGE:  /* ---- Read operation ---- */
-      if (pagestatus0 == VALID_PAGE)
-      {
-        return PAGE0;           /* Page0 valid */
-      }
-      else if (pagestatus1 == VALID_PAGE)
-      {
-        return PAGE1;           /* Page1 valid */
-      }
-      else
-      {
-        return NO_VALID_PAGE ;  /* No valid Page */
-      }
-
-    default:
-      return PAGE0;             /* Page0 valid */
-  }
-}
-
-/**
-  * @brief  Verify if active page is full and Writes variable in EEPROM.
-  * @param  VirtAddress: 16 bit virtual address of the variable
-  * @param  Data: 16 bit data to be written as variable value
-  * @retval Success or error status:
-  *           - FLASH_COMPLETE: on success
-  *           - PAGE_FULL: if valid page is full
-  *           - NO_VALID_PAGE: if no valid page was found
-  *           - Flash error code: on write Flash error
-  */
-uint16_t Eeprom::VerifyPageFullWriteVariable(uint16_t VirtAddress, uint16_t Data)
-{
-  HAL_StatusTypeDef flashstatus = HAL_OK;
-  uint16_t validpage = PAGE0;
-  uint32_t address = EEPROM_START_ADDRESS;
-  uint32_t pageendaddress = EEPROM_START_ADDRESS + PAGE_SIZE;
-
-  /* Get valid Page for write operation */
-  validpage = FindValidPage(WRITE_IN_VALID_PAGE);
-
-  /* Check if there is no valid page */
-  if (validpage == NO_VALID_PAGE)
-  {
-    return  NO_VALID_PAGE;
-  }
-
-  /* Get the valid Page start address */
-  address = (uint32_t)(EEPROM_START_ADDRESS + (uint32_t)(validpage * PAGE_SIZE));
-
-  /* Get the valid Page end address */
-  pageendaddress = (uint32_t)((EEPROM_START_ADDRESS - 1) + (uint32_t)((validpage + 1) * PAGE_SIZE));
-
-  /* Check each active page address starting from begining */
-  while (address < pageendaddress)
-  {
-    /* Verify if address and address+2 contents are 0xFFFFFFFF */
-    if ((*(__IO uint32_t*)address) == 0xFFFFFFFF)
-    {
-      /* Set variable data */
-      flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, address, Data);
-      /* If program operation was failed, a Flash error code is returned */
-      if (flashstatus != HAL_OK)
-      {
-        return flashstatus;
-      }
-      /* Set variable virtual address */
-      flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, address + 2, VirtAddress);
-      /* Return program operation status */
-      return flashstatus;
-    }
-    else
-    {
-      /* Next address location */
-      address = address + 4;
-    }
-  }
-
-  /* Return PAGE_FULL in case the valid page is full */
-  return PAGE_FULL;
-}
-
-/**
-  * @brief  Transfers last updated variables data from the full Page to
-  *   an empty one.
-  * @param  VirtAddress: 16 bit virtual address of the variable
-  * @param  Data: 16 bit data to be written as variable value
-  * @retval Success or error status:
-  *           - FLASH_COMPLETE: on success
-  *           - PAGE_FULL: if valid page is full
-  *           - NO_VALID_PAGE: if no valid page was found
-  *           - Flash error code: on write Flash error
-  */
-uint16_t Eeprom::PageTransfer(uint16_t VirtAddress, uint16_t Data)
-{
-  HAL_StatusTypeDef flashstatus = HAL_OK;
-  uint32_t newpageaddress = EEPROM_START_ADDRESS;
-  uint32_t oldpageid = 0;
-  uint16_t validpage = PAGE0, varidx = 0;
-  uint16_t eepromstatus = 0, readstatus = 0;
-  uint32_t page_error = 0;
-  FLASH_EraseInitTypeDef s_eraseinit;
-
-  /* Get active Page for read operation */
-  validpage = FindValidPage(READ_FROM_VALID_PAGE);
-
-  if (validpage == PAGE1)       /* Page1 valid */
-  {
-    /* New page address where variable will be moved to */
-    newpageaddress = PAGE0_BASE_ADDRESS;
-
-    /* Old page ID where variable will be taken from */
-    oldpageid = PAGE1_ID;
-  }
-  else if (validpage == PAGE0)  /* Page0 valid */
-  {
-    /* New page address  where variable will be moved to */
-    newpageaddress = PAGE1_BASE_ADDRESS;
-
-    /* Old page ID where variable will be taken from */
-    oldpageid = PAGE0_ID;
-  }
-  else
-  {
-    return NO_VALID_PAGE;       /* No valid Page */
-  }
-
-  /* Set the new Page status to RECEIVE_DATA status */
-  flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, newpageaddress, RECEIVE_DATA);
-  /* If program operation was failed, a Flash error code is returned */
-  if (flashstatus != HAL_OK)
-  {
-    return flashstatus;
-  }
-
-  /* Write the variable passed as parameter in the new active page */
-  eepromstatus = VerifyPageFullWriteVariable(VirtAddress, Data);
-  /* If program operation was failed, a Flash error code is returned */
-  if (eepromstatus != HAL_OK)
-  {
-    return eepromstatus;
-  }
-
-  /* Transfer process: transfer variables from old to the new active page */
-  for (varidx = 0; varidx < NB_OF_VAR; varidx++)
-  {
-    if (varidx != VirtAddress)  /* Check each variable except the one passed as parameter */
-    {
-      /* Read the other last variable updates */
-      readstatus = ReadVariable(varidx, &DataVar);
-      /* In case variable corresponding to the virtual address was found */
-      if (readstatus != 0x1)
-      {
-        /* Transfer the variable to the new active page */
-        eepromstatus = VerifyPageFullWriteVariable(varidx, DataVar);
-        /* If program operation was failed, a Flash error code is returned */
-        if (eepromstatus != HAL_OK)
-        {
-          return eepromstatus;
-        }
-      }
-    }
-  }
-
-  s_eraseinit.TypeErase   = FLASH_TYPEERASE_PAGES;
-  s_eraseinit.PageAddress = oldpageid;
-  s_eraseinit.NbPages     = 1;
-
-  /* Erase the old Page: Set old Page status to ERASED status */
-  flashstatus = HAL_FLASHEx_Erase(&s_eraseinit, &page_error);
-  /* If erase operation was failed, a Flash error code is returned */
-  if (flashstatus != HAL_OK)
-  {
-    return flashstatus;
-  }
-
-  /* Set new Page status to VALID_PAGE status */
-  flashstatus = HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, newpageaddress, VALID_PAGE);
-  /* If program operation was failed, a Flash error code is returned */
-  if (flashstatus != HAL_OK)
-  {
-    return flashstatus;
-  }
-
-
-
-  /* Return last operation flash status */
-  return flashstatus;
-}
-
-
-

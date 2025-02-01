@@ -39,7 +39,10 @@ ENTRY(Reset_Handler)
 _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 
 _Min_Heap_Size = 0x400; /* required amount of heap */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+_Min_Stack_Size = 0x9c4; /* required amount of stack */
+
+_EEPROM_PAGES = 4;
+_EEPROM_SIZE = 2K * 2 * _EEPROM_PAGES; /*2x pages*/
 
 /* Memories definition */
 /* Note 4K for eeprom on page 0 and 1 - each 2K bytes size */
@@ -48,9 +51,9 @@ MEMORY
   RAM     (xrw)    : ORIGIN = 0x20000000,             LENGTH = 64K
   BOOT     (rx)    : ORIGIN = 0x8000000,              LENGTH = 16K
 
-  FLASH    (rx)    : ORIGIN = 0x8000000,              LENGTH = 512K - 4 - 4K
-  CRC      (rx)    : ORIGIN = 0x8000000 + 512K -4K - 4,   LENGTH = 4
-  EEPROM   (rx)    : ORIGIN = 0x8000000 + 512K -4K,       LENGTH = 4K
+  FLASH    (rx)    : ORIGIN = 0x8000000,                LENGTH = 512K - 4 - _EEPROM_SIZE
+  CRC      (rx)    : ORIGIN = 0x8000000 + 512K - _EEPROM_SIZE - 4,LENGTH = 4
+  EEPROM   (rx)    : ORIGIN = 0x8000000 + 512K - _EEPROM_SIZE,    LENGTH = _EEPROM_SIZE
 }
 
 /* Sections */
@@ -155,10 +158,10 @@ SECTIONS
 
 .emulated_eeprom :
 {
-  __emulated_eeprom_start = .;
+  _emulated_eeprom_start = .;
   *(.emulated_eeprom)
   *(.emulated_eeprom.*)
-  __emulated_eeprom_end = .;
+  _emulated_eeprom_end = .;
 } >EEPROM
 
   /* Uninitialized data section into "RAM" Ram type memory */

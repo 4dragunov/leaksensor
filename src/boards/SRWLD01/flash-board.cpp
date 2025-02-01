@@ -4,11 +4,14 @@
 #define FLASH_SIZE_KB             (uint32_t)(*((uint32_t *)FLASHSIZE_BASE)&0xFFFF)
 #define FLASH_SIZE                (uint32_t)(FLASH_SIZE_KB * 1024U)
 
-class Stm32FlashInfo:public IFlashInfo<Stm32FlashInfo> {
+class Stm32FlashInfo:public IFlashInfo {
+	friend IFlashInfo& boardFlashInstance();
 	Stm32FlashInfo() = default;
 	virtual ~Stm32FlashInfo() = default;
-	static IFlashInfo& Instance();
+	Stm32FlashInfo(Stm32FlashInfo const&)= delete;
+	Stm32FlashInfo& operator= (Stm32FlashInfo const&)= delete;
 public:
+	static IFlashInfo& Instance();
 	virtual size_t size() override;
 	virtual size_t pagesize() override;
 };
@@ -26,6 +29,7 @@ size_t Stm32FlashInfo::size() {
 size_t Stm32FlashInfo::pagesize(){
 	return (FLASH_SIZE_KB > 128)? 2048 : 1024;
 }
+
 IFlashInfo& boardFlashInstance(){
 	return Stm32FlashInfo::Instance();
 }
