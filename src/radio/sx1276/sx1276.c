@@ -30,7 +30,7 @@
 #include "delay.h"
 #include "sx1276.h"
 #include "sx1276-board.h"
-
+#include "cmsis_os.h"
 /*!
  * \brief Internal frequency of the radio
  */
@@ -300,9 +300,12 @@ DioIrqHandler *DioIrq[] = { SX1276OnDio0Irq, SX1276OnDio1Irq,
 /*!
  * Tx and Rx timers
  */
-TimerEvent_t TxTimeoutTimer;
-TimerEvent_t RxTimeoutTimer;
-TimerEvent_t RxTimeoutSyncWord;
+osTimerDef(TxTimeoutTimer, SX1276OnTimeoutIrq);
+osTimerDef(RxTimeoutTimer, SX1276OnTimeoutIrq);
+osTimerDef(RxTimeoutSyncWord, SX1276OnTimeoutIrq);
+osTimerId TxTimeoutTimer;
+osTimerId RxTimeoutTimer;
+osTimerId RxTimeoutSyncWord;
 
 /*
  * Radio driver functions implementation
@@ -315,9 +318,10 @@ void SX1276Init( RadioEvents_t *events )
     RadioEvents = events;
 
     // Initialize driver timeout timers
-    TimerInit( &TxTimeoutTimer, SX1276OnTimeoutIrq );
-    TimerInit( &RxTimeoutTimer, SX1276OnTimeoutIrq );
-    TimerInit( &RxTimeoutSyncWord, SX1276OnTimeoutIrq );
+
+    TxTimeoutTimer = osTimerCreate( osTimer(TxTimeoutTimer), osTimerOnce, NULL  );
+    RxTimeoutTimer = osTimerCreate( osTimer(RxTimeoutTimer), osTimerOnce, NULL  );
+    RxTimeoutSyncWord = osTimerCreate( osTimer(RxTimeoutSyncWord), osTimerOnce, NULL );
 
     SX1276Reset( );
 
@@ -877,9 +881,9 @@ void SX1276Send( uint8_t *buffer, uint8_t size )
 
 void SX1276SetSleep( void )
 {
-    TimerStop( &RxTimeoutTimer );
-    TimerStop( &TxTimeoutTimer );
-    TimerStop( &RxTimeoutSyncWord );
+    osTimerStop( RxTimeoutTimer );
+    osTimerStop( TxTimeoutTimer );
+    osTimerStop( RxTimeoutSyncWord );
 
     SX1276SetOpMode( RF_OPMODE_SLEEP );
 
@@ -891,9 +895,9 @@ void SX1276SetSleep( void )
 
 void SX1276SetStby( void )
 {
-    TimerStop( &RxTimeoutTimer );
-    TimerStop( &TxTimeoutTimer );
-    TimerStop( &RxTimeoutSyncWord );
+    osTimerStop( RxTimeoutTimer );
+    osTimerStop( TxTimeoutTimer );
+    osTimerStop( RxTimeoutSyncWord );
 
     SX1276SetOpMode( RF_OPMODE_STANDBY );
     SX1276.Settings.State = RF_IDLE;
@@ -902,7 +906,7 @@ void SX1276SetStby( void )
 void SX1276SetRx( uint32_t timeout )
 {
     bool rxContinuous = false;
-    TimerStop( &TxTimeoutTimer );
+    osTimerStop( TxTimeoutTimer );
 
     switch( SX1276.Settings.Modem )
     {
@@ -1037,8 +1041,7 @@ void SX1276SetRx( uint32_t timeout )
     SX1276.Settings.State = RF_RX_RUNNING;
     if( timeout != 0 )
     {
-        TimerSetValue( &RxTimeoutTimer, timeout );
-        TimerStart( &RxTimeoutTimer );
+        osTimerStart( RxTimeoutTimer, timeout );
     }
 
     if( SX1276.Settings.Modem == MODEM_FSK )
@@ -1047,8 +1050,7 @@ void SX1276SetRx( uint32_t timeout )
 
         if( rxContinuous == false )
         {
-            TimerSetValue( &RxTimeoutSyncWord, SX1276.Settings.Fsk.RxSingleTimeout );
-            TimerStart( &RxTimeoutSyncWord );
+            osTimerStart( RxTimeoutSyncWord, SX1276.Settings.Fsk.RxSingleTimeout );
         }
     }
     else
@@ -1066,9 +1068,9 @@ void SX1276SetRx( uint32_t timeout )
 
 static void SX1276SetTx( uint32_t timeout )
 {
-    TimerStop( &RxTimeoutTimer );
+    osTimerStop( RxTimeoutTimer );
 
-    TimerSetValue( &TxTimeoutTimer, timeout );
+    //osTimerSetValue( &TxTimeoutTimer, timeout );
 
     switch( SX1276.Settings.Modem )
     {
@@ -1124,7 +1126,7 @@ static void SX1276SetTx( uint32_t timeout )
     }
 
     SX1276.Settings.State = RF_TX_RUNNING;
-    TimerStart( &TxTimeoutTimer );
+    osTimerStart( TxTimeoutTimer, timeout );
     SX1276SetOpMode( RF_OPMODE_TRANSMITTER );
 }
 
@@ -1174,10 +1176,9 @@ void SX1276SetTxContinuousWave( uint32_t freq, int8_t power, uint16_t time )
     SX1276Write( REG_DIOMAPPING1, RF_DIOMAPPING1_DIO0_11 | RF_DIOMAPPING1_DIO1_11 );
     SX1276Write( REG_DIOMAPPING2, RF_DIOMAPPING2_DIO4_10 | RF_DIOMAPPING2_DIO5_10 );
 
-    TimerSetValue( &TxTimeoutTimer, timeout );
 
     SX1276.Settings.State = RF_TX_RUNNING;
-    TimerStart( &TxTimeoutTimer );
+    osTimerStart( TxTimeoutTimer, timeout );
     SX1276SetOpMode( RF_OPMODE_TRANSMITTER );
 }
 
@@ -1546,7 +1547,7 @@ static void SX1276OnTimeoutIrq( void* context )
             else
             {
                 SX1276.Settings.State = RF_IDLE;
-                TimerStop( &RxTimeoutSyncWord );
+                osTimerStop( RxTimeoutSyncWord );
             }
         }
         if( ( RadioEvents != NULL ) && ( RadioEvents->RxTimeout != NULL ) )
@@ -1599,7 +1600,7 @@ static void SX1276OnTimeoutIrq( void* context )
 static void SX1276OnDio0Irq( void* context )
 {
     volatile uint8_t irqFlags = 0;
-
+    DBG("SX1276OnDio0Irq\n");
     switch( SX1276.Settings.State )
     {
         case RF_RX_RUNNING:
@@ -1619,11 +1620,11 @@ static void SX1276OnDio0Irq( void* context )
                                                     RF_IRQFLAGS1_SYNCADDRESSMATCH );
                         SX1276Write( REG_IRQFLAGS2, RF_IRQFLAGS2_FIFOOVERRUN );
 
-                        TimerStop( &RxTimeoutTimer );
+                        osTimerStop( RxTimeoutTimer );
 
                         if( SX1276.Settings.Fsk.RxContinuous == false )
                         {
-                            TimerStop( &RxTimeoutSyncWord );
+                            osTimerStop( RxTimeoutSyncWord );
                             SX1276.Settings.State = RF_IDLE;
                         }
                         else
@@ -1664,12 +1665,12 @@ static void SX1276OnDio0Irq( void* context )
                     SX1276.Settings.FskPacketHandler.NbBytes += ( SX1276.Settings.FskPacketHandler.Size - SX1276.Settings.FskPacketHandler.NbBytes );
                 }
 
-                TimerStop( &RxTimeoutTimer );
+                osTimerStop( RxTimeoutTimer );
 
                 if( SX1276.Settings.Fsk.RxContinuous == false )
                 {
                     SX1276.Settings.State = RF_IDLE;
-                    TimerStop( &RxTimeoutSyncWord );
+                    osTimerStop( RxTimeoutSyncWord );
                 }
                 else
                 {
@@ -1692,6 +1693,7 @@ static void SX1276OnDio0Irq( void* context )
                     SX1276Write( REG_LR_IRQFLAGS, RFLR_IRQFLAGS_RXDONE );
 
                     irqFlags = SX1276Read( REG_LR_IRQFLAGS );
+                    DBG("SX1276OnDio0Irq:%i\n", irqFlags);
                     if( ( irqFlags & RFLR_IRQFLAGS_PAYLOADCRCERROR_MASK ) == RFLR_IRQFLAGS_PAYLOADCRCERROR )
                     {
                         // Clear Irq
@@ -1701,7 +1703,7 @@ static void SX1276OnDio0Irq( void* context )
                         {
                             SX1276.Settings.State = RF_IDLE;
                         }
-                        TimerStop( &RxTimeoutTimer );
+                        osTimerStop( RxTimeoutTimer );
 
                         if( ( RadioEvents != NULL ) && ( RadioEvents->RxError != NULL ) )
                         {
@@ -1747,7 +1749,7 @@ static void SX1276OnDio0Irq( void* context )
                     {
                         SX1276.Settings.State = RF_IDLE;
                     }
-                    TimerStop( &RxTimeoutTimer );
+                    osTimerStop( RxTimeoutTimer );
 
                     if( ( RadioEvents != NULL ) && ( RadioEvents->RxDone != NULL ) )
                     {
@@ -1760,7 +1762,7 @@ static void SX1276OnDio0Irq( void* context )
             }
             break;
         case RF_TX_RUNNING:
-            TimerStop( &TxTimeoutTimer );
+            osTimerStop( TxTimeoutTimer );
             // TxDone interrupt
             switch( SX1276.Settings.Modem )
             {
@@ -1785,6 +1787,7 @@ static void SX1276OnDio0Irq( void* context )
 
 static void SX1276OnDio1Irq( void* context )
 {
+	DBG("SX1276OnDio1Irq\n");
     switch( SX1276.Settings.State )
     {
         case RF_RX_RUNNING:
@@ -1802,7 +1805,7 @@ static void SX1276OnDio1Irq( void* context )
                     break;
                 }
                 // Stop timer
-                TimerStop( &RxTimeoutSyncWord );
+                osTimerStop( RxTimeoutSyncWord );
 
                 // FifoLevel interrupt
                 // Read received packet size
@@ -1849,7 +1852,7 @@ static void SX1276OnDio1Irq( void* context )
                     break;
                 }
                 // Sync time out
-                TimerStop( &RxTimeoutTimer );
+                osTimerStop( RxTimeoutTimer );
                 // Clear Irq
                 SX1276Write( REG_LR_IRQFLAGS, RFLR_IRQFLAGS_RXTIMEOUT );
 
@@ -1904,6 +1907,7 @@ static void SX1276OnDio1Irq( void* context )
 
 static void SX1276OnDio2Irq( void* context )
 {
+	DBG("SX1276OnDio2Irq\n");
     switch( SX1276.Settings.State )
     {
         case RF_RX_RUNNING:
@@ -1918,7 +1922,7 @@ static void SX1276OnDio2Irq( void* context )
 
                 if( ( SX1276.Settings.FskPacketHandler.PreambleDetected != 0 ) && ( SX1276.Settings.FskPacketHandler.SyncWordDetected == 0 ) )
                 {
-                    TimerStop( &RxTimeoutSyncWord );
+                    osTimerStop( RxTimeoutSyncWord );
 
                     SX1276.Settings.FskPacketHandler.SyncWordDetected = true;
 
@@ -1973,6 +1977,7 @@ static void SX1276OnDio2Irq( void* context )
 
 static void SX1276OnDio3Irq( void* context )
 {
+	DBG("SX1276OnDio3Irq\n");
     switch( SX1276.Settings.Modem )
     {
     case MODEM_FSK:
