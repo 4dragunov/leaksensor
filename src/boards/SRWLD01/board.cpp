@@ -76,6 +76,7 @@ typedef struct USID{
  */
 Gpio_t Led1;
 Gpio_t Led2;
+Gpio_t Led3;
 
 Gpio_t BattPwr;
 
@@ -149,7 +150,33 @@ void BoardCriticalSectionEnd( UBaseType_t *mask )
 
 void BoardInitPeriph( void )
 {
+#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
+    SpiInit( &SX126x.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
+    SX126xIoInit( );
+#elif defined( LR1110MB1XXS )
+    SpiInit( &LR1110.spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
+    lr1110_board_init_io( &LR1110 );
+#elif defined( SX1272MB2DAS )
+    SpiInit( &SX1272.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
+    SX1272IoInit( );
+#elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
+    SpiInit( &SX1276.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
+    SX1276IoInit( );
+#endif
 
+#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
+        SX126xIoDbgInit( );
+        // WARNING: If necessary the TCXO control is initialized by SX126xInit function.
+#elif defined( LR1110MB1XXS )
+        lr1110_board_init_dbg_io( &LR1110 );
+        // WARNING: If necessary the TCXO control is initialized by SX126xInit function.
+#elif defined( SX1272MB2DAS )
+        SX1272IoDbgInit( );
+        SX1272IoTcxoInit( );
+#elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
+        SX1276IoDbgInit( );
+        SX1276IoTcxoInit( );
+#endif
 }
 
 void BoardInitMcu( void )
@@ -163,9 +190,10 @@ void BoardInitMcu( void )
 #ifdef DEBUG
     	initialise_monitor_handles();
 #endif
-        // LEDs
-        GpioInit( &Led1, LED_1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-        GpioInit( &Led2, LED_2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+        // LEDs OFF
+        GpioInit( &Led1, LED_1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, LED_OFF );
+        GpioInit( &Led2, LED_2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, LED_OFF );
+        GpioInit( &Led3, LED_3, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, LED_OFF );
 
         GpioInit( &BattPwr, BAT_PWR, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
 
@@ -184,11 +212,12 @@ void BoardInitMcu( void )
         RtcInit( );
 
         BoardUnusedIoInit( );
-        if( GetBoardPowerSource( ) == BATTERY_POWER )
+        if( GetBoardPowerSource( ) == EXT_POWER )
         {
             // Disables OFF mode - Enables lowest power mode (STOP)
             LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
         }
+        McuInitialized = true;
     }
     else
     {
@@ -205,40 +234,7 @@ void BoardInitMcu( void )
 	printf("HCLK=%li\n", HAL_RCC_GetHCLKFreq());
 	printf("APB1=%li\n", HAL_RCC_GetPCLK1Freq());
 	printf("APB2=%li\n", HAL_RCC_GetPCLK2Freq());
-
-#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
-    SpiInit( &SX126x.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
-    SX126xIoInit( );
-#elif defined( LR1110MB1XXS )
-    SpiInit( &LR1110.spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
-    lr1110_board_init_io( &LR1110 );
-#elif defined( SX1272MB2DAS )
-    SpiInit( &SX1272.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
-    SX1272IoInit( );
-#elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
-    SpiInit( &SX1276.Spi, SPI_2, RADIO_MOSI, RADIO_MISO, RADIO_SCLK, RADIO_NSS, MASTER );
-    SX1276IoInit( );
-#endif
-
-    if( McuInitialized == false )
-    {
-        McuInitialized = true;
-#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
-        SX126xIoDbgInit( );
-        // WARNING: If necessary the TCXO control is initialized by SX126xInit function.
-#elif defined( LR1110MB1XXS )
-        lr1110_board_init_dbg_io( &LR1110 );
-        // WARNING: If necessary the TCXO control is initialized by SX126xInit function.
-#elif defined( SX1272MB2DAS )
-        SX1272IoDbgInit( );
-        SX1272IoTcxoInit( );
-#elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
-        SX1276IoDbgInit( );
-        SX1276IoTcxoInit( );
-#endif
-    }
 }
-
 
 static TimerEvent_t TestTimer;
 static volatile bool TestTimerPassed = false;
