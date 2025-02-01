@@ -138,25 +138,31 @@ void SpiFrequency( Spi_t *obj, uint32_t hz )
 
 uint16_t SpiInOut( Spi_t *obj, uint16_t outData )
 {
-    uint8_t rxData = 0;
+    uint16_t rxData = 0;
 
     if( ( obj == NULL ) || ( SpiHandle[obj->SpiId].Instance ) == NULL )
     {
         assert_param( LMN_STATUS_ERROR );
     }
 
-    __HAL_SPI_ENABLE( &SpiHandle[obj->SpiId] );
+    if ((SpiHandle[obj->SpiId].Instance->CR1 & SPI_CR1_SPE) != SPI_CR1_SPE)
+    {
+        /* Enable SPI peripheral */
+        __HAL_SPI_ENABLE(&SpiHandle[obj->SpiId]);
+    }
 
     CRITICAL_SECTION_BEGIN( );
-    //while( __HAL_SPI_GET_FLAG( &SpiHandle[obj->SpiId], SPI_FLAG_TXE ) == RESET );
-   // SpiHandle[obj->SpiId].Instance->DR = ( uint16_t ) ( outData & 0xFF );
-    if(HAL_SPI_TransmitReceive( &SpiHandle[obj->SpiId], &outData, &rxData, 1, 100) != HAL_OK)
+    while( __HAL_SPI_GET_FLAG( &SpiHandle[obj->SpiId], SPI_FLAG_TXE ) == RESET );
+    SpiHandle[obj->SpiId].Instance->DR = ( uint16_t ) ( outData & 0xFF );
+   /*
+    if(HAL_SPI_TransmitReceive( &SpiHandle[obj->SpiId], (uint8_t*)&outData, (uint8_t*)&rxData, 1, 100) != HAL_OK)
     {
     	assert_param( LMN_STATUS_ERROR );
     }
-    //while( __HAL_SPI_GET_FLAG( &SpiHandle[obj->SpiId], SPI_FLAG_RXNE ) == RESET );
+    */
+    while( __HAL_SPI_GET_FLAG( &SpiHandle[obj->SpiId], SPI_FLAG_RXNE ) == RESET );
+    rxData = ( uint16_t ) SpiHandle[obj->SpiId].Instance->DR;
 
-    //rxData = ( uint16_t ) SpiHandle[obj->SpiId].Instance->DR;
     CRITICAL_SECTION_END( );
 
     return( rxData );
