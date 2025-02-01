@@ -22,6 +22,9 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
+#include <iostream>
+#include <iomanip>
+#include <cstring>
 #include "utilities.h"
 
 /*!
@@ -148,4 +151,26 @@ uint32_t Crc32Update( uint32_t crcInit, uint8_t *buffer, uint16_t length )
 uint32_t Crc32Finalize( uint32_t crc )
 {
     return ~crc;
+}
+
+void print_buf(const char *title, const unsigned char *buf, size_t buf_len)
+{
+    size_t i = 0;
+    fprintf(stdout, "%s\n", title);
+    for(i = 0; i < buf_len; ++i)
+    fprintf(stdout, "%02X%s", buf[i],
+             ( i + 1 ) % 16 == 0 ? "\r\n" : " " );
+
+}
+
+void print_bytes(std::ostream& out, const char *title, const unsigned char *data, size_t dataLen, bool format) {
+    out << title << std::endl;
+    out << std::setfill('0');
+    for(size_t i = 0; i < dataLen; ++i) {
+        out << std::hex << std::setw(2) << (int)data[i];
+        if (format) {
+            out << (((i + 1) % 16 == 0) ? "\n" : " ");
+        }
+    }
+    out << std::endl;
 }

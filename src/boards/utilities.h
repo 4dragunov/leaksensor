@@ -35,19 +35,7 @@ extern "C" {
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
-#ifdef DEBUG
-    #include <stdio.h>
-    /*!
-     * Works in the same way as the printf function does.
-     */
-    #define DBG( ... )                               \
-        do                                           \
-        {                                            \
-            printf( __VA_ARGS__ );                   \
-        }while( 0 )
-#else
-    #define DBG( fmt, ... )
-#endif
+
 
 /*!
  * LMN (LoRaMac-node) status
@@ -226,6 +214,8 @@ void BoardCriticalSectionBegin( uint32_t *mask );
  */
  void BoardCriticalSectionEnd( uint32_t *mask );
 
+ void print_buf(const char *title, const unsigned char *buf, size_t buf_len);
+
 #ifdef __cplusplus
 }
 
@@ -275,5 +265,26 @@ public:
   bool operator!=(const enum_iterator& i) { return val != i.val; }
 
 };
+
+#include <iostream>
+void print_bytes(std::ostream& out, const char *title, const unsigned char *data, size_t dataLen, bool format = true);
+
 #endif //cpp
+
+#ifdef DEBUG
+    #include <stdio.h>
+    /*!
+     * Works in the same way as the printf function does.
+     */
+    #define DBG( ... )                               \
+        do                                           \
+        {                                            \
+            printf( __VA_ARGS__ );                   \
+        }while( 0 )
+	#define DBG_HEX(t, x, y) print_buf(t, x, y)
+#else
+    #define DBG( fmt, ... )
+	#define DBG_HEX(x,y,z) do{}while(0)
+#endif
+
 #endif // __UTILITIES_H__

@@ -25,6 +25,8 @@ set(MCU STM32F103xE)
 set(BOARD_MCU ${MCU} PARENT_SCOPE)
 set(BOARD_MCU ${MCU})
 
+set(SECURE_ELEMENT SOFT_SE PARENT_SCOPE)
+
 include(CMakePrintHelpers)
 
 cmake_print_variables(BOARD_MCU)
@@ -45,9 +47,10 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/nonvol.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sensors.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/flash-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom-data.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/modbus_callback.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/arm-gcc/startup_stm32f103zetx.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/system_stm32f1xx.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32F1xx_HAL_Driver/Src/stm32f1xx_hal.c"
@@ -118,4 +121,4 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     $<TARGET_PROPERTY:peripherals,INTERFACE_INCLUDE_DIRECTORIES>
 )
 
-set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 11 CXX_STANDARD 17)
+set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 11 CXX_STANDARD 20)
