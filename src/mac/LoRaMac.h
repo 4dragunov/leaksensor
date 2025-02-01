@@ -761,7 +761,8 @@ typedef struct sLoRaMacNvmDataGroup2
  * LoRaMAC data structure for non-volatile memory (NVM).
  * This structure contains data which must be stored in NVM.
  */
-typedef struct sLoRaMacNvmData
+#pragma pack(push, 1) // stored at eeprom - so we need pack it
+struct sLoRaMacNvmData
 {
     /*!
      * Parameters related to the crypto layer. Change with every TX/RX
@@ -796,8 +797,9 @@ typedef struct sLoRaMacNvmData
      * Parameters related to class b.
      */
     LoRaMacClassBNvmData_t ClassB;
-}LoRaMacNvmData_t;
-
+};
+#pragma pack(pop)
+typedef struct sLoRaMacNvmData LoRaMacNvmData_t;
 /*!
  *
  * \brief   LoRaMAC data services
