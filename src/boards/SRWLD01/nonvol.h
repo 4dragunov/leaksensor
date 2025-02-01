@@ -9,7 +9,6 @@
 #include "utilities.h"
 #include "LoraMac.h"
 
-
 #define EEPROM_NV_SIZE  128
 
 typedef enum NvVar {
@@ -32,20 +31,21 @@ typedef enum NvVar {
 	EEPROM_LENGTH = NV_LAST_VAR
 }NvVar;
 
+#ifdef __cplusplus
 
 typedef uint8_t NvSum;		// ones-complement checksum
 
 class NvField
 {
   Eeprom& eeprom;	// the backing EEPROM device
-  typename Eeprom::address_type addr;		// current read/write address in device
+  typename Eeprom::address addr;		// current read/write address in device
   NvSum sum;		// checksum accumulator
 
   void note(const void* buf, size_t len)
   {
     const uint8_t* p = static_cast<const uint8_t*>(buf);
 
-    for (size_t i = 0; i < len * sizeof(typename Eeprom::data_type); i++)
+    for (size_t i = 0; i < len * sizeof(typename Eeprom::data); i++)
     {
       NvSum t = sum;
 
@@ -55,26 +55,26 @@ class NvField
   }
 
 public:
-  NvField(Eeprom& e, typename Eeprom::address_type a) : eeprom(e), addr(a), sum(0) { }
+  NvField(Eeprom& e, typename Eeprom::address a) : eeprom(e), addr(a), sum(0) { }
 
   // Write buffer to device; update checksum and address.
 
   bool write(const void* buf, size_t len)
   {
-	bool retval = Eeprom::Instance().write(addr, (Eeprom::data_type*)buf, len);
-	if(retval)
+	Eeprom::Result retval = eeprom.write(addr, (Eeprom::data*)buf, len);
+	if(retval==Eeprom::Result::OK)
 		note(buf, len);
-    return retval;
+    return retval == Eeprom::Result::OK;;
   }
 
   // Read from device into buffer; update checksum and address.
 
   bool read(void* buf, size_t len)
   {
-    bool retval = Eeprom::Instance().read(addr, (Eeprom::data_type*)buf, len);
-    if(retval)
+	  Eeprom::Result retval = eeprom.read(addr, (Eeprom::data*)buf, len);
+    if(retval == Eeprom::Result::OK)
     	note(buf, len);
-    return retval;
+    return retval == Eeprom::Result::OK;;
   }
 
   // Write or read arbitrary types.
@@ -94,11 +94,8 @@ public:
 
   // Get address of field following this one.
 
-  typename Eeprom::address_type next() const { return addr; }
+  typename Eeprom::address next() const { return addr; }
 };
-
-#define STORE_BEGIN (0 + sizeof(LoRaMacNvmData_t))
-#define STORE_END (STORE_BEGIN + EEPROM_NV_SIZE)
 
 // Nonvolatile storage layout manager for byte-eraseable devices.
 class NvStore
@@ -106,8 +103,8 @@ class NvStore
 public:
   Eeprom &eeprom;       // EEPROM driver
 
-  const Eeprom::address_type base = STORE_BEGIN;          // start address of first record in EEPROM
-  const Eeprom::address_type end = STORE_END;           // end of available EEPROM
+  const Eeprom::address base = 1200;          // start address of first record in EEPROM - lora uses about 1160 bytes from 0
+  const Eeprom::address end = Eeprom::end;    // end of available EEPROM
 
   NvStore()
   : eeprom(Eeprom::Instance()){ }
@@ -121,11 +118,11 @@ public:
 
   static NvStore& Instance();
   
-  virtual Eeprom::address_type open(const NvVar& name, void* buf)
+  virtual Eeprom::address open(const NvVar& name, void* buf)
   {
 
     if(name < NvVar::NV_LAST_VAR) {
-    		Eeprom::address_type addr = std::accumulate(registry, &registry[name], base);// size in words
+    		Eeprom::address addr = std::accumulate(registry, &registry[name], base);// size in words
     		if(buf) {
 				NvField payload(eeprom, addr);
 				payload.read(buf, registry[name]);
@@ -138,19 +135,11 @@ public:
   virtual bool update(const NvVar& name, const void* buf)
   {
       NvField payload(eeprom, open(name, nullptr));
-      return payload.write(buf, registry[name]);
+      bool res =  payload.write(buf, registry[name]);
+      DBG("update %i:%i\n", name, res);
+      return res;
   }
 
-  void dump() {
-
-	for (int i = 0; i < NvVar::NV_LAST_VAR; i++) {
-		union {
-		uint8_t bytes[4];
-		uint32_t dword;
-		}buf = {};
-		DBG("id:%i adr: %i, val: %li size: %i\n", i, open((NvVar)i, buf.bytes), buf.dword,  NvStore::registry[i]);
-	}
-  }
   friend std::ostream& operator<<(std::ostream& os, const NvStore& st);
 };
 std::ostream& operator<<(std::ostream& os, const NvStore& st);
@@ -168,42 +157,42 @@ class NvProperty
 	    std::is_enum<T>::value,
 	    std::underlying_type<T>,
 	    std::enable_if<true, T>>::type::type;
-
-  TT value;                   // RAM image of the nonvolatile variable
-  uint16_t  addr;        // EEPROM address of the record payload
+  NvStore& store;
+  mutable TT value;  // RAM image of the nonvolatile variable
+  uint16_t  addr;    // EEPROM address of the record payload
   NvVar id;
 public:
   const TT min;
   const TT max;
+  const TT def;
   NvProperty(const T& min, const T& max, const T& defVal,  const NvVar& id):
-  	value(defVal),
-  	addr(NvStore::Instance().open(id, &value)),
+	store(NvStore::Instance()),
+  	value(std::numeric_limits<T>::max()),
+  	addr(store.open(id, &value)),
   	id(id),
   	min(min),
-  	max(max)
+  	max(max),
+	def(defVal)
   {
-  	  DBG("st %p\n", (void*)&NvStore::Instance());
-  	  DBG("se %p\n", (void*)&NvStore::Instance().eeprom);
   	  if((value > max) || (value < min)) {
-  		  if(NvStore::Instance().update(id, &defVal)){
-  			  value = defVal;
-  			  DBG("default set\n");
-  		  } else {
-  			  DBG("default fail \n");
+  		  value = def;
+  		  if(store.update(id, &def)){
+  			  value = def;
   		  }
-  	  } else {
-  		  DBG("%i skip\n",addr);
   	  }
   }
 
   operator const T& () const {
-  	return value;
+	if((value > max) || (value < min)) {
+		  value = def;
+	}
+	return value;
   }
 
   const T& operator = (const T& v)
   {
     value = std::clamp(v, min, max);
-    NvStore::Instance().update(id, &value);
+    store.update(id, &value);
     return value;
   }
 
@@ -213,3 +202,5 @@ public:
   	  return os << std::endl;
   }
 };
+
+#endif
