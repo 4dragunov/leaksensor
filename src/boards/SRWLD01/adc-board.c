@@ -46,12 +46,27 @@ void AdcMcuInit( Adc_t *obj, PinNames adcInput )
 	 if(h->Instance == ADC3)
 	    __HAL_RCC_ADC3_CLK_ENABLE( );
 
-    HAL_ADC_DeInit(h);
+	 HAL_ADC_DeInit(h);
 
     if( adcInput != NC )
     {
         GpioInit( &obj->AdcInput, adcInput, PIN_ANALOGIC, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
     }
+}
+
+void AdcMcuDeInit( Adc_t *obj, PinNames adcInput )
+{
+	ADC_HandleTypeDef * h = i2h(obj->inst);
+	assert(h);
+
+	HAL_ADC_DeInit(h);
+
+	if(h->Instance == ADC1)
+		__HAL_RCC_ADC1_CLK_DISABLE( );
+	if(h->Instance == ADC2)
+		__HAL_RCC_ADC2_CLK_DISABLE( );
+	if(h->Instance == ADC3)
+		__HAL_RCC_ADC3_CLK_DISABLE( );
 }
 
 void AdcMcuConfig( Adc_t *obj )
