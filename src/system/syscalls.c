@@ -65,8 +65,9 @@ __weak int __io_getchar(void) {
 
 int _getpid(void)
 {
-	if(osThreadGetId())
-		return (int)osThreadGetId();
+	osThreadId thid = osThreadGetId();
+	if(thid)
+		return (int)thid;
 	else
 		return 1;
 }
