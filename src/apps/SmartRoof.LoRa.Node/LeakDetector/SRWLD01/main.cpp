@@ -129,9 +129,7 @@
 
 NvProperty<uint8_t> gActiveRegion(LORAMAC_REGION_EU868, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
 
-NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_resolution(to_underlying(OneWire::DS18B20::Resolution::SR9BITS),
-		to_underlying(OneWire::DS18B20::Resolution::SR12BITS),
-		to_underlying(OneWire::DS18B20::Resolution::SR12BITS), NvVar::DS18B20_RESOLUTION);
+
 //2678400000
 NvProperty<uint32_t> gLoraAppTxDutyCycle(1000,  1000u * 60u * 60u * 24u* 31u, APP_TX_DUTYCYCLE, NvVar::LORA_TX_DUTYCYCLE);
 
@@ -180,22 +178,17 @@ static TimerEvent_t TxTimer;
 osSemaphoreDef(UplinkSem);
 osSemaphoreId gUplinkSem;
 
-void StartTaskOneWire(void const * argument);
-osThreadId oneWireTaskHandle;
-osThreadDef(oneWireTask, StartTaskOneWire, osPriorityNormal, 0, 256);
-
 void StartTaskDefault(void const * argument);
 osThreadId defaultTaskHandle;
 osThreadDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 256);
 
 
-uint8_t ds18b20Sensors = 0;
-int16_t ds18b20SensorTemp[8] = {};
+
 uint16_t gLeakSensorData[20] = {};
 uint8_t  gLeakSensorCount = 20;
 
 extern void InitModBus(void);
-
+extern void InitOneWire(void);
 
 static void OnMacProcessNotify( void );
 static void OnNvmDataChange( LmHandlerNvmContextStates_t state, uint16_t size );
@@ -343,22 +336,8 @@ extern Uart_t Usart1;
 extern Adc_t Adc1;
 extern Adc_t Adc3;
 
-extern OneWire::Bus gOWI;
-extern OneWire::DS18B20 gDs18b20;
-
-
 osMailQDef(TxSensors, 1, SummarySensorsData);                    // Define mail queue
 osMailQId  gTxSensorsMq;
-osMailQDef(SummarySensors, 1, SummarySensorsData);                    // Define mail queue
-osMailQId  gSummarySensorsMq;
-
-struct SummarySensorsDataMailDeleter {
-    void operator()(SummarySensorsData* p) const {
-        std::cout << std::endl;
-        osMailFree(gSummarySensorsMq, p);
-    }
-};
-typedef std::shared_ptr<SummarySensorsData> SummarySensorsDataSharedMail;
 
 
 void UpdateHadlerProps(){
@@ -452,52 +431,6 @@ void StartTaskDefault(void const * argument)
   /* USER CODE END StartTaskLeakMeter */
 }
 
-
-
-/* USER CODE BEGIN Header_StartTaskOneWire */
-/**
-* @brief Function implementing the oneWireTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartTaskOneWire */
-void StartTaskOneWire(void const * argument)
-{
-  for(;;)
-  {
-    if(!ds18b20Sensors) {
-    	ds18b20Sensors = gDs18b20.init(static_cast<OneWire::DS18B20::Resolution>((uint8_t)ds18b20_resolution));
-    	if(!ds18b20Sensors) {DBG("No sensors!\n");osDelay(200);}
-    }else {
-    	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
-
-    	if(gDs18b20.waitTempReady(0) == osOK) {
-			SummarySensorsData* summaryData = static_cast<SummarySensorsData*>(osMailCAlloc(gSummarySensorsMq, osWaitForever));
-			if(summaryData) {
-				osEvent ev = osMailGet(DataSampler::Instance(), osWaitForever);
-				if(ev.status == osEventMail) {
-					DBG("MB MAIL\n");
-					summaryData->leakSamples=*static_cast<Samples *>(ev.value.p);
-					summaryData->thermal.sensors =  ds18b20Sensors;
-					for(uint8_t s = 0; s < ds18b20Sensors; s++)
-						OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &summaryData->thermal.data[s]);
-					gettimeofday(&summaryData->thermal.timestamp, 0);
-					gettimeofday(&summaryData->timestamp, 0);
-					osMailFree(DataSampler::Instance(), ev.value.p);
-					osMailPut(gSummarySensorsMq, (void*)summaryData);  // Send Message
-				}
-			}
-        }else {
-        	DBG("temp wait error\n");
-        }
-	  } else{
-		  DBG("failed to start measure\n");
-	  }
-  }
- }
-}
-
-
 #ifdef TEST
 static void keyCallback(void* context ){
     GpioToggle(&Led1);
@@ -535,8 +468,8 @@ int main( void )
 
     InitModBus();
 
-    oneWireTaskHandle = osThreadCreate(osThread(oneWireTask), NULL);
-    assert(oneWireTaskHandle);
+    InitOneWire();
+
     defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
     assert(defaultTaskHandle);
     // create mail queues
@@ -544,8 +477,7 @@ int main( void )
     gTxSensorsMq = osMailCreate(osMailQ(TxSensors), NULL);
     assert(gTxSensorsMq);
 
-    gSummarySensorsMq=osMailCreate(osMailQ(SummarySensors), NULL);
-    assert(gSummarySensorsMq);
+
     // create semaphores
     gUplinkSem = osSemaphoreCreate(osSemaphore(UplinkSem), 1);
     assert(gUplinkSem);
@@ -680,6 +612,7 @@ static void PrepareTxFrame( void )
 
     if( LmHandlerIsBusy( ) == true )
     {
+    	DBG("busy\n");
         return;
     }
     DBG("not busy\n");
