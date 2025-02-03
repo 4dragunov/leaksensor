@@ -1257,9 +1257,10 @@ void RadioIrqProcess( void )
 
     if( isIrqFired == true )
     {
+
         uint16_t irqRegs = SX126xGetIrqStatus( );
         SX126xClearIrqStatus( irqRegs );
-
+        DBG("isIrqFired: %i\n", irqRegs);
         // Check if DIO1 pin is High. If it is the case revert IrqFired to true
         CRITICAL_SECTION_BEGIN( );
         if( SX126xGetDio1PinState( ) == 1 )
@@ -1313,6 +1314,7 @@ void RadioIrqProcess( void )
                 SX126xGetPacketStatus( &RadioPktStatus );
                 if( ( RadioEvents != NULL ) && ( RadioEvents->RxDone != NULL ) )
                 {
+                	DBG_HEX("RadioRxPayload:", RadioRxPayload, size);
                     RadioEvents->RxDone( RadioRxPayload, size, RadioPktStatus.Params.LoRa.RssiPkt, RadioPktStatus.Params.LoRa.SnrPkt );
                 }
             }
