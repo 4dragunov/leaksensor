@@ -463,29 +463,23 @@ public:
 extern volatile uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
 extern volatile Modbus *mHandlers[MAX_M_HANDLERS];
 
-
-namespace Master {
-
-class ModBusMaster:public Modbus {
+class Master:public Modbus {
 public:
 
-	ModBusMaster(Uart_t *uart, Gpio_t *dePin, Registers &regs):Modbus(uart, dePin, ModBusType::Master, 0, regs) {
+	Master(Uart_t *uart, Gpio_t *dePin, Registers &regs):Modbus(uart, dePin, ModBusType::Master, 0, regs) {
 
 	}
-	virtual ~ModBusMaster()=default;
+	virtual ~Master()=default;
 };
-}//namespace Master
 
-namespace Slave {
 
-class ModBusSlave:public Modbus {
+class Slave:public Modbus {
 public:
 
-	ModBusSlave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):Modbus(uart, dePin, ModBusType::Slave, id, regs) {
+	Slave(Uart_t *uart, Gpio_t *dePin, const uint8_t id, Registers &regs):Modbus(uart, dePin, ModBusType::Slave, id, regs) {
 	}
-	virtual ~ModBusSlave()=default;
+	virtual ~Slave()=default;
 };
-} //namespace Slave
 
 } //namespace ModBus
 
