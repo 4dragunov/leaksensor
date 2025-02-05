@@ -169,9 +169,9 @@ typedef struct Samples{
 
 
 class DataSampler {
-	friend void SamplerTask(void const * argument);
+	friend void SamplerTask(const void* argument);
 public:
-	 typedef std::array<Channel, WL_CHANNEL_COUNT> Channels;
+	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2> Channels;
 
 	 static DataSampler &Instance() {
 		 static DataSampler instance;
@@ -179,7 +179,6 @@ public:
 	 }
 	 osMailQId& Init();
 	 void DeInit();
-	 static void SamplerTask(void const * argument);
 
 	 static void OnChannelLimit(const Channel *ch);
 	 void DoOnChannelLimit(const Channel *ch);
@@ -203,9 +202,10 @@ protected:
 	 struct timeval mTs;
 	 DataSampler();
 	 virtual ~DataSampler();
+	 void DoSamplerTask();
 };
-extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT];
-extern  ChannelPins gChannelsPins[WL_CHANNEL_COUNT];
+extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 2];
+extern  ChannelPins gChannelsPins[WL_CHANNEL_COUNT + 2];
 #endif
 
 
