@@ -31,6 +31,8 @@ extern "C"
 #include <stdint.h>
 #include <stdbool.h>
 #include "utilities.h"
+
+
 /*!
  * Possible power sources
  */
@@ -132,6 +134,8 @@ uint8_t GetBoardPowerSource( void );
  */
 Version_t BoardGetVersion( void );
 
+void BoardPrintSID(void);
+void BoardPrintUUID(void);
 
 #ifdef __cplusplus
 }

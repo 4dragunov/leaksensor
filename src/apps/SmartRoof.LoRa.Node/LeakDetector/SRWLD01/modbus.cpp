@@ -17,8 +17,7 @@ extern NvProperty<uint8_t> gLoraAdrState;
 
 extern uint8_t ds18b20Sensors;
 extern int16_t ds18b20SensorTemp[8];
-extern uint16_t gLeakSensorData[20];
-extern uint8_t  gLeakSensorCount;
+
 
 extern osMailQId  gSummarySensorsMq;
 
@@ -66,6 +65,9 @@ enum class Index:std::underlying_type_t<ModBus::Index>{
 			COUNT,
 			END = COUNT
 		};
+uint8_t  gLeakSensorCount = 20;
+uint16_t gLeakSensorData[20];
+
 typedef enum_iterator<ModBus::Register::Index, static_cast<ModBus::Register::Index>(Index::WL_1), static_cast<ModBus::Register::Index>(Index::WL_20)> wl_iterator;
 typedef enum_iterator<ModBus::Register::Index, static_cast<ModBus::Register::Index>(Index::TEMP_1), static_cast<ModBus::Register::Index>(Index::TEMP_8)> temp_iterator;
 

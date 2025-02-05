@@ -21,6 +21,8 @@
  * \author    Gregory Cristian ( Semtech )
  */
 #include <cassert>
+#include <cstring>
+#include <string.h>
 #include "stm32f1xx.h"
 #include "utilities.h"
 #include "gpio.h"
@@ -50,18 +52,22 @@
 #endif
 #include "board.h"
 
-
 /*!
  * Unique Devices IDs register set ( STM32F103xE )
  */
 
-typedef struct USID{
-	uint32_t LotNumber:24;
-	uint8_t  SiliconWaferNumber;
-	uint32_t AnotherLotNumber;
-	uint32_t UniqueID;
+typedef union {
+	struct USID{
+		uint32_t LotNumber:24;
+		uint8_t  SiliconWaferNumber;
+		uint32_t AnotherLotNumber;
+		uint32_t UniqueID;
+	} field;
+	uint8_t bytes[12];
 }Usid;
-
+/*!
+ * Unique Devices IDs register set ( STM32F103xE )
+ */
 #define U_ID          0x1ffff7e8
 
 #define ID1 ((uint32_t*)(U_ID + 0x0))
@@ -236,39 +242,6 @@ void BoardInitMcu( void )
 	printf("APB2=%li\n", HAL_RCC_GetPCLK2Freq());
 }
 
-static TimerEvent_t TestTimer;
-static volatile bool TestTimerPassed = false;
-const uint16_t times[] = { 1011, 2212}; // 10, 2, 1,
-static void TestTimerEvent(void* ctx)
-{
-  TimerStop( &TestTimer );
-  TestTimerPassed = true;
-}
-bool Board_Timer_Test(void){
-	uint8_t pass = 0;
-
-	TimerInit( &TestTimer, TestTimerEvent );
-	for(uint8_t i = 0; i < ARRAY_SIZE(times); i++) {
-		DBG("TEST TM:%i\n",times[i]);
-		TimerSetValue( &TestTimer, times[i] );
-		uint32_t timeStart = HAL_GetTick();
-		TimerStart( &TestTimer );
-		while( TestTimerPassed == false )
-		{
-			osDelay(1);
-		}
-		TestTimerPassed = false;
-		uint32_t t =  HAL_GetTick() - timeStart;
-		if((t>times[i] && t-times[i]<5)||(t<times[i] && times[i]-t<5)||(t==times[i])){
-			DBG("TM:%i pass: %li diff: %li\n",times[i], t, t-times[i]);
-			pass++;
-		}else{
-			DBG("TM:%i fail: %li diff: %li\n",times[i], t,  t-times[i]);
-		}
-	}
-	return pass == ARRAY_SIZE(times);
-}
-
 
 void BoardResetMcu( void )
 {
@@ -315,6 +288,37 @@ void BoardGetUniqueId( uint8_t *id )
     id[2] = ( ( *( uint32_t* )ID2 ) ) >> 16;
     id[1] = ( ( *( uint32_t* )ID2 ) ) >> 8;
     id[0] = ( ( *( uint32_t* )ID2 ) );
+}
+
+uint8_t UIDtoString(const Usid *sid, char *buf, size_t bufSize)
+{
+  unsigned int i;
+  std::strncpy(buf, (const char*)"{", bufSize);
+  for(i=0;i<sizeof(Usid);i++) {
+	strncat(buf, (const char*)"0x", bufSize);
+    strcatNum8Hex(buf, bufSize, sid->bytes[i]);
+    if (i<sizeof(Usid)-1) {
+    	strncat(buf, (const char*)",", bufSize);
+    }
+  }
+  strncat((char*)buf, (const char*)"}", bufSize);
+  return 0;
+}
+
+void BoardPrintSID(void) {
+	printf( "######     Silicon ID    ######\r\n");
+	printf( "######   UID 0x%lx  ######\r\n", UniqueSiliconID->field.UniqueID);
+	printf( "######   Wafer %i         ######\r\n", UniqueSiliconID->field.SiliconWaferNumber);
+	printf( "######   Lot  %i   ######\r\n", UniqueSiliconID->field.LotNumber);
+}
+
+void BoardPrintUUID(void) {
+  Usid uid;
+  char buf[96];
+
+  BoardGetUniqueId(uid.bytes);
+  UIDtoString(&uid, buf, sizeof(buf));
+  printf( "######   Board UUID: %s   ######\r\n\r\n", buf);
 }
 
 /*!

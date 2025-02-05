@@ -24,8 +24,11 @@
 #include <stdio.h>
 #include <iostream>
 #include <iomanip>
+#include <string.h>
 #include <cstring>
+
 #include "utilities.h"
+#include "board-config.h"
 
 /*!
  * Redefinition of rand() and srand() standard C functions.
@@ -151,6 +154,25 @@ uint32_t Crc32Update( uint32_t crcInit, uint8_t *buffer, uint16_t length )
 uint32_t Crc32Finalize( uint32_t crc )
 {
     return ~crc;
+}
+
+/*!
+  \brief Adds a 8bit number as hex value to a string.
+  \param[in,out] dst Start of string buffer, where to append the number string
+  \param[in] dstSize The size of the buffer, including the zero byte
+  \param[in] num The 8bit number to add
+  */
+void strcatNum8Hex(char *dst, size_t dstSize, uint8_t num)
+{
+  char buf[sizeof("FF")]; /* maximum buffer size we need */
+  unsigned char hex;
+
+  buf[2] = '\0';
+  hex = (char)(num & 0x0F);
+  buf[1] = (char)(hex + ((hex <= 9) ? '0' : ('A'-10)));
+  hex = (char)((num>>4) & 0x0F);
+  buf[0] = (char)(hex + ((hex <= 9) ? '0' : ('A'-10)));
+  strncat(dst, const_cast<const char*>(buf), dstSize);
 }
 
 void print_buf(const char *title, const unsigned char *buf, size_t buf_len)

@@ -50,9 +50,6 @@
 #include "NvmDataMgmt.h"
 #include "sensors.h"
 
-#define TEST
-
-
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
@@ -68,7 +65,7 @@
  * LoRaWAN default end-device class
  */
 #ifndef LORAWAN_DEFAULT_CLASS
-#define LORAWAN_DEFAULT_CLASS                       CLASS_A
+#define LORAWAN_DEFAULT_CLASS                       CLASS_B
 #endif
 
 /*!
@@ -120,24 +117,12 @@
  */
 #define LORAWAN_APP_PORT                            2
 
-
-#define VREF        3.3   // Опорное напряжение АЦП
-#define ADC_MAX     4095   // Максимальное значение для 12-битного АЦП
-#define R1          10000  // Значение известного сопротивления R1 в омах
-#define UART_BUFFER_SIZE 256
-
-
-NvProperty<uint8_t> gActiveRegion(LORAMAC_REGION_EU868, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
-
-
-//2678400000
-NvProperty<uint32_t> gLoraAppTxDutyCycle(1000,  1000u * 60u * 60u * 24u* 31u, APP_TX_DUTYCYCLE, NvVar::LORA_TX_DUTYCYCLE);
-
+NvProperty<uint8_t>  gActiveRegion(LORAMAC_REGION_EU868, LORAMAC_REGION_RU864, ACTIVE_REGION, NvVar::LORA_REGION);
+NvProperty<uint32_t> gLoraAppTxDutyCycle(1000,  1000u * 60u * 60u * 24u* 31u, APP_TX_DUTYCYCLE, NvVar::LORA_TX_DUTYCYCLE);//2678400000
 NvProperty<uint16_t> gLoraAppTxDutyCycleRnd(100,  1000 * 2, APP_TX_DUTYCYCLE_RND, NvVar::LORA_TX_DUTYCYCLE_RND);
-NvProperty<uint8_t> gLoraAdrState(0,  1, LORAWAN_ADR_STATE, NvVar::LORA_ADR_STATE);
-
-NvProperty<uint8_t> gLoraDefaultDatarate(DR_0,  DR_15, LORAWAN_DEFAULT_DATARATE, NvVar::LORA_DEFAULT_DATARATE);
-NvProperty<uint8_t> gLoraAppPort(1,  223, LORAWAN_APP_PORT, NvVar::LORA_APP_PORT);
+NvProperty<uint8_t>  gLoraAdrState(0,  1, LORAWAN_ADR_STATE, NvVar::LORA_ADR_STATE);
+NvProperty<uint8_t>  gLoraDefaultDatarate(DR_0,  DR_15, LORAWAN_DEFAULT_DATARATE, NvVar::LORA_DEFAULT_DATARATE);
+NvProperty<uint8_t>  gLoraAppPort(1,  223, LORAWAN_APP_PORT, NvVar::LORA_APP_PORT);
 
 /*!
  *
@@ -180,12 +165,7 @@ osSemaphoreId gUplinkSem;
 
 void StartTaskDefault(void const * argument);
 osThreadId defaultTaskHandle;
-osThreadDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 256);
-
-
-
-uint16_t gLeakSensorData[20] = {};
-uint8_t  gLeakSensorCount = 20;
+osThreadDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 512);
 
 extern void InitModBus(void);
 extern void InitOneWire(void);
@@ -328,13 +308,9 @@ static struct Leds{
 #define LED_SWITCH_ON(led) {GpioWrite( &gLeds[led].pio, LED_ON ); osTimerStart( gLeds[led].timer, gLeds[led].timeout );}
 #define LED_SWITCH_OFF(led)    {osTimerStop( gLeds[led].timer ); GpioWrite( &gLeds[led].pio, LED_OFF );}
 
-/*!
- * UART object used for command line interface handling
- */
-extern Uart_t Usart1;
 
-extern Adc_t Adc1;
-extern Adc_t Adc3;
+//extern Adc_t Adc1;
+//extern Adc_t Adc3;
 
 osMailQDef(TxSensors, 1, SummarySensorsData);                    // Define mail queue
 osMailQId  gTxSensorsMq;
@@ -366,7 +342,8 @@ void StartTaskDefault(void const * argument)
     DisplayAppInfo( "periodic-uplink-lpp",
                     &appVersion,
                     &gitHubVersion );
-
+    BoardPrintUUID();
+    BoardPrintSID();
     // Initialize transmission periodicity variable
     TxPeriodicity = gLoraAppTxDutyCycle + randr( -gLoraAppTxDutyCycleRnd, gLoraAppTxDutyCycleRnd );
     LmHandlerParams =   {
@@ -381,7 +358,7 @@ void StartTaskDefault(void const * argument)
         .PingSlotPeriodicity = REGION_COMMON_DEFAULT_PING_SLOT_PERIODICITY,
     };
 
-    BoardInitPeriph(); // init lora in task context
+    BoardInitPeriph(); // init lora hardware in the task context (drivers modified to use os timers)
 
     if ( LmHandlerInit( &LmHandlerCallbacks, &LmHandlerParams ) != LORAMAC_HANDLER_SUCCESS )
     {
@@ -431,32 +408,6 @@ void StartTaskDefault(void const * argument)
   /* USER CODE END StartTaskLeakMeter */
 }
 
-#ifdef TEST
-static void keyCallback(void* context ){
-    GpioToggle(&Led1);
-}
-static Gpio_t key;
-GpioIrqHandler *keyHandler = keyCallback;
-
-/* USER CODE END Header_StartTaskLeakMeter */
-void StartTaskTimerTest(void const * argument)
-{
-	struct timeval tv;
-    GpioInit( &key, PE_2, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
-    GpioSetInterrupt( &key, IRQ_FALLING_EDGE, IRQ_HIGH_PRIORITY, keyHandler );
-
-    bool passed = Board_Timer_Test();
-    DBG("Timer test passed: %i\n", passed);
-    for(;;)
-    {
-    	osDelay(100);
-    	gettimeofday(&tv, NULL);
-    	GpioToggle(&Led1);
-    	DBG("tv: sec: %ld, usec:%ld \n", (uint32_t)tv.tv_sec, (uint32_t)tv.tv_usec);
-    }
-
-}
-#endif
 /*!
  * Main application entry point.
  */
@@ -620,7 +571,7 @@ static void PrepareTxFrame( void )
 
     CayenneLppReset( );
 
-    evt = osMailGet(gTxSensorsMq, osWaitForever);  // wait for message
+    evt = osMailGet(gTxSensorsMq, 0);  // wait for message
     if (evt.status == osEventMail) {
     	DBG("LS MAIL\n");
     	SummarySensorsData *summarySensorsData = static_cast<SummarySensorsData*>(evt.value.p);
@@ -675,7 +626,7 @@ static void StartTxProcess( LmHandlerTxEvents_t txEvent )
 
 static void UplinkProcess( void )
 {
-    if(osSemaphoreWait(gUplinkSem, osWaitForever) == osOK)
+    if(osSemaphoreWait(gUplinkSem, 0) == osOK)
     {
         PrepareTxFrame( );
     }

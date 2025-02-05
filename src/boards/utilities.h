@@ -35,8 +35,6 @@ extern "C" {
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
-
-
 /*!
  * LMN (LoRaMac-node) status
  */
@@ -206,6 +204,9 @@ uint32_t Crc32Finalize( uint32_t crc );
  * \param [IN] mask Pointer to a variable where to store the CPU IRQ mask
  */
 void BoardCriticalSectionBegin( uint32_t *mask );
+
+
+void strcatNum8Hex(char *dst, size_t dstSize, uint8_t num);
 
 /*!
  * Ends critical section
