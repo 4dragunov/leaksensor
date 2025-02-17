@@ -223,8 +223,8 @@ public:
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			std::get<Register::RefValue<uint32_t>>(nvp[0]) = value;
 		}
-		return value;
 	};
+
 	const GetterType defaultGetter = [](const Register::ValuesType &nvp)->uint16_t{
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			return std::get<Register::nvb_ref>(nvp[0]).get();
@@ -252,25 +252,25 @@ public:
 		}
 		return 0;
 	};
-	const OnChanged defaultOnChanged = [](const Register *reg){};
-	const OnAccessError defaultOnAccessError = [](const Register *reg){};
+	const OnChanged defaultOnChanged = [](const Register *reg){DBG("Changed\n");};
+	const OnAccessError defaultOnAccessError = [](const Register *reg){DBG("Access Error\n");};
 	Register();
 	Register(Register::Index idx, Register::ValuesType values,
 			Register::Access acc = Register::Access::RW,
-			Register::GetterType getter = [](const Register::ValuesType &vs)->uint16_t{return 0;},
-			Register::SetterType setter = [](Register::ValuesType &vs, const uint16_t value){},
+			Register::GetterType getter = nullptr,
+			Register::SetterType setter = nullptr,
 			Register::OnChanged changed = nullptr,
 			Register::OnAccessError error = nullptr);
 
 
 	virtual ~Register() = default;
 
-	virtual operator const uint16_t& ();
+	virtual operator const uint16_t ();//we can't use ref as value can be combined from multiple register
 	virtual const uint16_t& operator = (const uint16_t& value);
 	virtual const uint16_t& operator &= (const uint16_t& value);
 	virtual const uint16_t& operator |= (const uint16_t& value);
 	const Access  acces;
-
+	const uint16_t& SetValue(const uint16_t& value);
 protected:
 
 private:
@@ -428,8 +428,8 @@ class Modbus
 	int8_t process_FC6();
 	int8_t process_FC15();
 	int8_t process_FC16();
-	static void vTimerCallbackT35(void const * arg);
-	static void vTimerCallbackTimeout(void const * arg);
+	static void vTimerCallbackT35(void * arg);
+	static void vTimerCallbackTimeout(void * arg);
 	Error SendQuery(Query_t q);
 
 public:
@@ -449,10 +449,8 @@ public:
 	void QueryInject(Query_t mq); //put a query in the queue head
 	void DoSlaveTask(); //slave
 	void DoMasterTask(); //master
-	static void MasterTask(const void *argument);
-	static void SlaveTask(const void *argument);
 	Uart_t* port() {return mUart;}
-	osThreadId taskHandle() {return mTaskHandle;}
+	TaskHandle_t taskHandle() {return (TaskHandle_t)mTaskHandle;}
 	osTimerId  &t35TimerHandle() {return mTimerT35;}
 	BusBuffer& busBuffer() {return mBufferRX;}
 	uint8_t &  dataRX() {return mDataRX;}

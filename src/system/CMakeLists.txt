@@ -30,12 +30,13 @@ set(SEGGER_RTT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Segger")
 set(SEGGER_SYSVIEW_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Segger/SysView")
 set(FSM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/tinyfsm")
 
-file(GLOB ${PROJECT_NAME}_SOURCES
+
+file(GLOB  ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
     "${FREERTOS_DIR}/Source/*.c"
     "${FREERTOS_DIR}/Source/portable/GCC/ARM_CM3/*.c"
-    "${FREERTOS_DIR}/Source/CMSIS_RTOS/*.c"
+    "${FREERTOS_DIR}/Source/CMSIS_RTOS_V2/*.c"
     "${FREERTOS_CPP_DIR}/*.cpp"
     "${FREERTOS_C_DIR}/*.c"
     "${SEGGER_RTT_DIR}/*.c"
@@ -51,7 +52,7 @@ target_include_directories( ${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${FREERTOS_DIR}/Source/include
     ${FREERTOS_DIR}/Source/portable/GCC/ARM_CM3
-    ${FREERTOS_DIR}/Source/CMSIS_RTOS
+    ${FREERTOS_DIR}/Source/CMSIS_RTOS_V2
     ${FREERTOS_CPP_DIR}/include
     ${FREERTOS_C_DIR}/include
     ${SEGGER_RTT_DIR}

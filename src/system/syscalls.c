@@ -51,7 +51,7 @@ void initialise_monitor_handles()
 {
 
 	SEGGER_RTT_Init();
-	SEGGER_SYSVIEW_Init(osKernelSysTickFrequency, SystemCoreClock, 0, 0);
+	SEGGER_SYSVIEW_Init(osKernelGetTickFreq(), SystemCoreClock, 0, 0);
 	SEGGER_SYSVIEW_Start();
 }
 

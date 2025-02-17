@@ -49,7 +49,10 @@
 #include "utilities.h"
 #include "NvmDataMgmt.h"
 #include "sensors.h"
-
+#include "modbusnode.h"
+#include "onewirenode.h"
+#include "loranode.h"
+#include "cmsis_os.h"
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 
@@ -163,12 +166,8 @@ static TimerEvent_t TxTimer;
 osSemaphoreDef(UplinkSem);
 osSemaphoreId gUplinkSem;
 
-void StartTaskDefault(void const * argument);
+void StartTaskDefault(void * argument);
 osThreadId defaultTaskHandle;
-osThreadDef(defaultTask, StartTaskDefault, osPriorityNormal, 0, 512);
-
-extern void InitModBus(void);
-extern void InitOneWire(void);
 
 static void OnMacProcessNotify( void );
 static void OnNvmDataChange( LmHandlerNvmContextStates_t state, uint16_t size );
@@ -201,22 +200,22 @@ static void OnTxTimerEvent( void* context );
 /*!
  * Function executed on Led 1 Timeout event
  */
-static void OnLed1TimerEvent(const void* context );
+static void OnLed1TimerEvent(void* context );
 
 /*!
  * Function executed on Led 2 Timeout event
  */
-static void OnLed2TimerEvent(const void* context );
+static void OnLed2TimerEvent(void* context );
 
 /*!
  * Function executed on Led 3 Timeout event
  */
-static void OnLed3TimerEvent(const void* context );
+static void OnLed3TimerEvent(void* context );
 
 /*!
  * \brief Function executed on Beacon timer Timeout event
  */
-static void OnLedBeaconTimerEvent(const void* context );
+static void OnLedBeaconTimerEvent(void* context );
 
 static LmHandlerCallbacks_t LmHandlerCallbacks =
 {
@@ -275,27 +274,23 @@ extern Gpio_t Led3;
 /*!
  * Timer to handle the state of LED1
  */
-osTimerDef(Led1Timer, OnLed1TimerEvent);
 static osTimerId Led1Timer;
 #define LED1_TIMER_TIMEOUT 25
 /*!
  * Timer to handle the state of LED2
  */
-osTimerDef(Led2Timer, OnLed2TimerEvent);
 static osTimerId Led2Timer;
 #define LED2_TIMER_TIMEOUT 25
 
 /*!
  * Timer to handle the state of LED3
  */
-osTimerDef(Led3Timer, OnLed3TimerEvent);
 static osTimerId Led3Timer;
 #define LED3_TIMER_TIMEOUT 25
 
 /*!
  * Timer to handle the state of LED beacon indicator
  */
-osTimerDef(LedBeaconTimer, OnLedBeaconTimerEvent);
 static osTimerId LedBeaconTimer;
 #define LED_BEACON_TIMER_TIMEOUT 5000
 
@@ -308,14 +303,6 @@ static struct Leds{
 #define LED_SWITCH_ON(led) {GpioWrite( &gLeds[led].pio, LED_ON ); osTimerStart( gLeds[led].timer, gLeds[led].timeout );}
 #define LED_SWITCH_OFF(led)    {osTimerStop( gLeds[led].timer ); GpioWrite( &gLeds[led].pio, LED_OFF );}
 
-
-//extern Adc_t Adc1;
-//extern Adc_t Adc3;
-
-osMailQDef(TxSensors, 1, SummarySensorsData);                    // Define mail queue
-osMailQId  gTxSensorsMq;
-
-
 void UpdateHadlerProps(){
 
 }
@@ -326,16 +313,17 @@ void UpdateHadlerProps(){
 * @retval None
 */
 /* USER CODE END Header_StartTaskLeakMeter */
-void StartTaskDefault(void const * argument)
+void StartTaskDefault(void * argument)
 {
   /* USER CODE BEGIN StartTaskLeakMeter */
-	Led1Timer = osTimerCreate( osTimer(Led1Timer), osTimerOnce, NULL );
 
-	Led2Timer = osTimerCreate( osTimer(Led2Timer), osTimerOnce, NULL );
+	Led1Timer = osTimerNew( OnLed1TimerEvent, osTimerOnce, NULL, NULL );
 
-	Led3Timer = osTimerCreate( osTimer(Led3Timer), osTimerOnce, NULL );
+	Led2Timer = osTimerNew( OnLed2TimerEvent, osTimerOnce, NULL, NULL );
 
-	LedBeaconTimer = osTimerCreate( osTimer(LedBeaconTimer), osTimerOnce, NULL );
+	Led3Timer = osTimerNew( OnLed3TimerEvent, osTimerOnce, NULL, NULL );
+
+	LedBeaconTimer = osTimerNew( OnLedBeaconTimerEvent, osTimerOnce, NULL, NULL );
 
     const Version_t appVersion = { .Value = FIRMWARE_VERSION };
     const Version_t gitHubVersion = { .Value = GITHUB_VERSION };
@@ -408,36 +396,38 @@ void StartTaskDefault(void const * argument)
   /* USER CODE END StartTaskLeakMeter */
 }
 
+
+const osThreadAttr_t thread_attr = {
+  .name = "default",
+  .stack_size = 2048                            // Create the thread stack with a size of 1024 bytes
+};
 /*!
  * Main application entry point.
  */
 int main( void )
 {
 	//Not needed but for compatibility
-	osKernelInitialize();   // pre initialize CMSIS-RTOS
     BoardInitMcu( );
 
-    InitModBus();
+    osKernelInitialize();   // pre initialize CMSIS-RTOS
+    MessageBus& mbus = InitOneWire();
+    InitModBus(mbus);
 
-    InitOneWire();
-
-    defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+    InitLoraNode(mbus);
+    defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
     assert(defaultTaskHandle);
-    // create mail queues
-
-    gTxSensorsMq = osMailCreate(osMailQ(TxSensors), NULL);
-    assert(gTxSensorsMq);
-
 
     // create semaphores
-    gUplinkSem = osSemaphoreCreate(osSemaphore(UplinkSem), 1);
+    gUplinkSem = osSemaphoreNew(1, 0, nullptr);
     assert(gUplinkSem);
 
 	DBG("Heap %i\n", xPortGetFreeHeapSize());
-    osKernelStart();
-    while(1) {
-    	assert(0);
-    }
+	if (osKernelGetState() == osKernelReady) {
+		osKernelStart();
+	}
+	while(1) {
+		assert(0);
+	}
 }
 
 static void OnMacProcessNotify( void )
@@ -571,7 +561,7 @@ static void PrepareTxFrame( void )
 
     CayenneLppReset( );
 
-    evt = osMailGet(gTxSensorsMq, 0);  // wait for message
+   // evt = osMailGet(gTxSensorsMq, 0);  // wait for message
     if (evt.status == osEventMail) {
     	DBG("LS MAIL\n");
     	SummarySensorsData *summarySensorsData = static_cast<SummarySensorsData*>(evt.value.p);
@@ -587,7 +577,7 @@ static void PrepareTxFrame( void )
     	for(int i = 0; i < summarySensorsData->thermal.sensors; i++) {
     		CayenneLppAddTemperature( channel++, summarySensorsData->thermal.data[i] * 100 / 254 );
     	}
-        osMailFree(gTxSensorsMq, summarySensorsData);
+     //   osMailFree(gTxSensorsMq, summarySensorsData);
     }
 
     CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
@@ -626,7 +616,7 @@ static void StartTxProcess( LmHandlerTxEvents_t txEvent )
 
 static void UplinkProcess( void )
 {
-    if(osSemaphoreWait(gUplinkSem, 0) == osOK)
+    if(osSemaphoreAcquire(gUplinkSem, 0) == osOK)
     {
         PrepareTxFrame( );
     }
@@ -675,7 +665,7 @@ static void OnTxTimerEvent( void* context )
 /*!
  * Function executed on Led 1 Timeout event
  */
-static void OnLed1TimerEvent(const void* context )
+static void OnLed1TimerEvent(void* context )
 {
 	// Switch LED 1 OFF
     LED_SWITCH_OFF(LedsType::LED1);
@@ -684,7 +674,7 @@ static void OnLed1TimerEvent(const void* context )
 /*!
  * Function executed on Led 2 Timeout event
  */
-static void OnLed2TimerEvent(const void* context )
+static void OnLed2TimerEvent(void* context )
 {
     // Switch LED 2 OFF
     LED_SWITCH_OFF(LedsType::LED2);
@@ -693,7 +683,7 @@ static void OnLed2TimerEvent(const void* context )
 /*!
  * Function executed on Led 2 Timeout event
  */
-static void OnLed3TimerEvent(const void* context )
+static void OnLed3TimerEvent(void* context )
 {
     // Switch LED 2 OFF
     LED_SWITCH_OFF(LedsType::LED3);
@@ -701,7 +691,7 @@ static void OnLed3TimerEvent(const void* context )
 /*!
  * \brief Function executed on Beacon timer Timeout event
  */
-static void OnLedBeaconTimerEvent(const void* context )
+static void OnLedBeaconTimerEvent(void* context )
 {
 	// Switch LED 2 ON
     LED_SWITCH_ON(LedsType::LED2);

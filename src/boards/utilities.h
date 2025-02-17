@@ -220,6 +220,19 @@ void strcatNum8Hex(char *dst, size_t dstSize, uint8_t num);
 #ifdef __cplusplus
 }
 
+#include <sys/time.h>
+#define usec2sec(x)  (x / (1000 * 1000))
+#define sec2usec(x)  (x * 1000 * 1000)
+#define msecOnSec (1000 * 1000)
+constexpr struct timeval operator-(struct timeval lhs, const struct timeval& rhs)
+{
+	struct timeval result;
+	uint64_t usec = sec2usec(lhs.tv_sec) - sec2usec(rhs.tv_sec) + (lhs.tv_usec - rhs.tv_usec);
+	result.tv_sec = usec2sec(usec);
+	result.tv_usec = usec % msecOnSec;
+	return result;
+}
+
 #include <type_traits>
 template <typename E>
 constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {

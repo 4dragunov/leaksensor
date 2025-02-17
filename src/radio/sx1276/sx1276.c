@@ -300,9 +300,6 @@ DioIrqHandler *DioIrq[] = { SX1276OnDio0Irq, SX1276OnDio1Irq,
 /*!
  * Tx and Rx timers
  */
-osTimerDef(TxTimeoutTimer, SX1276OnTimeoutIrq);
-osTimerDef(RxTimeoutTimer, SX1276OnTimeoutIrq);
-osTimerDef(RxTimeoutSyncWord, SX1276OnTimeoutIrq);
 osTimerId TxTimeoutTimer;
 osTimerId RxTimeoutTimer;
 osTimerId RxTimeoutSyncWord;
@@ -319,9 +316,9 @@ void SX1276Init( RadioEvents_t *events )
 
     // Initialize driver timeout timers
 
-    TxTimeoutTimer = osTimerCreate( osTimer(TxTimeoutTimer), osTimerOnce, NULL  );
-    RxTimeoutTimer = osTimerCreate( osTimer(RxTimeoutTimer), osTimerOnce, NULL  );
-    RxTimeoutSyncWord = osTimerCreate( osTimer(RxTimeoutSyncWord), osTimerOnce, NULL );
+    TxTimeoutTimer = osTimerNew( SX1276OnTimeoutIrq, osTimerOnce, NULL, NULL );
+    RxTimeoutTimer = osTimerNew( SX1276OnTimeoutIrq, osTimerOnce, NULL, NULL );
+    RxTimeoutSyncWord = osTimerNew( SX1276OnTimeoutIrq, osTimerOnce, NULL, NULL );
 
     SX1276Reset( );
 

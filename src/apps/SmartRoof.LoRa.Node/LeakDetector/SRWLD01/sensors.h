@@ -8,6 +8,7 @@
 #ifndef SRC_APPS_SMARTROOF_LORA_NODE_LEAKDETECTOR_SRWLD01_SENSORS_H_
 #define SRC_APPS_SMARTROOF_LORA_NODE_LEAKDETECTOR_SRWLD01_SENSORS_H_
 #include <sys/time.h>
+#include "sensors-board.h"
 
 typedef struct {
 	int16_t data[8];
@@ -25,7 +26,7 @@ extern osMailQId  gSummarySensorsMq;
 
 struct SummarySensorsDataMailDeleter {
     void operator()(SummarySensorsData* p) const {
-        std::cout << std::endl;
+        //std::cout << std::endl;
         osMailFree(gSummarySensorsMq, p);
     }
 };

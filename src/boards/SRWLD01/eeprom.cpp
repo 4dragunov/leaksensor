@@ -4,6 +4,7 @@
 #include "eeprom.h"
 #include "nonvol.h"
 #include "utilities.h"
+#include "cmsis_os.h"
 
 extern uint32_t _emulated_eeprom_start[];
 extern uint32_t _EEPROM_PAGES[];
@@ -40,7 +41,7 @@ const char* Eeprom::pageStateNames[STATE_COUNT] = {"Clear", "Active", "Receiving
 osMutexDef (RwLock);
 
 /******************************************************************************/
-Eeprom::Eeprom():mRwLock(osRecursiveMutexCreate(osMutex(RwLock)))
+Eeprom::Eeprom():mRwLock(osMutexNew(osMutex(RwLock)))
 
 {
 	if(!mInitialized) {
@@ -130,7 +131,7 @@ Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
   Eeprom::Result res = Result::ERROR;
   PageIdx activePage = PageIdx::PAGE_0;
 
-  osRecursiveMutexWait(mRwLock, osWaitForever);
+  osMutexWait(mRwLock, osWaitForever);
   if (GetActivePageIdx(&activePage) == Result::OK)
   {
 	  auto read_time_start = osKernelSysTick();
@@ -160,7 +161,7 @@ Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
 		}
 	  }
   }
-  osRecursiveMutexRelease(mRwLock);
+  osMutexRelease(mRwLock);
   return  res;
 }
 
@@ -231,7 +232,7 @@ Eeprom::Result Eeprom::write(const Eeprom::address eepromAddress, const Eeprom::
   Eeprom::data available = 0;
   PageIdx activePage = PageIdx::PAGE_0;
 
-  osRecursiveMutexWait(mRwLock, osWaitForever);
+  osMutexWait(mRwLock, osWaitForever);
   if (GetActivePageIdx(&activePage) == Result::OK)
   {
 	  auto write_time_start = osKernelSysTick();
@@ -251,7 +252,7 @@ Eeprom::Result Eeprom::write(const Eeprom::address eepromAddress, const Eeprom::
 				res =  WriteRecord(addr, eepromAddress, data);
 				free = end - occuped - 1;
 				write_time = osKernelSysTick() - write_time_start;
-				osRecursiveMutexRelease(mRwLock);
+				osMutexRelease(mRwLock);
 				return res;
 			}
 			else
@@ -263,7 +264,7 @@ Eeprom::Result Eeprom::write(const Eeprom::address eepromAddress, const Eeprom::
 		  res = PageTransfer(activePage, eepromAddress, data);
 	  }
   }
-  osRecursiveMutexRelease(mRwLock);
+  osMutexRelease(mRwLock);
   return res;
 }
 

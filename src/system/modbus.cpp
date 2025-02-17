@@ -35,15 +35,8 @@ constexpr typename std::underlying_type<E>::type to_underlying(E e) noexcept {
 volatile Modbus *mHandlers[MAX_M_HANDLERS];
 
 
-///Queue Modbus telegrams for master
-osMessageQDef(ModbusMessages, MAX_M_HANDLERS, 0);
-
-
-osThreadDef(ModbusMasterTask, Modbus::MasterTask, osPriorityNormal, MAX_M_HANDLERS, 128 * 4);
-
-osThreadDef(ModbusSlaveTask, Modbus::SlaveTask, osPriorityNormal, MAX_M_HANDLERS, 128 * 4);
-
-
+void MasterTask(void *argument);
+void SlaveTask(void *argument);
 //Semaphore to access the Modbus Data
 osSemaphoreDef(ModBusSp);
 
@@ -79,33 +72,50 @@ Register::Register(Register::Index idx,Register::ValuesType values,
 {
 }
 
-Register::operator const uint16_t& ()
+Register::operator const uint16_t ()
 {
 	static uint16_t fake = 0;
-	if(acces != Access::WO && mGetter) {
-		return mGetter(mValues);
+	if(acces != Access::WO) {
+		if(mGetter)
+			return mGetter(mValues);
+		else
+			return defaultGetter(mValues);
 	}
 	else {
-		if(mOnAccessError) {
+		if(mOnAccessError)
 			mOnAccessError(this);
-		}
-		return fake;
+		else
+			defaultOnAccessError(this);
 	}
+	return fake;
 }
 
 const uint16_t& Register::operator = (const uint16_t& value)
 {
-	if(acces != Access::RO && mSetter) {
-		mSetter(mValues, value);
+	if(acces != Access::RO) {
+		if(mSetter)
+			mSetter(mValues, value);
+		else
+			defaultSetter(mValues, value);
 		if(mOnChanged)
 			mOnChanged(this);
+		else
+			defaultOnChanged(this);
 	}else{
 		if(mOnAccessError)
 			mOnAccessError(this);
+		else
+			defaultOnAccessError(this);
 	}
 	return value;
 }
 
+
+const uint16_t& Register::SetValue(const uint16_t& value)
+{
+	defaultSetter(mValues, value);
+	return value;
+}
 const uint16_t& Register::operator &= (const uint16_t& value)
 {
 	return (*this &= value) ;
@@ -199,7 +209,10 @@ const uint8_t fctsupported[] =
 	to_underlying(FunctionCode::WRITE_MULTIPLE_REGISTERS)
 };
 
-
+const osThreadAttr_t thread_attr = {
+  .name = "Modbus",
+  .stack_size = 512                            // Create the thread stack with a size of 1024 bytes
+};
 Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, Registers &regs):
 		mType(type),
 		mUart(uart),
@@ -272,19 +285,18 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 
 	 mBufferRX.Clear();
 
-	 mTaskHandle =  osThreadCreate((mType == ModBusType::Slave)? osThread(ModbusSlaveTask) : osThread(ModbusMasterTask), this);
+	 mTaskHandle =  osThreadNew((mType == ModBusType::Slave)? SlaveTask : MasterTask, this, &thread_attr);
 	 if (mType == ModBusType::Master)
 	 {
-		 osTimerDef (TimerTimeout, vTimerCallbackTimeout);
-		 mTimerTimeout = osTimerCreate(osTimer(TimerTimeout),  osTimerOnce , &mTimerTimeout);
-		 if(mTimerTimeout == NULL)
+		 mTimerTimeout = osTimerNew(vTimerCallbackTimeout,  osTimerOnce , &mTimerTimeout, nullptr);
+		 if(mTimerTimeout == nullptr)
 		 {
 			  while(1); //error creating timer, check heap and stack size
 		 }
 
-		 mQueueMessageHandle = osMessageCreate(osMessageQ(ModbusMessages), NULL);
+		 mQueueMessageHandle = osMessageQueueNew(MAX_M_HANDLERS, sizeof(Query_t), nullptr);
 
-		 if(mQueueMessageHandle == NULL)
+		 if(mQueueMessageHandle == nullptr)
 		 {
 			  while(1); //error creating queue for telegrams, check heap and stack size
 		 }
@@ -295,14 +307,13 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 	  while(1); //Error Modbus type not supported choose a valid Type
 	 }
 
-	 if(mTaskHandle == NULL)
+	 if(mTaskHandle == nullptr)
 	 {
 	  while(1); //Error creating Modbus task, check heap and stack size
 	 }
-	 osTimerDef (TimerT35, vTimerCallbackT35); //	 ,
-	 mTimerT35 = osTimerCreate(osTimer(TimerT35),  osTimerPeriodic , &mTimerT35);
+	 mTimerT35 = osTimerNew(vTimerCallbackT35,  osTimerPeriodic , &mTimerT35, nullptr);
 
-	 assert(mSpHandle = osSemaphoreCreate(osSemaphore(ModBusSp), 1));
+	 mSpHandle = osSemaphoreNew(1, 0, nullptr);
 
 	 mUart->IrqNotify = ModBus_IrqNotify;
 
@@ -317,7 +328,7 @@ void Modbus::SetLine(const uint32_t baudrate, const WordLength_t wordLength, con
 void Modbus::Start( )
 {
 
-	if (mDePin != NULL )
+	if (mDePin != nullptr )
     {
        // return RS485 transceiver to receive mode
 		GpioWrite(mDePin, 0);
@@ -341,23 +352,23 @@ void Modbus::Start( )
 }
 
 
-void Modbus::vTimerCallbackT35(void const * arg)
+void Modbus::vTimerCallbackT35(void* arg)
 {
 	osTimerId *tim = (osTimerId*)arg;
 	int i;
 	for(i = 0; i < numberHandlers; i++)
 	{
-		if(mHandlers[i] && (TimerHandle_t *)&mHandlers[i]->mTimerT35 ==  tim ){
+		if(mHandlers[i] && &mHandlers[i]->mTimerT35 ==  tim ){
 			if(mHandlers[i]->mType == ModBusType::Master)
 			{
 				osTimerStop(mHandlers[i]->mTimerTimeout);
 			}
-			xTaskNotify(mHandlers[i]->mTaskHandle, 0, eSetValueWithOverwrite);
+			xTaskNotify((TaskHandle_t)mHandlers[i]->mTaskHandle, 0, eSetValueWithOverwrite);
 		}
 	}
 }
 
-void Modbus::vTimerCallbackTimeout(void const * arg)
+void Modbus::vTimerCallbackTimeout(void * arg)
 {
 	osTimerId *tim = (osTimerId*)arg;
 	//Notify that a stream has just arrived
@@ -366,13 +377,13 @@ void Modbus::vTimerCallbackTimeout(void const * arg)
 	for(i = 0; i < numberHandlers; i++)
 	{
 		if( (osTimerId *)&mHandlers[i]->mTimerTimeout ==  tim ){
-			xTaskNotify(mHandlers[i]->mTaskHandle, to_underlying(Error::TIME_OUT), eSetValueWithOverwrite);
+			xTaskNotify((TaskHandle_t)mHandlers[i]->mTaskHandle, to_underlying(Error::TIME_OUT), eSetValueWithOverwrite);
 		}
 
 	}
 
 }
-void Modbus::SlaveTask(const void *argument) {
+void SlaveTask(void *argument) {
 	  Modbus *mH =  (Modbus *)argument;
 	  mH->DoSlaveTask();
 }
@@ -437,7 +448,7 @@ void Modbus::DoSlaveTask()
 	 }
 
 	mLastError = Error::NONE;
-	xSemaphoreTake(mSpHandle , portMAX_DELAY); //before processing the message get the semaphore
+	osSemaphoreAcquire(mSpHandle , osWaitForever); //before processing the message get the semaphore
 
 	 // process message
 	 switch(static_cast<FunctionCode>(mBuffer[to_underlying( Message::FUNC) ] ))
@@ -477,7 +488,7 @@ void Modbus::DoSlaveTask()
 	 }
 
 
-	 xSemaphoreGive(mSpHandle); //Release the semaphore
+	 osSemaphoreRelease(mSpHandle); //Release the semaphore
 	 continue;
 
    }
@@ -489,7 +500,7 @@ void Modbus::Query(Query_t q)
 	if (mType == ModBusType::Master)
 	{
 		q.currentTask = (uint32_t *) osThreadGetId();
-		xQueueSendToBack(mQueueMessageHandle, &q, 0);
+		xQueueSendToBack((QueueHandle_t)mQueueMessageHandle, &q, 0);
 	}
 	else{
 		assert(0);
@@ -501,9 +512,9 @@ void Modbus::Query(Query_t q)
 void Modbus::QueryInject(Query_t q )
 {
 	//Add the telegram to the TX head Queue of Modbus
-	xQueueReset(mQueueMessageHandle);
+	xQueueReset((QueueHandle_t)mQueueMessageHandle);
 	q.currentTask = (uint32_t *) osThreadGetId();
-	xQueueSendToFront(mQueueMessageHandle, &q, 0);
+	xQueueSendToFront((QueueHandle_t)mQueueMessageHandle, &q, 0);
 }
 
 
@@ -511,7 +522,7 @@ Error Modbus::SendQuery(Query_t q)
 {
 	uint8_t regsno, bytesno;
 	Error  error = Error::NONE;
-	xSemaphoreTake(mSpHandle , portMAX_DELAY); //before processing the message get the semaphore
+	osSemaphoreAcquire(mSpHandle , osWaitForever); //before processing the message get the semaphore
 
 	if (mId!=0) error = Error::NOT_MASTER;
 	if (mState != to_underlying(ComState::IDLE)) error = Error::POLLING ;
@@ -521,7 +532,7 @@ Error Modbus::SendQuery(Query_t q)
 	if(error != Error::NONE)
 	{
 		mLastError = error;
-	    xSemaphoreGive(mSpHandle);
+	    osSemaphoreRelease(mSpHandle);
 	    return error;
 	}
 
@@ -612,7 +623,7 @@ Error Modbus::SendQuery(Query_t q)
 
 }
 
-void Modbus::MasterTask(const void *argument)
+void MasterTask(void *argument)
 {
 	Modbus *modH =  (Modbus *)argument;
 	modH->DoMasterTask();
@@ -626,10 +637,7 @@ void Modbus::DoMasterTask()
 
   for(;;)
   {
-	  /*Wait indefinitely for a telegram to send */
-	  xQueueReceive(mQueueMessageHandle, &telegram, portMAX_DELAY);
-
-
+	  if(osMessageQueueGet(mQueueMessageHandle, &telegram, 0, osWaitForever) == osOK) {
 
      /*Wait period of silence between modbus frame */
 	  uint32_t br = UartGetBaudrate(mUart);
@@ -679,7 +687,7 @@ void Modbus::DoMasterTask()
 
 	  mLastError = static_cast<Error>(exception);
 
-	  xSemaphoreTake(mSpHandle , portMAX_DELAY); //before processing the message get the semaphore
+	  osSemaphoreAcquire(mSpHandle , osWaitForever); //before processing the message get the semaphore
 	  // process answer
 	  switch(static_cast<FunctionCode>(mBuffer[ to_underlying(Message::FUNC) ] ))
 	  {
@@ -706,14 +714,14 @@ void Modbus::DoMasterTask()
 
 	  if (mLastError == Error::NONE) // no error the error_OK, we need to use a different value than 0 to detect the timeout
 	  {
-		  xSemaphoreGive(mSpHandle); //Release the semaphore
+		  osSemaphoreRelease(mSpHandle); //Release the semaphore
 		  xTaskNotify((TaskHandle_t)telegram.currentTask, to_underlying(Error::OK_QUERY), eSetValueWithOverwrite);
 	  }
 
 
 	  continue;
 	 }
-
+  }
 }
 
 /**
@@ -1014,7 +1022,7 @@ void Modbus::sendTxBuffer()
     mBufferSize++;
 
 
-    	if (mDePin != NULL)
+    	if (mDePin != nullptr)
         {
 
     		//enable transmitter, disable receiver to avoid echo on RS485 transceivers
@@ -1035,7 +1043,7 @@ void Modbus::sendTxBuffer()
         UartLastByteSendOut(mUart, TIMEOUT_MODBUS);
 
 
-         if (mDePin != NULL)
+         if (mDePin != nullptr)
          {
 
              //return RS485 transceiver to receive mode

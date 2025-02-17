@@ -16,18 +16,16 @@ template<typename T, const uint8_t WindowLength>
 class MAV{
 public:
 	MAV():History(), Sum(), WindowPointer(0), FirstRun(true){};
-	MAV(const T *raw_data):Sum(), WindowPointer(0), FirstRun(false){
-		for(size_t i = 0; i < WindowLength; i++)
-		{
-			Filter(raw_data);
-		}
-	}
 	virtual ~MAV() = default;
 	T Filter(const T *raw_data)
 	{
 		if(FirstRun) {
-			*this = MAV(raw_data);
-			return Sum/WindowLength;
+			for(size_t i = 0; i < WindowLength - 1; i++)
+			{
+				DoFilter(raw_data);
+			}
+			FirstRun = false;
+			return DoFilter(raw_data);
 		}else
 			return DoFilter(raw_data);
 	}

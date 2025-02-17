@@ -24,11 +24,6 @@
 #include "uart-board.h"
 #include "uart.h"
 
-#ifdef USART_SUPPORT_RTOS
-osSemaphoreDef(rxSem);
-osSemaphoreDef(txSem);
-#endif
-
 const char *gUsartNames[] = {
 		FOREACH_USART(GENERATE_STRING)
 };
@@ -38,14 +33,12 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
     if( obj->IsInitialized == false )
     {
 #ifdef USART_SUPPORT_RTOS
-    	obj->rxSem = osSemaphoreCreate(osSemaphore(rxSem), 1);
+    	obj->rxSem = osSemaphoreNew(1, 0, NULL);
     	assert(obj->rxSem);
     	vQueueAddToRegistry( obj->rxSem, "rxSem" );
-    	obj->txSem = osSemaphoreCreate(osSemaphore(txSem), 1);
+    	obj->txSem = osSemaphoreNew(1, 0, NULL);
     	assert(obj->txSem);
     	vQueueAddToRegistry( obj->txSem, "txSem"  );
-    	osSemaphoreWait(obj->rxSem, osWaitForever);
-    	osSemaphoreWait(obj->txSem, osWaitForever);
 #endif
         obj->IsInitialized = true;
         UartMcuInit( obj, uartId, tx, rx );

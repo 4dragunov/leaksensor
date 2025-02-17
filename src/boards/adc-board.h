@@ -37,7 +37,7 @@ extern "C"
  * \param [IN] adcInput ADC input pin
  */
 void AdcMcuInit( Adc_t *obj, PinNames adcInput );
-
+void AdcMcuDeInit( Adc_t *obj );
 /*!
  * \brief Initializes the ADC internal parameters
  */

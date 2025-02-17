@@ -46,7 +46,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/nonvol.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sensors.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sensors-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/flash-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom-data.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/modbus_callback.cpp"
@@ -93,7 +93,7 @@ endif()
 
 add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DUSE_HAL_DRIVER 
+target_compile_definitions(${PROJECT_NAME} PUBLIC -DUSE_HAL_DRIVER -DARM_MATH_CM3
 -D${BOARD_MCU}
 -D${BOARD_RADIO}
 -DSTM32_THREAD_SAFE_STRATEGY=4
@@ -114,11 +114,13 @@ target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/cmsis
     ${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32
     ${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/cmsis
+    ${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/cmsis/DSP/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32F1xx_HAL_Driver/Inc
     $<TARGET_PROPERTY:board,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:system,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:radio,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:peripherals,INTERFACE_INCLUDE_DIRECTORIES>
 )
+target_link_libraries(${PROJECT_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/cmsis/DSP/Lib/libarm_cortexM3l_math.a)
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 11 CXX_STANDARD 20)

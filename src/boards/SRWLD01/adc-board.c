@@ -54,7 +54,7 @@ void AdcMcuInit( Adc_t *obj, PinNames adcInput )
     }
 }
 
-void AdcMcuDeInit( Adc_t *obj, PinNames adcInput )
+void AdcMcuDeInit( Adc_t *obj )
 {
 	ADC_HandleTypeDef * h = i2h(obj->inst);
 	assert(h);
@@ -93,7 +93,7 @@ uint16_t AdcMcuReadChannel( Adc_t *obj )
     uint16_t adcData = 0;
 
     // Enable HSI
-   // __HAL_RCC_HSI_ENABLE( );
+    __HAL_RCC_HSI_ENABLE( );
 
     // Wait till HSI is ready
     while( __HAL_RCC_GET_FLAG( RCC_FLAG_HSIRDY ) == RESET )
@@ -108,7 +108,8 @@ uint16_t AdcMcuReadChannel( Adc_t *obj )
 
     adcConf.Channel = obj->channel;
     adcConf.Rank = ADC_REGULAR_RANK_1;
-    adcConf.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+    adcConf.SamplingTime = ((obj->channel== ADC_CHANNEL_VREFINT) ||
+    						(obj->channel== ADC_CHANNEL_TEMPSENSOR))? ADC_SAMPLETIME_55CYCLES_5 : ADC_SAMPLETIME_1CYCLE_5;
 
     HAL_ADC_ConfigChannel( h, &adcConf );
 

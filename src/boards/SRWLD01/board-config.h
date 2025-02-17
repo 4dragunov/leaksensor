@@ -39,7 +39,7 @@
 #include "ds18b20.h"
 #include "modbus.h"
 #include "eeprom.h"
-#include "sensors.h"
+#include "sensors-board.h"
 /*!
  * Defines the time required for the TCXO to wakeup [ms].
  */
@@ -110,6 +110,8 @@ typedef enum {
 
 #define BAT_PWR                                  PF_3
 
-#define ADC_CHANNEL_COUNT 20
+#define SYS_CHANNEL_COUNT  2
+#define WL_CHANNEL_COUNT  20
+#define ADC_CHANNEL_COUNT  (WL_CHANNEL_COUNT + SYS_CHANNEL_COUNT)
 
 #endif // __BOARD_CONFIG_H__

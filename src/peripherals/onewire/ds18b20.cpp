@@ -7,20 +7,8 @@
 namespace OneWire {
 
 #define BITS2CMD(x) ((uint8_t)(31u + (32u * x)))
-#define usec2sec(x)  (x / (1000 * 1000))
-#define sec2usec(x)  (x * 1000 * 1000)
-#define msecOnSec (1000 * 1000)
 
 const uint16_t gResolution2Ms[] = {94, 186, 375, 750};
-
-struct timeval operator-(const struct timeval& a, const struct timeval& b)
-{
-	struct timeval result;
-	uint64_t usec = sec2usec(a.tv_sec) - sec2usec(b.tv_sec) + (a.tv_usec - b.tv_usec);
-	result.tv_sec = usec2sec(usec);
-	result.tv_usec = usec % msecOnSec;
-	return result;
-}
 
 bool operator>=(const struct timeval& a, const uint64_t& b)
 {

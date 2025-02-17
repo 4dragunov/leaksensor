@@ -23,6 +23,7 @@
 #include <cassert>
 #include <cstring>
 #include <string.h>
+#include <math.h>
 #include "stm32f1xx.h"
 #include "utilities.h"
 #include "gpio.h"
@@ -39,7 +40,7 @@
 #include "OneWire.h"
 #include "Ds18B20.h"
 #include "FreeRTOS.h"
-#include "sensors.h"
+#include "sensors-board.h"
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
     #include "sx126x-board.h"
@@ -229,9 +230,8 @@ void BoardInitMcu( void )
     {
         SystemClockReConfig( );
     }
-
+    //includes vref and ts
 	for(int i = 0; i < ADC_CHANNEL_COUNT; i++) {
-
 		GpioInit( &gChannelsPins[i].ptp, gChannelConfig[i].toggle_pin1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
 		GpioInit( &gChannelsPins[i].ntp, gChannelConfig[i].toggle_pin2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
 		AdcInit( gChannelConfig[i].hadc, &gChannelsPins[i].ap, gChannelConfig[i].analog_pin, gChannelConfig[i].adc_channel);  // Just initialize ADC
@@ -255,7 +255,7 @@ void BoardDeInitMcu( void )
 {
     AdcDeInit( &AdcVref );
     AdcDeInit( &AdcTempSens );
-    for(int i = 0; i < ADC_CHANNEL_COUNT; i++)
+    for(int i = 0; i < WL_CHANNEL_COUNT; i++)
     	AdcDeInit( &gChannelsPins[i].ap );
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
@@ -399,8 +399,7 @@ void BoardPrintUUID(void) {
   * @param ADC_DATA: Digital value measured by ADC
   * @retval None
   */
-#define COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(ADC_DATA)                        \
-  ( (ADC_DATA) * VDD_APPLI / RANGE_12BITS)
+#define COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(ADC_DATA)  (roundf(4095.0 * 1200/(ADC_DATA)))
 
 
 static uint16_t BatteryVoltage = BATTERY_MAX_LEVEL;
@@ -413,6 +412,7 @@ uint16_t BoardBatteryMeasureVoltage( void )
     vref = AdcReadChannel( &AdcVref );
 
     // Compute and return the Voltage in millivolt
+
     return COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(vref);
 }
 
@@ -555,9 +555,21 @@ void SystemClockReConfig( void )
 
 void SysTick_Handler( void )
 {
-    HAL_IncTick( );
-    HAL_SYSTICK_IRQHandler( );
-    osSystickHandler();
+    /* USER CODE BEGIN SysTick_IRQn 0 */
+
+    /* USER CODE END SysTick_IRQn 0 */
+    HAL_IncTick();
+  #if (INCLUDE_xTaskGetSchedulerState == 1 )
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+    {
+  #endif /* INCLUDE_xTaskGetSchedulerState */
+    xPortSysTickHandler();
+  #if (INCLUDE_xTaskGetSchedulerState == 1 )
+    }
+  #endif /* INCLUDE_xTaskGetSchedulerState */
+    /* USER CODE BEGIN SysTick_IRQn 1 */
+
+    /* USER CODE END SysTick_IRQn 1 */
 }
 
 void HAL_MspInit(void)

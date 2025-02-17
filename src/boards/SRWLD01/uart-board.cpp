@@ -318,7 +318,7 @@ uint8_t UartMcuPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )
             CRITICAL_SECTION_END( );
 #ifdef USART_SUPPORT_RTOS
          if(obj->fifo == SYNC) {
-        	 auto ret = osSemaphoreWait(obj->txSem, timeout) ; // OK
+        	 auto ret = osSemaphoreAcquire(obj->txSem, timeout) ; // OK
         	// DBG("txSem result:%i: %s\n", ret, ret==osOK? "ok": "fail");
         	 return ret != osOK;
          }
@@ -354,7 +354,7 @@ uint8_t UartMcuGetChar( Uart_t *obj, uint8_t *data , uint32_t timeout )
     	    return ret;
     	}
 #endif
-        if(osSemaphoreWait(obj->rxSem, timeout) == osOK)
+        if(osSemaphoreAcquire(obj->rxSem, timeout) == osOK)
         {
         	CRITICAL_SECTION_BEGIN( );
             *data = FifoPop( &obj->FifoRx );
