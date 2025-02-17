@@ -155,8 +155,6 @@ ModBus::Registers modbusRegisters = {
 		}
 };
 
-#define RTEG_NAME(x) #x
-
 void ModBusNode::DoTaskModBus()
 {
   /* USER CODE BEGIN StartTaskModBus */
