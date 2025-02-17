@@ -199,7 +199,7 @@ public:
 	typedef std::function<uint16_t (const Register::ValuesType &vs)> GetterType;
 	typedef std::function<void(Register::ValuesType &vs, const uint16_t value)> SetterType;
 	const SetterType defaultSetter = [&, this](Register::ValuesType &nvp, const uint16_t value){
-		DBG("defaultSetter reg:%i value %i\n", mIdx, value);
+		DBG("defaultSetter reg:%i- %s value %i\n", mIdx, mName, value);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			std::get<Register::nvb_ref>(nvp[0]).get() = value;
 		} else
@@ -229,7 +229,7 @@ public:
 	};
 
 	const GetterType defaultGetter = [&, this](const Register::ValuesType &nvp)->uint16_t{
-		DBG("defaultGetter reg:%i\n", mIdx);
+		DBG("defaultGetter reg:%i - %s\n", mIdx, mName);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			return std::get<Register::nvb_ref>(nvp[0]).get();
 		} else
@@ -254,7 +254,7 @@ public:
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			return std::get<Register::RefValue<uint32_t>>(nvp[0]);
 		}else {
-			DBG("defaultGetter reg:%i unknown value type!\n", mIdx);
+			DBG("defaultGetter reg:%i - %s unknown value type!\n", mIdx, mName);
 		}
 		return 0;
 	};
