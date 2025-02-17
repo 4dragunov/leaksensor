@@ -143,7 +143,7 @@ ModBus::Registers modbusRegisters = {
 					return value;
 				})
 		},
-		{static_cast<ModBus::Register::Index>(Index::TEMP_SENSORS),          ModBus::Register(static_cast<ModBus::Register::Index>(Index::TEMP_SENSORS), "TEMP_SENSORS", {ModBus::Register::RefValue<uint8_t>{ds18b20Sensors, 0, 8}}, ModBus::Register::Access::RO,
+		{MODBUS_REGISTER(Index::TEMP_SENSORS, {ModBus::Register::RefValue<uint8_t>{ds18b20Sensors COMMA 0 COMMA 8}}, ModBus::Register::Access::RO,
 				[](const ModBus::Register::ValuesType &nvp)->uint16_t
 				{
 					return std::get<ModBus::Register::nv8_ref>(nvp[0]).get();
