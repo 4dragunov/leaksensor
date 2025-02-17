@@ -146,7 +146,7 @@ public:
 	friend std::ostream& operator<<(std::ostream&, const ModBus::Register&);
 	enum class Index: uint8_t {
 		BEGIN = 0,
-		END
+		END = BEGIN
 	};
 
 	enum class Access{
@@ -198,7 +198,8 @@ public:
 
 	typedef std::function<uint16_t (const Register::ValuesType &vs)> GetterType;
 	typedef std::function<void(Register::ValuesType &vs, const uint16_t value)> SetterType;
-	const SetterType defaultSetter = [](Register::ValuesType &nvp, const uint16_t value){
+	const SetterType defaultSetter = [&, this](Register::ValuesType &nvp, const uint16_t value){
+		DBG("defaultSetter reg:%i value %i\n", mIdx, value);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			std::get<Register::nvb_ref>(nvp[0]).get() = value;
 		} else
@@ -222,10 +223,13 @@ public:
 		}else
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			std::get<Register::RefValue<uint32_t>>(nvp[0]) = value;
+		}else{
+			DBG("defaultSetter - reg:%i unknown value type!\n", mIdx);
 		}
 	};
 
-	const GetterType defaultGetter = [](const Register::ValuesType &nvp)->uint16_t{
+	const GetterType defaultGetter = [&, this](const Register::ValuesType &nvp)->uint16_t{
+		DBG("defaultGetter reg:%i\n", mIdx);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			return std::get<Register::nvb_ref>(nvp[0]).get();
 		} else
@@ -249,13 +253,15 @@ public:
 		}else
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			return std::get<Register::RefValue<uint32_t>>(nvp[0]);
+		}else {
+			DBG("defaultGetter reg:%i unknown value type!\n", mIdx);
 		}
 		return 0;
 	};
 	const OnChanged defaultOnChanged = [](const Register *reg){DBG("Changed\n");};
 	const OnAccessError defaultOnAccessError = [](const Register *reg){DBG("Access Error\n");};
 	Register();
-	Register(Register::Index idx, Register::ValuesType values,
+	Register(Register::Index idx, const char* name, Register::ValuesType values,
 			Register::Access acc = Register::Access::RW,
 			Register::GetterType getter = nullptr,
 			Register::SetterType setter = nullptr,
@@ -275,6 +281,7 @@ protected:
 
 private:
 	Register::Index mIdx;
+	const char* mName;
 	ValuesType mValues;
 	GetterType mGetter;
 	SetterType mSetter;
@@ -284,12 +291,13 @@ private:
 
 enum class Index: std::underlying_type_t<ModBus::Register::Index> {
 		BEGIN =  static_cast<std::underlying_type_t<ModBus::Register::Index>>(ModBus::Register::Index::END),
-		IDENT = BEGIN,
-		BAUD_RATE_AND_WORD_LEN,
-		STOP_BITS_AND_PARITY,//rw - nv
-		END
+		IDENT = BEGIN, // reg 0
+		BAUD_RATE_AND_WORD_LEN,// reg 1
+		STOP_BITS_AND_PARITY,//rw - nv// reg 2
+		END //reg 3
 };
-#define REGISTER(idx, val, acc, set, get) static_cast<ModBus::Register::Index>(idx), ModBus::Register(static_cast<ModBus::Register::Index>(idx), {val}, acc, set, get)
+
+#define MODBUS_REGISTER(idx, val, acc, set, get) static_cast<ModBus::Register::Index>(idx), ModBus::Register(static_cast<ModBus::Register::Index>(idx), #idx, {val}, acc, set, get)
 
 std::ostream& operator<<(std::ostream&, const ModBus::Register&);
 

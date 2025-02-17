@@ -25,5 +25,7 @@ private:
 	osThreadId mModbusTaskHandle;
 	MessageBus::Message mSensorData;
 	osSemaphoreId mDataChangedSem;
+	Gpio_t mDePin;
+	std::unique_ptr<ModBus::Slave> mSlave;
 };
 ModBusNode& InitModBus(MessageBus& mbus);

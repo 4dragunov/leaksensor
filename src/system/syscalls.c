@@ -46,9 +46,14 @@ char *__env[1] = { 0 };
 char **environ = __env;
 volatile int32_t ITM_RxBuffer;
 
+osSemaphoreId_t gIoGuardSem;
+const osSemaphoreAttr_t gIoGuardSem_attr = {
+		.name = "io",
+};
 /* Functions */
 void initialise_monitor_handles()
 {
+	gIoGuardSem = osSemaphoreNew(1, 1, &gIoGuardSem_attr);
 
 	SEGGER_RTT_Init();
 	SEGGER_SYSVIEW_Init(osKernelGetTickFreq(), SystemCoreClock, 0, 0);
@@ -89,12 +94,12 @@ __weak int _read(int file, char *ptr, int len)
 {
   (void)file;
   int DataIdx;
-
+  osSemaphoreAcquire(gIoGuardSem, osWaitForever);
   for (DataIdx = 0; DataIdx < len; DataIdx++)
   {
     *ptr++ = __io_getchar();
   }
-
+  osSemaphoreRelease(gIoGuardSem);
   return len;
 }
 
@@ -102,11 +107,12 @@ __weak int _write(int file, char *ptr, int len)
 {
   (void)file;
   int DataIdx;
-
+  osSemaphoreAcquire(gIoGuardSem, osWaitForever);
   for (DataIdx = 0; DataIdx < len; DataIdx++)
   {
     __io_putchar(*ptr++);
   }
+  osSemaphoreRelease(gIoGuardSem);
   return len;
 }
 

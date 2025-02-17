@@ -145,7 +145,7 @@ static uint8_t AppDataBuffer[LORAWAN_APP_DATA_BUFFER_MAX_SIZE];
 /*!
  * User application data structure
  */
-static LmHandlerAppData_t AppData =
+LmHandlerAppData_t AppData =
 {
 
     .Port = 0,
@@ -168,6 +168,7 @@ osSemaphoreId gUplinkSem;
 
 void StartTaskDefault(void * argument);
 osThreadId defaultTaskHandle;
+LoraNode* gLoraNode = nullptr;
 
 static void OnMacProcessNotify( void );
 static void OnNvmDataChange( LmHandlerNvmContextStates_t state, uint16_t size );
@@ -413,7 +414,7 @@ int main( void )
     MessageBus& mbus = InitOneWire();
     InitModBus(mbus);
 
-    InitLoraNode(mbus);
+    gLoraNode = &InitLoraNode(mbus);
     defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
     assert(defaultTaskHandle);
 
@@ -548,46 +549,21 @@ static void OnSysTimeUpdate( void )
  */
 static void PrepareTxFrame( void )
 {
-	uint8_t channel = 0;
-	osEvent evt;
-
+	static bool NewDataAvailable = false;
     if( LmHandlerIsBusy( ) == true )
     {
     	DBG("busy\n");
         return;
     }
-    DBG("not busy\n");
+
     AppData.Port = LORAWAN_APP_PORT;
 
-    CayenneLppReset( );
-
-   // evt = osMailGet(gTxSensorsMq, 0);  // wait for message
-    if (evt.status == osEventMail) {
-    	DBG("LS MAIL\n");
-    	SummarySensorsData *summarySensorsData = static_cast<SummarySensorsData*>(evt.value.p);
-
-    	size_t sensors = summarySensorsData->leakSamples.data.ch.wl.size();
-    	CayenneLppAddDigitalInput(channel++, sensors );
-    	for(size_t i = 0; i < sensors; i++) {
-    		CayenneLppAddRelativeHumidity(channel++, summarySensorsData->leakSamples.data.ch.wl[i] * 100 / 254 );
-    	}
-
-    	CayenneLppAddDigitalInput(channel++, summarySensorsData->thermal.sensors );
-
-    	for(int i = 0; i < summarySensorsData->thermal.sensors; i++) {
-    		CayenneLppAddTemperature( channel++, summarySensorsData->thermal.data[i] * 100 / 254 );
-    	}
-     //   osMailFree(gTxSensorsMq, summarySensorsData);
-    }
-
-    CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
-   // CayenneLppAddAnalogOutput( channel++, BoardGetModbusId( ) * 100 / 254 );
-
-    CayenneLppCopy( AppData.Buffer );
-    AppData.BufferSize = CayenneLppGetSize( );
-    DBG("TX size:%i\n",AppData.BufferSize);
-    if( LmHandlerSend( &AppData, LmHandlerParams.IsTxConfirmed ) == LORAMAC_HANDLER_SUCCESS )
+    NewDataAvailable =!NewDataAvailable? osSemaphoreAcquire(gLoraNode->AppDataChanged(), 10) == osOK : NewDataAvailable;
+    if( NewDataAvailable && (LmHandlerSend( &AppData, LmHandlerParams.IsTxConfirmed ) == LORAMAC_HANDLER_SUCCESS ))
     {
+    	NewDataAvailable = false;
+    	gLoraNode->DataSend();
+    	 DBG("DATA SENT\n");
         // Switch LED 1 ON
     	LED_SWITCH_ON(LedsType::LED1);
     }

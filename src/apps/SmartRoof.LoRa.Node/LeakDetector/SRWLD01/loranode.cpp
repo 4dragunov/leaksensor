@@ -11,6 +11,7 @@
 #include "cmsis_os.h"
 #include "CayenneLpp.h"
 #include "LmHandler.h"
+#include "board.h"
 
 extern LmHandlerAppData_t AppData;
 
@@ -25,9 +26,12 @@ const osThreadAttr_t thread_attr = {
 
 LoraNode::LoraNode(MessageBus &b):
 	BusNode(&b),
+	NewDataAvailable(false),
 	mLoraNodeTaskHandle(osThreadNew(StartTaskLoraNode, this, &thread_attr)),
 	mSensorData(nullptr),
-	mDataChangedSem(osSemaphoreNew(1, 0, nullptr))	{
+	mDataChangedSem(osSemaphoreNew(1, 0, nullptr)),
+	mAppDataChangedSem(osSemaphoreNew(1, 0, nullptr)),
+	mAppDataSendSem(osSemaphoreNew(1, 0, nullptr)){
 	DBG("%s\r\n",__FUNCTION__);
 }
 
@@ -40,12 +44,16 @@ LoraNode& LoraNode::Instance(MessageBus &b)
 	static LoraNode n(b);
 	return n;
 }
+void LoraNode::DataSend(){
+	osSemaphoreRelease(mAppDataSendSem);
+}
 
 void LoraNode::DoTaskLoraNode()
 {
 	for(;;){
 		if(osSemaphoreAcquire(mDataChangedSem, osWaitForever) == osOK) {
 			std::shared_ptr<SummarySensorsData> summarySensorsData = static_pointer_cast<SummarySensorsData>(mSensorData);
+			uint8_t channel = 0;
 		    CayenneLppReset( );
 		    DBG("LS MAIL\n");
 
@@ -68,8 +76,9 @@ void LoraNode::DoTaskLoraNode()
 		    CayenneLppCopy( AppData.Buffer );
 		    AppData.BufferSize = CayenneLppGetSize( );
 		    DBG("TX size:%i\n",AppData.BufferSize);
-
+		    osSemaphoreRelease(mAppDataChangedSem);
 		    summarySensorsData = nullptr;
+		    osSemaphoreAcquire(mAppDataSendSem, osWaitForever);
 		}
 	}
 }

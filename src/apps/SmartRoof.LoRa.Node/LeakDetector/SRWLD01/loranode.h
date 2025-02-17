@@ -5,6 +5,9 @@ class LoraNode : public BusNode {
 	friend void StartTaskLoraNode(void * argument);
 public:
 	static LoraNode& Instance(MessageBus &b);
+	osSemaphoreId_t & AppDataChanged() {return mAppDataChangedSem;}
+	bool NewDataAvailable;
+	void DataSend();
 private:
 	LoraNode(MessageBus& mbus);
 	virtual ~LoraNode();
@@ -16,7 +19,9 @@ private:
 
 	osThreadId mLoraNodeTaskHandle;
 	MessageBus::Message mSensorData;
-	osSemaphoreId mDataChangedSem;
+	osSemaphoreId_t mDataChangedSem;
+	osSemaphoreId_t mAppDataChangedSem;
+	osSemaphoreId_t mAppDataSendSem;
 };
 
 LoraNode& InitLoraNode(MessageBus& mbus);

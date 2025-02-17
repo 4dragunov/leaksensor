@@ -46,16 +46,17 @@ volatile uint8_t numberHandlers = 0;
 Register::Register():
 	acces(Register::Access::RW),
 	mIdx(Register::Index::END),
+	mName(""),
 	mValues(),
 	mGetter(defaultGetter),
 	mSetter(defaultSetter),
 	mOnChanged(defaultOnChanged),
 	mOnAccessError(defaultOnAccessError)
 {
-
+	DBG("Register: %i created\n", mIdx);
 }
 
-Register::Register(Register::Index idx,Register::ValuesType values,
+Register::Register(Register::Index idx, const char* name, Register::ValuesType values,
 		Register::Access acces,
 		Register::GetterType getter,
 		Register::SetterType setter,
@@ -64,12 +65,14 @@ Register::Register(Register::Index idx,Register::ValuesType values,
 
 	acces(acces),
 	mIdx(idx),
+	mName(name),
 	mValues(values),
 	mGetter(getter),
 	mSetter(setter),
 	mOnChanged(changed),
 	mOnAccessError(error)
 {
+	DBG("Register: %i: %s created\n", mIdx, mName);
 }
 
 Register::operator const uint16_t ()
@@ -236,7 +239,7 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 {
 
 	if(mType ==ModBusType::Slave) {
-		mRegs.emplace(REGISTER(Index::IDENT, mId, Register::Access::RW,
+		mRegs.emplace(MODBUS_REGISTER(Index::IDENT, mId, Register::Access::RW,
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
 			return std::get<Register::nv8_ref>(nvp[0]).get();
@@ -246,7 +249,7 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 			return value;
 		}));
 
-		mRegs.emplace(REGISTER(Index::BAUD_RATE_AND_WORD_LEN, {mBaudRate COMMA mWordLen}, Register::Access::RW,
+		mRegs.emplace(MODBUS_REGISTER(Index::BAUD_RATE_AND_WORD_LEN, {mBaudRate COMMA mWordLen}, Register::Access::RW,
 
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
@@ -263,7 +266,7 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 			return v;
 		}));
 
-		mRegs.emplace(REGISTER(Index::STOP_BITS_AND_PARITY, {mStopBits COMMA mParity}, Register::Access::RW,
+		mRegs.emplace(MODBUS_REGISTER(Index::STOP_BITS_AND_PARITY, {mStopBits COMMA mParity}, Register::Access::RW,
 
 		[&](const Register::ValuesType &nvp)->uint16_t
 		{
