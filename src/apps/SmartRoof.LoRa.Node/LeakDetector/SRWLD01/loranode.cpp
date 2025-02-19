@@ -6,7 +6,7 @@
  */
 
 #include "loranode.h"
-#include "sensors.h"
+
 #include "utilities.h"
 #include "cmsis_os.h"
 #include "CayenneLpp.h"
@@ -52,23 +52,21 @@ void LoraNode::DoTaskLoraNode()
 {
 	for(;;){
 		if(osSemaphoreAcquire(mDataChangedSem, osWaitForever) == osOK) {
-			std::shared_ptr<SummarySensorsData> summarySensorsData = static_pointer_cast<SummarySensorsData>(mSensorData);
 			uint8_t channel = 0;
 		    CayenneLppReset( );
 		    DBG("LS MAIL\n");
 
-		    size_t sensors = summarySensorsData->leakSamples.data.ch.wl.size();
+		    size_t sensors = mSensorData->leakSamples.data.ch.wl.size();
 		    CayenneLppAddDigitalInput(channel++, sensors );
 		    for(size_t i = 0; i < sensors; i++) {
-		    	CayenneLppAddRelativeHumidity(channel++, summarySensorsData->leakSamples.data.ch.wl[i] * 100 / 254 );
+		    	CayenneLppAddRelativeHumidity(channel++, mSensorData->leakSamples.data.ch.wl[i] * 100 / 254 );
 		    }
 
-		   	CayenneLppAddDigitalInput(channel++, summarySensorsData->thermal.sensors );
+		   	CayenneLppAddDigitalInput(channel++, mSensorData->thermal.sensors );
 
-		   	for(int i = 0; i < summarySensorsData->thermal.sensors; i++) {
-		   		CayenneLppAddTemperature( channel++, summarySensorsData->thermal.data[i] * 100 / 254 );
+		   	for(int i = 0; i < mSensorData->thermal.sensors; i++) {
+		   		CayenneLppAddTemperature( channel++, mSensorData->thermal.data[i] * 100 / 254 );
 		   	}
-		    //   osMailFree(gTxSensorsMq, summarySensorsData);
 
 		    CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
 		   // CayenneLppAddAnalogOutput( channel++, BoardGetModbusId( ) * 100 / 254 );
@@ -77,7 +75,8 @@ void LoraNode::DoTaskLoraNode()
 		    AppData.BufferSize = CayenneLppGetSize( );
 		    DBG("TX size:%i\n",AppData.BufferSize);
 		    osSemaphoreRelease(mAppDataChangedSem);
-		    summarySensorsData = nullptr;
+		    mSensorData = nullptr;
+		    messageDone();
 		    osSemaphoreAcquire(mAppDataSendSem, osWaitForever);
 		}
 	}
@@ -85,7 +84,7 @@ void LoraNode::DoTaskLoraNode()
 
 void LoraNode::onNotify(MessageBus::Message &message)
 {
-	mSensorData = message;
+	mSensorData = static_pointer_cast<SummarySensorsData>(message);
 	DBG("LoraNode %s\r\n",__FUNCTION__);
 	osSemaphoreRelease(mDataChangedSem);
 }

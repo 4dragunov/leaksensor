@@ -463,6 +463,7 @@ public:
 	BusBuffer& busBuffer() {return mBufferRX;}
 	uint8_t &  dataRX() {return mDataRX;}
 	Registers& registers() {return mRegs;}
+	Register& reg(const Register::Index idx) {return mRegs[idx];}
 	Register& operator[](const size_t idx) {return mRegs[static_cast<Register::Index>(idx)];}
 };
 

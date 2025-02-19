@@ -1,5 +1,6 @@
 #pragma once
 #include "messagebus.h"
+#include "sensors.h"
 
 class LoraNode : public BusNode {
 	friend void StartTaskLoraNode(void * argument);
@@ -18,7 +19,7 @@ private:
 	void DoTaskLoraNode();
 
 	osThreadId mLoraNodeTaskHandle;
-	MessageBus::Message mSensorData;
+	std::shared_ptr<SummarySensorsData>  mSensorData;
 	osSemaphoreId_t mDataChangedSem;
 	osSemaphoreId_t mAppDataChangedSem;
 	osSemaphoreId_t mAppDataSendSem;

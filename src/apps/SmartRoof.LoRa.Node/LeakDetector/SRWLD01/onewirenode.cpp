@@ -13,7 +13,6 @@ extern OneWire::Bus gOWI;
 extern OneWire::DS18B20 gDs18b20;
 
 uint8_t ds18b20Sensors = 0;
-int16_t ds18b20SensorTemp[8] = {};
 
 NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_resolution(to_underlying(OneWire::DS18B20::Resolution::SR9BITS),
 		to_underlying(OneWire::DS18B20::Resolution::SR12BITS),
@@ -38,11 +37,10 @@ void OneWireNode::DoTaskOneWire(){
     	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
 
     	if(gDs18b20.waitTempReady(0) == osOK) {
-    		MessageBus::Message  summaryData = MessageBus::Message(new (osMemoryPoolAlloc(mSummarySamplesMp, osWaitForever)) SummarySensorsData(), [=,this](void* p){
+    		MessageBus::Message  summaryData = MessageBus::Message(osMemoryPoolAlloc(mSummarySamplesMp, osWaitForever), [=,this](void* p){
     			DBG("osMemoryPoolFree mSummarySamplesMp %p\r\n", p);
     			osMemoryPoolFree(mSummarySamplesMp, p);
     		});
-
 			if(summaryData) {
 				Samples* samples = nullptr;
 				if(osMessageQueueGet(DataSampler::Instance().Queue(), &samples, nullptr, osWaitForever) == osOK) {
@@ -56,6 +54,7 @@ void OneWireNode::DoTaskOneWire(){
 					osMemoryPoolFree(DataSampler::Instance().Pool(), samples);
 					send(summaryData);
 					summaryData = nullptr;
+					messageDone();
 				}
 			}
         }else {

@@ -53,7 +53,7 @@ Register::Register():
 	mOnChanged(defaultOnChanged),
 	mOnAccessError(defaultOnAccessError)
 {
-	DBG("Register: %i created\n", mIdx);
+	DBG("Register: %i created empty\n", mIdx);
 }
 
 Register::Register(Register::Index idx, const char* name, Register::ValuesType values,

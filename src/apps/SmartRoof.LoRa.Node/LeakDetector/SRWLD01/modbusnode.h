@@ -8,7 +8,7 @@
 #pragma once
 
 #include "messagebus.h"
-
+#include "sensors.h"
 
 class ModBusNode : public BusNode {
 	friend void StartTaskModBus(void * argument);
@@ -23,7 +23,7 @@ private:
 	void onNotify(MessageBus::Message &message);
 	void DoTaskModBus();
 	osThreadId mModbusTaskHandle;
-	MessageBus::Message mSensorData;
+	std::shared_ptr<SummarySensorsData>  mSensorData;
 	osSemaphoreId mDataChangedSem;
 	Gpio_t mDePin;
 	std::unique_ptr<ModBus::Slave> mSlave;

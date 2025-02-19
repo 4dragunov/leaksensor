@@ -32,13 +32,15 @@ class BusNode
 {
 public:
     BusNode(MessageBus* messageBus);
-    virtual ~BusNode() = default;
+    virtual ~BusNode();
 protected:
     MessageBus* messageBus;
-
+    MessageBus::Message message;
     std::function<void(MessageBus::Message&)> getNotifyFunc();
 
     void send(MessageBus::Message &message);
 
     virtual void onNotify(MessageBus::Message &message);
+    virtual void messageDone();
+
 };

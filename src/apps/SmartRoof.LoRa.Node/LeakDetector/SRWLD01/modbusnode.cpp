@@ -6,7 +6,6 @@
 #include "utilities.h"
 #include "NvmDataMgmt.h"
 #include "modbusnode.h"
-#include "sensors.h"
 #include "cmsis_os.h"
 
 extern NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_resolution;
@@ -19,10 +18,6 @@ extern NvProperty<uint8_t> gLoraAdrState;
 
 #define DS18B20MAX_SENSORS 8
 extern uint8_t ds18b20Sensors;
-extern int16_t ds18b20SensorTemp[8];
-
-
-extern osMailQId  gSummarySensorsMq;
 
 extern Uart_t Usart2;
 
@@ -68,6 +63,11 @@ enum class Index:std::underlying_type_t<ModBus::Index>{
 		};
 uint8_t  gLeakSensorCount = 20;
 uint16_t gLeakSensorData[20];
+int16_t  ds18b20SensorTemp[8] = {};
+const char *tempRegNames[8] = {"TEMP_1", "TEMP_2", "TEMP_3","TEMP_4", "TEMP_5", "TEMP_6", "TEMP_7", "TEMP_8"};
+const char *wlRegNames[20] = {"WL_1","WL_2","WL_3",	"WL_4",	"WL_5",	"WL_6",	"WL_7",	"WL_8",	"WL_9", "WL_10",
+		"WL_11", "WL_12", "WL_13", "WL_14",	"WL_15", "WL_16", "WL_17", "WL_18", "WL_19", "WL_20" };
+
 
 typedef enum_iterator<ModBus::Register::Index, static_cast<ModBus::Register::Index>(Index::WL_1), static_cast<ModBus::Register::Index>(Index::WL_20)> wl_iterator;
 typedef enum_iterator<ModBus::Register::Index, static_cast<ModBus::Register::Index>(Index::TEMP_1), static_cast<ModBus::Register::Index>(Index::TEMP_8)> temp_iterator;
@@ -166,17 +166,17 @@ void ModBusNode::DoTaskModBus()
 		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::TEMP_1) + sensor);
 		DBG("ModBus reg temp:%i created\n", Index);
 		modbusRegisters.emplace(Index,
-				ModBus::Register(Index, "" ,{ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
+				ModBus::Register(Index, tempRegNames[sensor] ,{ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
 	}
 	Index = static_cast<ModBus::Register::Index>(Index::WL_SENSORS);
 	DBG("ModBus reg sensor count:%i created\n", Index);
-	modbusRegisters.emplace(Index, ModBus::Register(Index, "", {ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
+	modbusRegisters.emplace(Index, ModBus::Register(Index, "WL_SENSORS", {ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
 
 	for(size_t sensor = 0; sensor < gLeakSensorCount; sensor++) {
 		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::WL_1) + sensor);
 		DBG("ModBus reg wl:%i created\n", Index);
 		modbusRegisters.emplace(Index,
-				ModBus::Register(Index, "", {ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
+				ModBus::Register(Index, wlRegNames[sensor], {ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
 	}
 
 	mSlave->Start();
@@ -185,23 +185,19 @@ void ModBusNode::DoTaskModBus()
 	{
 		if(osSemaphoreAcquire(mDataChangedSem, osWaitForever) == osOK) {
 			DBG("MB MAIL\n");
-			std::shared_ptr<SummarySensorsData> sensorData = static_pointer_cast<SummarySensorsData>(mSensorData);
-			size_t j = 0;
-			for(auto i :wl_iterator()) {
-				uint16_t data = sensorData->leakSamples.data.ch.wl[j++];
-				DBG("Set mb wl reg:%i to %i\n", i, data);
-				(*mSlave)[(int)i].SetValue(data);
+
+			for(size_t sensor = 0; sensor < mSensorData->leakSamples.data.ch.wl.size(); sensor++) {
+				gLeakSensorData[sensor]= mSensorData->leakSamples.data.ch.wl[sensor];
+				DBG("Set mb wl reg:%i\n", sensor);
 			}
 			DBG("WL-set!\n");
-			j = 0;
-			for(auto i :temp_iterator()) {
-				uint16_t value = sensorData->thermal.data[j++];
-				DBG("Set mb temp reg:%i to %i\n", i, value);
-				(*mSlave)[(int)i].SetValue(value);
+			for(size_t sensor = 0; sensor < mSensorData->thermal.sensors; sensor++) {
+				ds18b20SensorTemp[sensor] = mSensorData->thermal.data[sensor];
+				DBG("Set mb temp reg:%i\n", sensor);
 			}
 			DBG("TMP-set!\n");
-			sensorData = nullptr;
 			mSensorData = nullptr;
+			messageDone();
 		}
 	}
   /* USER CODE END StartTaskModBus */
@@ -228,6 +224,7 @@ ModBusNode::ModBusNode(MessageBus& mbus):
 }
 
 ModBusNode::~ModBusNode(){
+	mSensorData = nullptr;
 }
 
 ModBusNode& ModBusNode::Instance(MessageBus &b)
@@ -237,8 +234,8 @@ ModBusNode& ModBusNode::Instance(MessageBus &b)
 }
 
 void ModBusNode::onNotify(MessageBus::Message &message){
-	mSensorData = message;
-	DBG("ModBusNode %s\r\n",__FUNCTION__);
+	mSensorData = static_pointer_cast<SummarySensorsData>(message);
+//	DBG("ModBusNode %s\r\n",__FUNCTION__);
 	osSemaphoreRelease(mDataChangedSem);
 }
 
