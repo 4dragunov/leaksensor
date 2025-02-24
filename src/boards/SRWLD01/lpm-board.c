@@ -95,7 +95,7 @@ void LpmEnterLowPower( void )
         /*!
         * SLEEP mode is required
         */
-    	DBG("LpmEnter SLEEP\n");
+    	//DBG("LpmEnter SLEEP\n");
         LpmEnterSleepMode( );
         LpmExitSleepMode( );
     }
