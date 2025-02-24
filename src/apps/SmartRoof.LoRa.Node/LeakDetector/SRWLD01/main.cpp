@@ -161,7 +161,7 @@ static bool AppLedStateOn = false;
 /*!
  * Timer to handle the application data transmission duty cycle
  */
-static TimerEvent_t TxTimer;
+static osTimerId_t TxTimer;
 
 osSemaphoreDef(UplinkSem);
 osSemaphoreId gUplinkSem;
@@ -275,34 +275,34 @@ extern Gpio_t Led3;
 /*!
  * Timer to handle the state of LED1
  */
-static osTimerId Led1Timer;
+static osTimerId_t Led1Timer;
 #define LED1_TIMER_TIMEOUT 25
 /*!
  * Timer to handle the state of LED2
  */
-static osTimerId Led2Timer;
+static osTimerId_t Led2Timer;
 #define LED2_TIMER_TIMEOUT 25
 
 /*!
  * Timer to handle the state of LED3
  */
-static osTimerId Led3Timer;
+static osTimerId_t Led3Timer;
 #define LED3_TIMER_TIMEOUT 25
 
 /*!
  * Timer to handle the state of LED beacon indicator
  */
-static osTimerId LedBeaconTimer;
+static osTimerId_t LedBeaconTimer;
 #define LED_BEACON_TIMER_TIMEOUT 5000
 
 static struct Leds{
 	Gpio_t &pio;
-	osTimerId &timer;
+	osTimerId_t &timer;
 	uint16_t   timeout;
 }gLeds[] = {{Led1, Led1Timer, LED1_TIMER_TIMEOUT}, {Led2, Led2Timer, LED2_TIMER_TIMEOUT}, {Led3, Led3Timer, LED3_TIMER_TIMEOUT}};
 
-#define LED_SWITCH_ON(led) {GpioWrite( &gLeds[led].pio, LED_ON ); osTimerStart( gLeds[led].timer, gLeds[led].timeout );}
-#define LED_SWITCH_OFF(led)    {osTimerStop( gLeds[led].timer ); GpioWrite( &gLeds[led].pio, LED_OFF );}
+#define LED_SWITCH_ON(led) {DBG("LED:%i:%i\n", led, LED_OFF);GpioWrite( &gLeds[led].pio, LED_ON ); osTimerStart( gLeds[led].timer, gLeds[led].timeout );}
+#define LED_SWITCH_OFF(led)    {DBG("LED:%i:%i\n", led, LED_OFF);osTimerStop( gLeds[led].timer ); GpioWrite( &gLeds[led].pio, LED_OFF );}
 
 void UpdateHadlerProps(){
 
@@ -388,9 +388,9 @@ void StartTaskDefault(void * argument)
           else
           {
               // The MCU wakes up through events
-#ifndef DEBUG
-              BoardLowPowerHandler( );
-#endif
+//#ifndef DEBUG
+      //        BoardLowPowerHandler( );
+//#endif
           }
           CRITICAL_SECTION_END( );
   }
@@ -578,9 +578,9 @@ static void StartTxProcess( LmHandlerTxEvents_t txEvent )
     case LORAMAC_HANDLER_TX_ON_TIMER:
         {
             // Schedule 1st packet transmission
-            TimerInit( &TxTimer, OnTxTimerEvent );
-            TimerSetValue( &TxTimer, TxPeriodicity );
-            OnTxTimerEvent( NULL );
+           TxTimer = osTimerNew( OnTxTimerEvent, osTimerOnce, NULL, NULL  );
+           osTimerStart(TxTimer, TxPeriodicity);
+           OnTxTimerEvent( NULL );
         }
         break;
     case LORAMAC_HANDLER_TX_ON_EVENT:
@@ -592,7 +592,7 @@ static void StartTxProcess( LmHandlerTxEvents_t txEvent )
 
 static void UplinkProcess( void )
 {
-    if(osSemaphoreAcquire(gUplinkSem, 0) == osOK)
+    if(osSemaphoreAcquire(gUplinkSem, 50) == osOK)
     {
         PrepareTxFrame( );
     }
@@ -608,9 +608,8 @@ static void OnTxPeriodicityChanged( uint32_t periodicity )
     }
     DBG("%s\n", __FUNCTION__);
     // Update timer periodicity
-    TimerStop( &TxTimer );
-    TimerSetValue( &TxTimer, TxPeriodicity );
-    TimerStart( &TxTimer );
+    osTimerStop(TxTimer );
+    osTimerStart(TxTimer, TxPeriodicity);
 }
 
 static void OnTxFrameCtrlChanged( LmHandlerMsgTypes_t isTxConfirmed )
@@ -629,13 +628,12 @@ static void OnPingSlotPeriodicityChanged( uint8_t pingSlotPeriodicity )
  */
 static void OnTxTimerEvent( void* context )
 {
-    TimerStop( &TxTimer );
+    osTimerStop(TxTimer );
 
     osSemaphoreRelease(gUplinkSem);//release semaphore as they created as available
 
     // Schedule next transmission
-    TimerSetValue( &TxTimer, TxPeriodicity );
-    TimerStart( &TxTimer );
+    osTimerStart( TxTimer, TxPeriodicity);
 }
 
 /*!
