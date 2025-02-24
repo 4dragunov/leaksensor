@@ -140,7 +140,7 @@ uint32_t RtcGetCalendarTime( uint16_t *milliseconds );
  * \retval RTC Timer value
  */
 uint32_t RtcGetTimerValue( void );
-
+uint32_t RtcGetAlarmValue(void);
 /*!
  * \brief Get the RTC timer elapsed time since the last Alarm was set
  *

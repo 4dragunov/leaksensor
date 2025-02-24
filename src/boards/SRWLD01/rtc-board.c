@@ -385,7 +385,7 @@ void RtcStartAlarm( const uint32_t timeoutMs )
 	uint32_t milliseconds = timeoutMs % 1000;
 
     RtcStopAlarm( );
-
+    DBG("ALM:%i\n",timeoutMs );
     CRITICAL_SECTION_BEGIN( );
      /* Convert time in seconds */
     if(RtcAcquireAccess()){
@@ -427,6 +427,16 @@ void RtcStartAlarm( const uint32_t timeoutMs )
 			DBG("Error enter rtc init\n");
 		}
     CRITICAL_SECTION_END( );
+}
+
+uint32_t RtcGetAlarmValue(void)
+{
+  register uint16_t high = 0, low = 0;
+
+  high  = READ_REG(RTC->ALRH & RTC_ALRH_RTC_ALR);
+  low   = READ_REG(RTC->ALRL & RTC_ALRL_RTC_ALR);
+
+  return (((uint32_t) high << 16U) | low);
 }
 
 uint32_t RtcGetTimerValue( void )
