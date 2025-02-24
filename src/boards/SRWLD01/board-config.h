@@ -66,15 +66,15 @@
 #define RADIO_DIO_1                                 PE_3
 #define RADIO_DIO_2                                 PE_4
 
-//#define RADIO_DIO_3                                 PB_4
-//#define RADIO_DIO_4                                 PA_9
-//#define RADIO_DIO_5                                 PC_7
+//#define RADIO_DIO_3
+//#define RADIO_DIO_4
+//#define RADIO_DIO_5
 
 //#define RADIO_ANT_SWITCH
 
 // Debug pins definition.
-//#define RADIO_DBG_PIN_TX                            PB_0
-//#define RADIO_DBG_PIN_RX                            PA_4
+#define RADIO_DBG_PIN_TX
+#define RADIO_DBG_PIN_RX
 
 #endif
 
