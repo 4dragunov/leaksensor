@@ -608,6 +608,28 @@ void HAL_MspDeInit(void)
 
 }
 
+void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
+{
+	__HAL_RCC_GPIOA_CLK_DISABLE( );
+	__HAL_RCC_GPIOB_CLK_DISABLE( );
+	__HAL_RCC_GPIOC_CLK_DISABLE( );
+	__HAL_RCC_GPIOD_CLK_DISABLE( );
+	__HAL_RCC_GPIOE_CLK_DISABLE( );
+	__HAL_RCC_GPIOF_CLK_DISABLE( );
+	__HAL_RCC_GPIOG_CLK_DISABLE( );
+}
+
+void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
+{
+	 __HAL_RCC_GPIOA_CLK_ENABLE( );
+	 __HAL_RCC_GPIOB_CLK_ENABLE( );
+	 __HAL_RCC_GPIOC_CLK_ENABLE( );
+	 __HAL_RCC_GPIOD_CLK_ENABLE( );
+	 __HAL_RCC_GPIOE_CLK_ENABLE( );
+	 __HAL_RCC_GPIOF_CLK_ENABLE( );
+	 __HAL_RCC_GPIOG_CLK_ENABLE( );
+}
+
 uint8_t GetBoardPowerSource( void )
 {
    return (GpioRead(&BattPwr) == GPIO_PIN_SET)? EXT_POWER : BATTERY_POWER;
