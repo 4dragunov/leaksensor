@@ -45,6 +45,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/uart-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/freertos.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/eeprom.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tickless.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/nonvol.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/sensors-board.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/flash-board.cpp"
