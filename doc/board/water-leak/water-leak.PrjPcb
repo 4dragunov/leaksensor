@@ -1389,7 +1389,7 @@ MatchParameter1=Comment
 MatchStrictly1=1
 MatchParameter2=Library Reference
 MatchStrictly2=1
-PhysicalNamingFormat=$ComponentPrefix.$RoomName.$ComponentIndex
+PhysicalNamingFormat=$RoomName
 GlobalIndexSortOrder=3
 GlobalIndexSortLocation=0
 
