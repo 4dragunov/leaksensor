@@ -229,7 +229,10 @@ void DisplayMacMlmeRequestUpdate( LoRaMacStatus_t status, MlmeReq_t *mlmeReq, Ti
     printf( "STATUS      : %s\n", MacStatusStrings[status] );
     if( status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED )
     {
-        printf( "Next Tx in  : %lu [ms]\n", nextTxIn );
+    	auto sec = nextTxIn/1000;
+    	auto min = sec / 60;
+    	auto hours = min / 60;
+        printf( "Next Tx in  : %lu [ms], (%lu [s]), (%lu [m]), (%lu [h])\n", nextTxIn, sec, min, hours );
     }
 }
 

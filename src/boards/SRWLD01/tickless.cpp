@@ -151,6 +151,7 @@ eSleepModeStatus eSleepStatus;
             vSetWakeTimeInterrupt( xExpectedIdleTime );
 
             /* Enter the low power state. */
+            DBG("expected sleep %li\n", xExpectedIdleTime);
             prvSleep(xExpectedIdleTime);
 
             /* Determine how long the microcontroller was actually in a low power
@@ -165,8 +166,10 @@ eSleepModeStatus eSleepStatus;
 
             /* Correct the kernels tick count to account for the time the
                microcontroller spent in its low power state. */
-            uint64_t sleepUs = timeval2us(ulLowPowerTimeAfterSleep - ulLowPowerTimeBeforeSleep);
-            vTaskStepTick(sleepUs /(portTICK_RATE_MS * 1000) );
+            uint64_t sleepMs = timeval2us(ulLowPowerTimeAfterSleep - ulLowPowerTimeBeforeSleep)/1000;
+            uint32_t sleepTicks = sleepMs /portTICK_RATE_MS;
+            DBG("real sleep %li ms\n", sleepMs);
+            vTaskStepTick(sleepTicks);
         }
 
         /* Exit the critical section - it might be possible to do this immediately

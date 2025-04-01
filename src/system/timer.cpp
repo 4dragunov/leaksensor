@@ -428,7 +428,7 @@ TimerTime_t TimerGetElapsedTime( TimerTime_t past )
     uint32_t pastInTicks = RtcMs2Tick( past );
 
     // Intentional wrap around. Works Ok if tick duration below 1ms
-    return RtcTick2Ms( nowInTicks - pastInTicks );
+    return RtcTick2Ms( nowInTicks - pastInTicks ) * 1000;
 }
 
 static void TimerSetTimeout( TimerEvent_t *obj )
