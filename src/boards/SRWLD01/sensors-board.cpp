@@ -297,7 +297,7 @@ Channel::ValueType Channel::Process(const ChannelPins& channel) {
     for (int i = 0; i < num_measurements; i++) {
     	if (channel.ptp.pin != NC && channel.ntp.pin != NC) {
 			ToggleCurrentDirection(channel.ptp, channel.ntp, 30);
-			GpioWrite(&gChannelsPins[i].ntp, 1); // подача высокого уровня перед АЦП
+			GpioWrite(const_cast<Gpio_t*>(&channel.ntp), 1); // подача высокого уровня перед АЦП
 		   // HAL_GPIO_WritePin(GPIOG, GPIO_PIN_0, GPIO_PIN_SET); //led on
 			osDelay(10);
     	}
@@ -313,7 +313,7 @@ Channel::ValueType Channel::Process(const ChannelPins& channel) {
             min_value = adc_values[i];
         }
         if (channel.ptp.pin != NC) {
-			GpioWrite(const_cast<Gpio_t*>(&channel.ptp), 0); // подача низкого уровня перед АЦП
+			GpioWrite(const_cast<Gpio_t*>(&channel.ntp), 0); // подача низкого уровня перед АЦП
 			osDelay(10);
         }
     }
@@ -337,7 +337,7 @@ const osMemoryPoolAttr_t samples_attr = {
 float DataSampler::vdda_voltage = 0;
 
 DataSampler::DataSampler():
-		mSamplesMp(osMemoryPoolNew(1, sizeof(Samples), &samples_attr)),
+		mSamplesMp(osMemoryPoolNew(2, sizeof(struct Samples), &samples_attr)),
 		mSamplesMq(osMessageQueueNew(1, sizeof(Samples*), nullptr)),
 		mMav(),
 		mTs(),
@@ -379,8 +379,8 @@ void DataSampler::DoSamplerTask()
 	assert(vdda_voltage < VDDA_MAX);
 
 	while( 1 ){
-		Samples* sensorsData = static_cast<Samples*>(osMemoryPoolAlloc(mSamplesMp, osWaitForever));
-		memset(sensorsData, 0, sizeof(Samples));
+		Samples* sensorsData = static_cast<Samples*>(new(osMemoryPoolAlloc(mSamplesMp, osWaitForever)) Samples);
+		//memset(sensorsData, 0, sizeof(Samples));
 		if(sensorsData) {
 			for (auto& channel: mChannels) {
 				channel.Measure((*sensorsData)[channel.idx]);
@@ -388,14 +388,14 @@ void DataSampler::DoSamplerTask()
 				switch(channel.chType()){
 					case Channel::Type::WL:{
 						auto voltage =  __LL_ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, (*sensorsData)[channel.idx], LL_ADC_RESOLUTION_12B);
-						(*sensorsData)[channel.idx] = voltage;
+						(*sensorsData)[channel.idx] = roundf(100 * (voltage/vdda_voltage));
 					}
 					break;
 					case Channel::Type::TS:{
 
 #ifdef __LL_ADC_CALC_TEMPERATURE
-							(*sensorsData)[channel.id] = __LL_ADC_CALC_TEMPERATURE(vdda_voltage,
-																			(*sensorsData)[channel.id],
+							sensorsData[channel.idx] = __LL_ADC_CALC_TEMPERATURE(vdda_voltage,
+																			(*sensorsData)[channel.idx],
 																			LL_ADC_RESOLUTION_12B) * 100.0;
 #else
 						    /* Device with temperature sensor not calibrated in production:
@@ -411,6 +411,7 @@ void DataSampler::DoSamplerTask()
 					}
 					break;
 					case Channel::Type::VREF:{
+					//not needed - just placeholder
 					}
 					break;
 					default:{
@@ -419,12 +420,23 @@ void DataSampler::DoSamplerTask()
 					}
 				}
 			}
-			*sensorsData = mMav.Filter(sensorsData);
-			gettimeofday(&sensorsData->timestamp,0);
+			gettimeofday(&sensorsData->timestamp, 0);
 			mSamplePeriod = sensorsData->timestamp - mTs;
+			*sensorsData = mMav.Filter(sensorsData);
 			vdda_voltage = (vdda_voltage + CALC_VDDA((*sensorsData)[CHANNEL_VREF]))/2.0;//mV;
 			mTs = sensorsData->timestamp;
+#ifdef DEBUG
+			//std::cout << *sensorsData << std::endl;
+			for(int i = 0; i < WL_CHANNEL_COUNT + 2; i++){
+				DBG("s:%i:%i\n", i, sensorsData->data.raw[i]);
+			}
+#endif
+
+#if 0
+			osMemoryPoolFree(mSamplesMp, sensorsData);
+#else
 			osMessageQueuePut(mSamplesMq, &sensorsData, 0, osWaitForever);
+#endif
 		}
 	}
 }

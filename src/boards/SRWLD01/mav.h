@@ -10,10 +10,13 @@
 
 #include <cstdint>
 #include <stdbool.h>
+#include <iostream>
+#include "utilities.h"
 
 #pragma pack(push, 1)
 template<typename T, const uint8_t WindowLength>
 class MAV{
+	const bool debug = true;
 public:
 	MAV():History(), Sum(), WindowPointer(0), FirstRun(true){};
 	virtual ~MAV() = default;
@@ -25,9 +28,8 @@ public:
 				DoFilter(raw_data);
 			}
 			FirstRun = false;
-			return DoFilter(raw_data);
-		}else
-			return DoFilter(raw_data);
+		}
+		return DoFilter(raw_data);
 	}
 
 private:

@@ -109,6 +109,8 @@ struct Channel{
 
 };
 
+
+
 typedef struct Samples{
 	union Data{
 		std::array<Channel::ValueType, WL_CHANNEL_COUNT + 1 + 1> raw;
@@ -119,6 +121,18 @@ typedef struct Samples{
 		} ch;
 	}data;
     struct timeval timestamp;
+    friend std::ostream& operator<<(std::ostream& os, const struct timeval& t){
+    	std::cout << "s:" << t.tv_sec << " us:" << t.tv_usec << std::endl;
+    }
+
+    friend  std::ostream& operator<<(std::ostream& os, const Samples& s) {
+    	std::cout << "ts s:" << s.timestamp.tv_sec << "  us:" <<  s.timestamp.tv_usec << std::endl;
+    	auto size = s.data.raw.size();
+    	for(int i = 0; i <  19; i++){
+    		std::cout << i << ":" << s.data.raw[i] << std::endl;
+    	}
+    }
+
 	inline bool operator==(const Samples& other)
     {
 		assert(data.raw.size() == other.data.raw.size());

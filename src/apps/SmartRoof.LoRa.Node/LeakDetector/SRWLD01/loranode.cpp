@@ -59,13 +59,13 @@ void LoraNode::DoTaskLoraNode()
 		    size_t sensors = mSensorData->leakSamples.data.ch.wl.size();
 		    CayenneLppAddDigitalInput(channel++, sensors );
 		    for(size_t i = 0; i < sensors; i++) {
-		    	CayenneLppAddRelativeHumidity(channel++, mSensorData->leakSamples.data.ch.wl[i] * 100 / 254 );
+		    	CayenneLppAddRelativeHumidity(channel++, mSensorData->leakSamples.data.ch.wl[i] );
 		    }
 
 		   	CayenneLppAddDigitalInput(channel++, mSensorData->thermal.sensors );
 
 		   	for(int i = 0; i < mSensorData->thermal.sensors; i++) {
-		   		CayenneLppAddTemperature( channel++, mSensorData->thermal.data[i] * 100 / 254 );
+		   		CayenneLppAddTemperature( channel++, mSensorData->thermal.data[i] / 10.0 );
 		   	}
 
 		    CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
