@@ -400,13 +400,13 @@ void DataSampler::DoSamplerTask()
 #else
 						    /* Device with temperature sensor not calibrated in production:
 						       use generic parameters */
-							auto temperature = __LL_ADC_CALC_TEMPERATURE_TYP_PARAMS(INTERNAL_TEMPSENSOR_AVGSLOPE,
+							float temperature = __LL_ADC_CALC_TEMPERATURE_TYP_PARAMS(INTERNAL_TEMPSENSOR_AVGSLOPE,
 									INTERNAL_TEMPSENSOR_V25,
 									TEMPSENSOR_V25_TEMP,
 									vdda_voltage,
 									(*sensorsData)[channel.idx],
 									LL_ADC_RESOLUTION_12b);
-							(*sensorsData)[channel.idx] = temperature;
+							(*sensorsData)[channel.idx] = temperature * 10;
 #endif
 					}
 					break;

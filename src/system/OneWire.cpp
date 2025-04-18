@@ -2,7 +2,7 @@
 #include "uart.h"
 #include "utilities.h"
 
-
+#include  <cstring>
 
 #define WIRE_1 0xFF
 #define WIRE_0 0x00
@@ -23,7 +23,7 @@ Bus::Bus( Uart_t *const uart):
 	mUart(uart),
 	mStatus()
 {
-
+	resetUART();
 }
 
 /**
@@ -33,9 +33,13 @@ Bus::Bus( Uart_t *const uart):
  */
 void Bus::resetUART(void)
 {
+	DBG("Resetting OW UART!\n");
+    taskENTER_CRITICAL();
 	UartDeInit(mUart);
 	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
 	mStatus = 0;
+    taskEXIT_CRITICAL();
 }
 
 void Bus::init(void)
@@ -90,12 +94,11 @@ bool Bus::reset(void)
 
     uint8_t reset = 0xF0;
     uint8_t resetBack = 0;
-
+    UartSetState(mUart, false);
+    UartSetState(mUart, true);
     setBaudRate(RESET_SPEED);
-
     UartPutChar(mUart, reset, OW_TIMEOUT);
     mStatus = UartGetChar(mUart, &resetBack, OW_TIMEOUT);
-
     setBaudRate(WORK_SPEED);
 
     return reset!=resetBack;
@@ -193,6 +196,8 @@ void Bus::resetSearch(void)
 	mLastDiscrepancy = 0;
 	mLastDeviceFlag = 0;
 	mLastFamilyDiscrepancy = 0;
+	std::memset(mROM, 0, sizeof(mROM));
+	mStatus = 0;
 }
 
 

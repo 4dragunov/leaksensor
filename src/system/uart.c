@@ -99,6 +99,11 @@ bool UartSetBaudrate(const Uart_t *obj, uint32_t baudrate)
 	return UartMcuSetBaudrate(obj,baudrate);
 }
 
+void UartSetState(const Uart_t *obj, bool enabled)
+{
+	UartMcuSetState(obj, enabled);
+}
+
 void UartAbortReceive(const Uart_t *obj) {
   UartMcuAbortReceive(obj);
 }

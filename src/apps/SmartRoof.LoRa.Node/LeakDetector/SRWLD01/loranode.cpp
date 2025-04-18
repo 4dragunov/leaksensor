@@ -63,11 +63,14 @@ void LoraNode::DoTaskLoraNode()
 		    }
 
 		   	CayenneLppAddDigitalInput(channel++, mSensorData->thermal.sensors );
-
-		   	for(int i = 0; i < mSensorData->thermal.sensors; i++) {
-		   		CayenneLppAddTemperature( channel++, mSensorData->thermal.data[i] / 10.0 );
+		   	if(mSensorData->thermal.sensors) {
+				for(int i = 0; i < mSensorData->thermal.sensors; i++) {
+					CayenneLppAddTemperature( channel++, mSensorData->thermal.data[i] / 10.0 );
+				}
+		   	}else{
+		   		//cpu thermal data allways present at index 0 if ds18b20 sensors not available
+		   		CayenneLppAddTemperature( channel++, mSensorData->thermal.data[0] / 10.0 );
 		   	}
-
 		    CayenneLppAddAnalogInput( channel++, BoardGetBatteryLevel( ) * 100 / 254 );
 		   // CayenneLppAddAnalogOutput( channel++, BoardGetModbusId( ) * 100 / 254 );
 

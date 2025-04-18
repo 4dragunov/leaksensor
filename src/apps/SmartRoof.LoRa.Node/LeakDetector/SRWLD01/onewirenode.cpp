@@ -30,25 +30,43 @@ NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_res
 void OneWireNode::DoTaskOneWire(){
   for(;;)
   {
-    if(!ds18b20Sensors) {
-    	ds18b20Sensors = gDs18b20.init(static_cast<OneWire::DS18B20::Resolution>((uint8_t)ds18b20_resolution));
-    	if(!ds18b20Sensors) {DBG("No sensors!\n");osDelay(200);}
-    }else {
-    	if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
+    	gDs18b20.init(static_cast<OneWire::DS18B20::Resolution>((uint8_t)ds18b20_resolution));
+    	if(gDs18b20.sensors()) {
+    		if(gDs18b20.startMeasure(to_underlying(OneWire::DS18B20::Command::MEASUREALL)) == osOK){
+    			DBG("Temp measurement started!\n");
+    		}else{
+    			DBG("Failed to start temp measurement on available sensors!\n");
+    		}
+    	}else{
+    		DBG("No onewire sensors available!\n");
+    	}
 
-    	if(gDs18b20.waitTempReady(0) == osOK) {
-    		MessageBus::Message  summaryData = MessageBus::Message(osMemoryPoolAlloc(mSummarySamplesMp, osWaitForever), [=,this](void* p){
+    	MessageBus::Message  summaryData = MessageBus::Message(osMemoryPoolAlloc(mSummarySamplesMp, osWaitForever), [=,this](void* p){
     			DBG("osMemoryPoolFree mSummarySamplesMp %p\r\n", p);
     			osMemoryPoolFree(mSummarySamplesMp, p);
-    		});
-			if(summaryData) {
+    	});
+
+		if(summaryData) {
 				Samples* samples = nullptr;
 				if(osMessageQueueGet(DataSampler::Instance().Queue(), &samples, nullptr, osWaitForever) == osOK) {
 					DBG("MB MAIL\n");
 					std::static_pointer_cast<SummarySensorsData>(summaryData)->leakSamples=*static_cast<Samples *>(samples);
-					std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors =  ds18b20Sensors;
-					for(uint8_t s = 0; s < ds18b20Sensors; s++)
-						OneWire::DS18B20::Error err = gDs18b20.getTempRaw(s, &std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[s]);
+					std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors = 0;
+					if(gDs18b20.sensors() && gDs18b20.waitTempReady(0) == osOK) {
+						DBG("Reading sensors.\n");
+						for(uint8_t sensor = 0; sensor < gDs18b20.sensors(); sensor++) {
+							int16_t temp = 0;
+							bool read_success = gDs18b20.getTempRaw(sensor, &temp) == OneWire::DS18B20::Error::TEMP_READ;
+							DBG("Sensor %i read %s, value %i\n", sensor, read_success? "success" : "failed", temp);
+							std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[sensor] = read_success? temp : 0xDEAD;
+							std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors++;
+						}
+					}
+					if(!std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors)
+					{
+						DBG("Using CPU thermal sensor data!\n");
+						std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[0] = samples->data.ch.Ts;
+					}
 					gettimeofday(&std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.timestamp, 0);
 					gettimeofday(&std::static_pointer_cast<SummarySensorsData>(summaryData)->timestamp, 0);
 					osMemoryPoolFree(DataSampler::Instance().Pool(), samples);
@@ -56,15 +74,10 @@ void OneWireNode::DoTaskOneWire(){
 					summaryData = nullptr;
 					messageDone();
 				}
-			}
-        }else {
-        	DBG("temp wait error\n");
-        }
-	  } else{
-		  DBG("failed to start measure\n");
-	  }
-  }
- }
+		}else {
+			DBG("summaryData is null!\n");
+		}
+    }
 }
 
 void StartTaskOneWire(void * argument){

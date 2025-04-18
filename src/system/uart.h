@@ -240,6 +240,8 @@ void UartEnableReciever(const Uart_t *obj);
 
 bool UartLastByteSendOut(const Uart_t *obj, uint32_t timeout);
 
+void UartSetState(const Uart_t *obj, bool enabled);
+
 #ifdef __cplusplus
 }
 #endif

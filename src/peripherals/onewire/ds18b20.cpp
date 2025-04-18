@@ -38,6 +38,9 @@ DS18B20::DS18B20(OneWire::Bus *bus, const  Resolution bits):
 
 uint8_t DS18B20::init(const  Resolution bits)
 {   
+	mSensorsFound = 0;
+	DBG("Searching 18b20 sensors\n");
+
     uint8_t status =  mBus->first();
 
     //Looking for the sensors while there are avalable and their amount could be stored
@@ -53,17 +56,23 @@ uint8_t DS18B20::init(const  Resolution bits)
         status =  mBus->next();
     }
 
-    uint8_t data[] = {  to_underlying(Bus::Command::SKIPROM),
-    					to_underlying(Bus::Command::WSCRATCHPAD),
-                        0x7F, //0b0111 1111 //temp high
-                        0xFF, //0b1111 1111 //temp low 
-						BITS2CMD((uint8_t)to_underlying(bits)) };
+	if(mSensorsFound) {
+		DBG("%i sensors found\n", mSensorsFound);
+		uint8_t data[] = {  to_underlying(Bus::Command::SKIPROM),
+							to_underlying(Bus::Command::WSCRATCHPAD),
+							0x7F, //0b0111 1111 //temp high
+							0xFF, //0b1111 1111 //temp low
+							BITS2CMD((uint8_t)to_underlying(bits)) };
 
-    if ( mBus->reset()) {
-        //Select all sensors.
-    	 mBus->send(data, sizeof(data));
-    	 mTimeNeeded = gResolution2Ms[to_underlying(bits)];
-    }
+		if ( mBus->reset()) {
+			//Select all sensors.
+			 mBus->send(data, sizeof(data));
+			 mTimeNeeded = gResolution2Ms[to_underlying(bits)];
+		}
+	}else {
+		DBG("Sensors not found!\n");
+		mTimeNeeded = 0;
+	}
     return mSensorsFound;
 }
 

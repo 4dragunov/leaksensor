@@ -446,15 +446,32 @@ uint32_t UartMcuGetBaudrate(const Uart_t *obj)
 
 bool UartMcuSetBaudrate(const Uart_t *obj, uint32_t baudrate)
 {
+	uint32_t brr = 0;
+	assert(obj);
+	UART_HandleTypeDef *huart = &UartHandle[obj->UartId];
+	assert(huart);
+	taskENTER_CRITICAL();
+	huart->gState = HAL_UART_STATE_BUSY;
+	huart->Init.BaudRate = baudrate;
+	//huart->Instance->CR1 &= ~(USART_CR1_TE);
+//	huart->Instance->CR1 &= ~(USART_CR1_RE);
+	uint32_t pclk = (obj->UartId == USART_1)? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
 
-	//DBG("%s uart:%i to %li\n",__FUNCTION__, obj->UartId, baudrate);
-	//__HAL_UART_DISABLE(&UartHandle[obj->UartId]);
-	uint32_t bus_clk = (obj->UartId == USART_1)? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
-	auto brr = UART_BRR_SAMPLING16(bus_clk, baudrate);
-	//DBG("uart:%i old brr %li new %li\n",obj->UartId, UartHandle[obj->UartId].Instance->BRR, brr);
-	UartHandle[obj->UartId].Instance->BRR = brr;
-	//__HAL_UART_ENABLE(&UartHandle[obj->UartId]);
-
+#if defined(USART_CR1_OVER8)
+	if (huart->Init.OverSampling == UART_OVERSAMPLING_8)
+		huart->Instance->BRR  = UART_BRR_SAMPLING8(pclk, huart->Init.BaudRate);
+	else
+	{
+		huart->Instance->BRR  = UART_BRR_SAMPLING16(pclk, huart->Init.BaudRate);
+	}
+#else
+	huart->Instance->BRR = UART_BRR_SAMPLING16(pclk, huart->Init.BaudRate);
+#endif
+	//huart->Instance->CR1 &= ~(USART_CR1_TE);
+	//huart->Instance->CR1 |= USART_CR1_TE;
+	//huart->Instance->CR1 |= USART_CR1_RE;
+	huart->gState = HAL_UART_STATE_READY;
+	taskEXIT_CRITICAL();
 	return  true;
 }
 
@@ -473,6 +490,33 @@ void UartMcuEnableReciever(const Uart_t *obj)
 {
 	DBG("%s uart:%i\n",__FUNCTION__, obj->UartId);
 	HAL_HalfDuplex_EnableReceiver(&UartHandle[obj->UartId]);
+}
+
+void UartMcuEnableRxTx(const Uart_t *obj)
+{
+	UART_HandleTypeDef *huart = &UartHandle[obj->UartId];
+
+	taskENTER_CRITICAL();
+	huart->Instance->CR1 |= USART_CR1_TE;
+	huart->Instance->CR1 |= USART_CR1_RE;
+	taskEXIT_CRITICAL();
+}
+
+void UartMcuDisableRxTx(const Uart_t *obj)
+{
+	UART_HandleTypeDef *huart = &UartHandle[obj->UartId];
+	taskENTER_CRITICAL();
+	huart->Instance->CR1 &= ~(USART_CR1_TE);
+	huart->Instance->CR1 &= ~(USART_CR1_RE);
+	taskEXIT_CRITICAL();
+}
+
+void UartMcuSetState(const Uart_t *obj, bool enabled)
+{
+	if(enabled)
+		UartMcuEnableRxTx(obj);
+	else
+		UartMcuDisableRxTx(obj);
 }
 
 

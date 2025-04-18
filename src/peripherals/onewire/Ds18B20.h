@@ -91,6 +91,7 @@ namespace OneWire {
 	inline static int16_t convertToInt(const double t){
 		return (int16_t)((t/0.0625)+0.5);
 	}
+	uint8_t sensors(void) {return mSensorsFound;}
 	private:
 		uint8_t mSensorsFound;
 		int16_t mCorrection[MAX_DS18B20_SENSORS];

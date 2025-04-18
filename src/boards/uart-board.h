@@ -29,6 +29,7 @@ extern "C"
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "uart.h"
 
 /*!
@@ -113,6 +114,10 @@ bool UartMcuSetBaudrate(const Uart_t *obj, uint32_t baudrate);
 void UartMcuAbortReceive(const Uart_t *obj);
 
 void UartMcuEnableTransmitter(const Uart_t *obj);
+
+void UartMcuEnableRxTx(const Uart_t *obj);
+void UartMcuDisableRxTx(const Uart_t *obj);
+void UartMcuSetState(const Uart_t *obj, bool enabled);
 
 void UartMcuEnableReciever(const Uart_t *obj);
 
