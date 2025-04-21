@@ -63,14 +63,14 @@ namespace OneWire {
 	 * @brief   Send one byte through OneWire bus
 	 * @par     b - bytes to send
 	 */
-	void send(const uint8_t b);
+	void send(const uint8_t b, bool power = false);
 
 	/**
 	 * @brief   Send some bytes through OneWire bus
 	 * @par     *bytes - array of bytes to send
 	 * @par     len - length of array
 	 */
-	void send(const uint8_t *bytes, const uint8_t len);
+	void send(const uint8_t *bytes, const uint8_t len, bool power = false);
 
 	/**
 	 * @brief   Receive one byte through OneWire bus
@@ -163,7 +163,9 @@ namespace OneWire {
 	void selectWithPointer(uint8_t* const ROM);
 
 	void setBaudRate(const uint32_t bdr);
+
 	private:
+	    void setPd(bool enabled);
 		void resetUART(void);
 		uint8_t receiveBit(void);
 		void sendBit(const uint8_t b);
@@ -174,6 +176,8 @@ namespace OneWire {
 		uint8_t mROM[8];
 		Uart_t *mUart;
 		uint8_t mStatus;
+		Gpio_t mOwpd;
+		bool mPdState;
 	}; //class Bus
 
 } //namespace OneWire

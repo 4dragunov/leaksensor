@@ -86,7 +86,7 @@ osStatus DS18B20::startMeasure(const uint8_t sensor)
 				if (mBus->reset()) {
 					//Select all sensors. It's faster
 					mBus->send(to_underlying(Bus::Command::SKIPROM));
-					mBus->send(to_underlying(Command::CONVERTTEMP));
+					mBus->send(to_underlying(Command::CONVERTTEMP), true);
 					for(uint8_t i=0; i< mSensorsFound; i++) {
 					   mLastTimeMeasured[i] = now;
 					}
@@ -95,7 +95,7 @@ osStatus DS18B20::startMeasure(const uint8_t sensor)
 			} else {
 				if (mBus->reset()) {
 					mBus->select(mROMS[sensor]);
-					mBus->send(to_underlying(Command::CONVERTTEMP));
+					mBus->send(to_underlying(Command::CONVERTTEMP), true);
 					mLastTimeMeasured[sensor] = now;
 					return osOK;
 				}
@@ -131,7 +131,6 @@ DS18B20::Error DS18B20::getTempRaw(const uint8_t sensor, int16_t * temp)
     
     if(!temp)
     	return Error::ERROR_PARAM;
-
     if (!mBus->reset()){
         return Error::TEMP_NOT_READ;
     }

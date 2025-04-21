@@ -21,7 +21,9 @@ Bus::Bus( Uart_t *const uart):
 	mLastDeviceFlag(),
 	mROM(),
 	mUart(uart),
-	mStatus()
+	mStatus(),
+	mOwpd(),
+	mPdState(false)
 {
 	resetUART();
 }
@@ -35,9 +37,10 @@ void Bus::resetUART(void)
 {
 	DBG("Resetting OW UART!\n");
     taskENTER_CRITICAL();
+    setPd(false);
 	UartDeInit(mUart);
 	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
-	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
+	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 	mStatus = 0;
     taskEXIT_CRITICAL();
 }
@@ -45,7 +48,7 @@ void Bus::resetUART(void)
 void Bus::init(void)
 {
 	mStatus = 0;
-	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
+	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 }
 
 static uint8_t bitsToByte(uint8_t *bits) {
@@ -85,8 +88,9 @@ void Bus::setBaudRate(const uint32_t bdr)
     UartSetBaudrate(mUart, bdr);
 }
 
-bool Bus::reset(void)
+bool Bus::reset()
 {
+	setPd(false); //disable power delivery as it incompatible with bus traffic
 	//Reset UART if there is an error
 	if (mStatus != 0) {
 		resetUART();
@@ -123,16 +127,18 @@ uint8_t Bus::receiveBit(void)
 	return 0;
 }
 
-void Bus::send(const uint8_t b)
+void Bus::send(const uint8_t b, bool power)
 {
     uint8_t sendByte[8];
     //uint8_t recvByte[8];
 
+    setPd(false);
     byteToBits(b, sendByte); //0b01101001 => 0x00 0xFF 0xFF 0x00 0xFF 0x00 0x00 0xFF
 
 	for(uint8_t i=0;i<8;i++) {
 		sendBit(sendByte[i]);
 	}
+	setPd(power);
 	/* 
 	On a high loaded system there will be desynchronization of transmit and receive
 	buffer. It will lead to timeout errors.
@@ -143,11 +149,12 @@ void Bus::send(const uint8_t b)
     //ow->status = HAL_UART_Receive(ow->huart, recvByte, 8, OW_TIMEOUT);
 }
 
-void Bus::send(const uint8_t *bytes, const uint8_t len)
+void Bus::send(const uint8_t *bytes, const uint8_t len, bool power)
 {
-    for(uint8_t i=0; i<len; i++) {
-		send(bytes[i]);
+    for(uint8_t i=0; i<len-1; i++) {
+		send(bytes[i], false);
     }
+    send(bytes[len - 1], power);
 }
 
 uint8_t Bus::receive(void)
@@ -156,6 +163,7 @@ uint8_t Bus::receive(void)
     uint8_t recvByte[8];
     byteToBits(0xFF, sendByte);
 
+    setPd(false);
 	for (uint8_t i=0;i<8;i++) {
 		recvByte[i] = receiveBit();
 	}
@@ -348,6 +356,21 @@ void Bus::selectWithPointer(uint8_t* ROM)
 	for (uint8_t i = 0; i < 8; i++) {
 		send(*(ROM + i));
 	}
+}
+
+void Bus::setPd(bool enabled){
+	if(mPdState!=enabled && enabled) {
+		GpioInit( &mOwpd, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_NO_PULL, 1 );
+#if OW_PD
+		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1 );
+#endif
+	}else if(mPdState!= enabled &&!enabled){
+		GpioInit( &mOwpd, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
+#if OW_PD
+		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+#endif
+	}
+	mPdState = enabled;
 }
 
 } //namespace OneWire
