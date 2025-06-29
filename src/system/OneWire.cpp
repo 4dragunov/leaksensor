@@ -2,6 +2,8 @@
 #include "uart.h"
 #include "utilities.h"
 
+#include <board-config.h>
+
 #include  <cstring>
 
 #define WIRE_1 0xFF
@@ -25,7 +27,7 @@ Bus::Bus( Uart_t *const uart):
 	mOwpd(),
 	mPdState(false)
 {
-	resetUART();
+	init();
 }
 
 /**
@@ -37,10 +39,8 @@ void Bus::resetUART(void)
 {
 	DBG("Resetting OW UART!\n");
     taskENTER_CRITICAL();
-    setPd(false);
-	UartDeInit(mUart);
-	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
-	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
+    UartSetState(mUart, false);
+    UartSetState(mUart, true);
 	mStatus = 0;
     taskEXIT_CRITICAL();
 }
@@ -48,7 +48,8 @@ void Bus::resetUART(void)
 void Bus::init(void)
 {
 	mStatus = 0;
-	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
+	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 }
 
 static uint8_t bitsToByte(uint8_t *bits) {
@@ -360,17 +361,22 @@ void Bus::selectWithPointer(uint8_t* ROM)
 
 void Bus::setPd(bool enabled){
 	if(mPdState!=enabled && enabled) {
-		GpioInit( &mOwpd, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_NO_PULL, 1 );
-#if OW_PD
-		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1 );
+		mPdState = enabled;
+#ifdef OW_PD
+		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, OW_PD_ON );
 #endif
+		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_PUSH_PULL, PIN_PULL_UP, 1 );
+		DBG("enabling PD\n");
 	}else if(mPdState!= enabled &&!enabled){
-		GpioInit( &mOwpd, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 0 );
-#if OW_PD
-		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+		mPdState = enabled;
+		resetUART();
+#ifdef OW_PD
+		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, !OW_PD_ON );
 #endif
+		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
+		DBG("disabling PD\n");
 	}
-	mPdState = enabled;
+
 }
 
 } //namespace OneWire

@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.10)
 #---------------------------------------------------------------------------------------
 
 # Allow switching of radios
-set(RADIO_LIST sx1272 sx1276 sx126x lr1110)
+set(RADIO_LIST sx1272 sx1276 sx126x lr1110 stm32wl5x)
 set(RADIO sx1272 CACHE STRING "Default radio is sx1272")
 set_property(CACHE RADIO PROPERTY STRINGS ${RADIO_LIST})
 set_property(CACHE RADIO PROPERTY ADVANCED)
@@ -31,7 +31,6 @@ set_property(CACHE RADIO PROPERTY ADVANCED)
 #---------------------------------------------------------------------------------------
 # Radio drivers
 #---------------------------------------------------------------------------------------
-
 if(${RADIO} STREQUAL lr1110)
     list(APPEND ${PROJECT_NAME}_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/lr1110/radio.c
@@ -57,6 +56,11 @@ elseif(${RADIO} STREQUAL sx1276)
     list(APPEND ${PROJECT_NAME}_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/sx1276/sx1276.c
     )
+elseif(${RADIO} STREQUAL stm32wl5x)
+    list(APPEND ${PROJECT_NAME}_SOURCES
+        ${CMAKE_CURRENT_SOURCE_DIR}/stm32wl5x/stm32_radio_driver/radio_driver.c
+        ${CMAKE_CURRENT_SOURCE_DIR}/stm32wl5x/stm32_radio_driver/radio.c
+    )
 else()
     message(FATAL_ERROR "Unsupported radio driver selected...")
 endif()
@@ -81,6 +85,11 @@ elseif(${RADIO} STREQUAL sx1272)
 elseif(${RADIO} STREQUAL sx1276)
     list(APPEND ${PROJECT_NAME}_INCLUDES
         ${CMAKE_CURRENT_SOURCE_DIR}/sx1276
+    )
+elseif(${RADIO} STREQUAL stm32wl5x)
+    list(APPEND ${PROJECT_NAME}_INCLUDES
+        ${CMAKE_CURRENT_SOURCE_DIR}/stm32wl5x
+        ${CMAKE_CURRENT_SOURCE_DIR}/stm32wl5x/stm32_radio_driver
     )
 else()
     message(FATAL_ERROR "Unsupported radio driver selected...")

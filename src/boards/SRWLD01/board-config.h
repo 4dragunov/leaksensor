@@ -108,8 +108,9 @@ typedef enum {
 #define OW_RX                                    PB_7
 #define OW_TX                                    PB_6
 //Power delivery pin to control external power switch
-//Used only if set
-#define OW_PD
+//Used only if defined and set
+//#define OW_PD
+//#define OW_PD_ON                                1
 
 #define BAT_PWR                                  PF_3
 

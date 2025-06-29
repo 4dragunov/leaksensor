@@ -30,7 +30,7 @@
 #include <sys/time.h>
 #include <sys/times.h>
 #include <cmsis_os.h>
-#include <stm32f103xe.h>
+#include <stm32wlxx.h>
 #include <segger_rtt.h>
 #include <segger_sysview.h>
 #include "task.h"

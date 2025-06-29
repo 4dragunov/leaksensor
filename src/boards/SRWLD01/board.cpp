@@ -210,10 +210,10 @@ void BoardInitMcu( void )
         FifoInit( &Usart2.FifoTx, Uart2TxBuffer, UART2_FIFO_TX_SIZE );
         FifoInit( &Usart2.FifoRx, Uart2RxBuffer, UART2_FIFO_RX_SIZE );
         // Configure your terminal for 8 Bits data (7 data bit + 1 parity bit), no parity and no flow ctrl
-        UartInit( &Usart2, USART_2, RS485_TX, RS485_RX );
+        UartInit( &Usart2, USART_2, RS485_TX, RS485_RX, PIN_PUSH_PULL);
         UartConfig( &Usart2, RX_TX, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
-        UartInit( &Usart1, USART_1, OW_TX, OW_RX );
+        UartInit( &Usart1, USART_1, OW_TX, OW_RX, PIN_OPEN_DRAIN );
         UartConfig( &Usart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
         RtcInit( );

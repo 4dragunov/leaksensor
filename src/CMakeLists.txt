@@ -21,12 +21,12 @@
 #---------------------------------------------------------------------------------------
 
 # Allow switching of target platform
-set(BOARD_LIST SRWLD01)
-set(BOARD SRWLD01 CACHE STRING "Default target platform is SRWLD01")
+set(BOARD_LIST SRWLD01 SRWLD02)
+set(BOARD SRWLD02 CACHE STRING "Default target platform is SRWLD02")
 set_property(CACHE BOARD PROPERTY STRINGS ${BOARD_LIST})
 
 # Allow switching of board radios
-set(BOARD_RADIO_LIST SX1276MB1LAS SX1276MB1MAS )
+set(BOARD_RADIO_LIST SX1272MB2DAS SX1276MB1LAS SX1276MB1MAS SX1261MBXBAS SX1262MBXCAS SX1262MBXDAS STM32WL5x)
 set(BOARD_RADIO SX1261MBXBAS CACHE STRING "Default board radio is SX1261MBXBAS")
 set_property(CACHE BOARD_RADIO PROPERTY STRINGS ${BOARD_RADIO_LIST})
 
@@ -53,6 +53,8 @@ option(CLASSB_ENABLED "Class B support of LoRaMac" OFF)
 # Target Boards
 #---------------------------------------------------------------------------------------
 
+include(CMakePrintHelpers)
+
 if(BOARD STREQUAL SRWLD01)
     # Configure toolchain for stm32f103
     set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD01/cmsis/arm-gcc/stm32f103xe_flash.ld)
@@ -73,6 +75,17 @@ if(BOARD STREQUAL SRWLD01)
     else()
         message(STATUS "Please specify the BOARD_RADIO!\nPossible values are: SX1276MB1LAS, SX1276MB1MAS")
     endif()
+elseif(BOARD STREQUAL SRWLD02)
+    # Configure toolchain for stm32fwl55
+    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02/cmsis/arm-gcc/stm32wl55_flash.ld)
+    include(stm32wl5x)
+
+    # Build platform specific board implementation
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02)
+
+    # Configure radio
+    set(BOARD_RADIO STM32WL5X CACHE INTERNAL "Radio stm32wl5x selected")
+    set(RADIO stm32wl5x CACHE INTERNAL "Radio stm32wl5x selected")
 
 endif()
 

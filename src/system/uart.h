@@ -51,11 +51,9 @@ typedef enum
 */
 
 #define FOREACH_USART(USART) \
-		USART(USART_1)   \
-		USART(USART_2)  \
-		USART(USART_3)   \
-		USART(UART_4)  \
-		USART(UART_5)  \
+		USART(LPUART_1)   \
+		USART(USART_1)  \
+		USART(USART_2)   \
 		USART(UART_USB_CDC)  \
 		USART(UART_NONE)  \
 
@@ -161,7 +159,7 @@ typedef enum
  * \param [IN] tx   UART Tx pin name to be used
  * \param [IN] rx   UART Rx pin name to be used
  */
-void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx );
+void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode );
 
 /*!
  * \brief Configures the UART object and MCU peripheral

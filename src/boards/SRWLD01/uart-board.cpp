@@ -61,7 +61,7 @@ UartId_t IdByHandle(const UART_HandleTypeDef *handle){
 	return UART_NONE;
 }
 
-void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
+void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode )
 {
     obj->UartId = uartId;
     obj->handle = &UartHandle[uartId];
@@ -105,7 +105,7 @@ void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
 
         	}
         };
-        GpioInit( &obj->Tx, tx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
+        GpioInit( &obj->Tx, tx, PIN_ALTERNATE_FCT, txPinMode, PIN_PULL_UP, 0 );
         GpioInit( &obj->Rx, rx, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_PULL_UP, 0 );
         switch(obj->UartId) {
         	case USART_1: {
@@ -513,10 +513,11 @@ void UartMcuDisableRxTx(const Uart_t *obj)
 
 void UartMcuSetState(const Uart_t *obj, bool enabled)
 {
+	UART_HandleTypeDef *huart = &UartHandle[obj->UartId];
 	if(enabled)
-		UartMcuEnableRxTx(obj);
+		huart->Instance->CR1 |= USART_CR1_UE;
 	else
-		UartMcuDisableRxTx(obj);
+		huart->Instance->CR1 &= ~(USART_CR1_UE);
 }
 
 

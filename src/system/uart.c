@@ -28,7 +28,7 @@ const char *gUsartNames[] = {
 		FOREACH_USART(GENERATE_STRING)
 };
 
-void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
+void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode )
 {
     if( obj->IsInitialized == false )
     {
@@ -41,7 +41,7 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx )
     	vQueueAddToRegistry( obj->txSem, "txSem"  );
 #endif
         obj->IsInitialized = true;
-        UartMcuInit( obj, uartId, tx, rx );
+        UartMcuInit( obj, uartId, tx, rx, txPinMode );
     }
 }
 
