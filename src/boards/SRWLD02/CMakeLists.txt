@@ -25,7 +25,8 @@ enable_language(C ASM CXX)
 set(MCU STM32WL55xx)
 set(BOARD_MCU ${MCU} PARENT_SCOPE)
 set(BOARD_MCU ${MCU})
-
+add_compile_definitions(${BOARD_MCU})
+add_compile_definitions(STM32WL55xx)
 set(SECURE_ELEMENT SOFT_SE PARENT_SCOPE)
 
 include(CMakePrintHelpers)
@@ -56,6 +57,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/arm-gcc/startup_stm32wl55ccux.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/system_stm32wlxx.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/radio_board_if.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_adc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_adc_ex.c"
@@ -74,22 +76,41 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_spi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_spi_ex.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_uart.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_subghz.c"
 )
 
 set(MBED_RADIO_SHIELD STM32WL55)
-list(APPEND ${PROJECT_NAME}_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/radio_board_if.c")
 
 add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
 
-
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DUSE_HAL_DRIVER -DARM_MATH_CM4
--DSTM32WL55xx
--DSTM32_THREAD_SAFE_STRATEGY=4
-"$<$<CONFIG:DEBUG>:-DHARD_FAULT_HANDLER_ENABLED>"
-#-DUSER_VECT_TAB_ADDRESS 
-#-DVECT_TAB_OFFSET=0x5000 
-#-DVECT_TAB_BASE_ADDRESS=FLASH_BASE 
+target_compile_options(${PROJECT_NAME} PUBLIC
+	-DUSE_HAL_DRIVER
+	-DUSE_BSP_DRIVER
+	-DSTM32WL55xx
+	-DSTM32_THREAD_SAFE_STRATEGY=4
+    -mcpu=cortex-m4
+    -mthumb
+    -mfloat-abi=soft
+    -fdata-sections
+    -ffunction-sections
+    -Wall
+    $<$<CONFIG:Debug>:-Og>
+    $<$<CONFIG:Debug>:-DHARD_FAULT_HANDLER_ENABLED>
 )
+
+target_link_options(${PROJECT_NAME} PUBLIC
+    -T${CMAKE_SOURCE_DIR}/STM32WL54XX_FLASH_CM4.ld
+    -mcpu=cortex-m4
+    -mthumb
+    -mfloat-abi=soft
+    -specs=nano.specs
+    -lc
+    -lm
+    -lnosys
+    -Wl,-Map=${TARGET}.map,--cref
+    -Wl,--gc-sections
+)
+
 
 # Add define if debbuger support is enabled
 target_compile_definitions(${PROJECT_NAME} PUBLIC $<$<BOOL:${USE_DEBUGGER}>:USE_DEBUGGER>)

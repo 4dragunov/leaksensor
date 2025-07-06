@@ -33,7 +33,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "radio_driver.h"
 #include "mw_log_conf.h"
-
+#include "stm32wlxx.h"
 /* External variables ---------------------------------------------------------*/
 /*!
  * \brief Sughz handler

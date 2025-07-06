@@ -423,13 +423,13 @@ bool UartMcuSetBaudrate(const Uart_t *obj, uint32_t baudrate)
 
 #if defined(USART_CR1_OVER8)
 	if (huart->Init.OverSampling == UART_OVERSAMPLING_8)
-		huart->Instance->BRR  = UART_BRR_SAMPLING8(pclk, huart->Init.BaudRate);
+		huart->Instance->BRR  = (uint16_t)(UART_DIV_SAMPLING8(pclk, huart->Init.BaudRate, huart->Init.ClockPrescaler));
 	else
 	{
-		huart->Instance->BRR  = UART_BRR_SAMPLING16(pclk, huart->Init.BaudRate);
+		huart->Instance->BRR  = (uint16_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate, huart->Init.ClockPrescaler));
 	}
 #else
-	huart->Instance->BRR = UART_BRR_SAMPLING16(pclk, huart->Init.BaudRate);
+	huart->Instance->BRR  = (uint16_t)(UART_DIV_SAMPLING16(pclk, huart->Init.BaudRate, huart->Init.ClockPrescaler));
 #endif
 	//huart->Instance->CR1 &= ~(USART_CR1_TE);
 	//huart->Instance->CR1 |= USART_CR1_TE;

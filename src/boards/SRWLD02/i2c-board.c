@@ -52,18 +52,7 @@ void I2cMcuInit( I2c_t *obj, I2cId_t i2cId, PinNames scl, PinNames sda )
 void I2cMcuFormat( I2c_t *obj, I2cMode mode, I2cDutyCycle dutyCycle, bool I2cAckEnable, I2cAckAddrMode AckAddrMode, uint32_t I2cFrequency )
 {
     __HAL_RCC_I2C1_CLK_ENABLE( );
-
-    I2cHandle.Init.ClockSpeed = I2cFrequency;
-
-    if( dutyCycle == I2C_DUTY_CYCLE_2 )
-    {
-        I2cHandle.Init.DutyCycle = I2C_DUTYCYCLE_2;
-    }
-    else
-    {
-        I2cHandle.Init.DutyCycle = I2C_DUTYCYCLE_16_9;
-    }
-
+    I2cHandle.Init.Timing = 0x0090194B;
     I2cHandle.Init.OwnAddress1 = 0;
     I2cHandle.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
     I2cHandle.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -84,7 +73,7 @@ void I2cMcuResetBus( I2c_t *obj )
     GpioInit( &obj->Scl, I2C_SCL, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
     GpioInit( &obj->Sda, I2C_SDA, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
 
-    I2cMcuFormat( obj, MODE_I2C, I2C_DUTY_CYCLE_2, true, I2C_ACK_ADD_7_BIT, 400000 );
+    I2cMcuFormat( obj, MODE_I2C, I2C_DUTY_CYCLE_2, true, I2C_ACK_ADD_7_BIT, 0x0090194B );
 }
 
 void I2cMcuDeInit( I2c_t *obj )

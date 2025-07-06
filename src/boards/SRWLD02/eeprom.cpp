@@ -116,7 +116,7 @@ Eeprom::Result Eeprom::WriteRecord(const uint32_t address, const Eeprom::address
   Eeprom::data_record dataRecord = static_cast<Eeprom::data_record>((Eeprom::data)varValue << std::numeric_limits<typename Eeprom::address>::digits) | (Eeprom::address)varId;
 
   HAL_FLASH_Unlock();
-  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, dataRecord);
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, address, dataRecord);
   HAL_FLASH_Lock();
   if (flashRes != HAL_OK)
   {
@@ -293,6 +293,7 @@ Eeprom::PageState Eeprom::ReadPageState(const Eeprom::PageIdx idx)
 }
 
 /******************************************************************************/
+
 Eeprom::Result Eeprom::SetPageState(const Eeprom::PageIdx idx, const Eeprom::PageState state)
 {
   Eeprom::Result res = Result::OK;
@@ -300,7 +301,7 @@ Eeprom::Result Eeprom::SetPageState(const Eeprom::PageIdx idx, const Eeprom::Pag
   DBG("eeprom %s page:%i state:%s\n",__FUNCTION__, idx, pageStateNames[state]);
   assert(state < Eeprom::PageState::UNDEFINED);
   HAL_FLASH_Unlock();
-  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, pageAddress[idx], pageStateValues[state]);
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, pageAddress[idx], pageStateValues[state]);
   HAL_FLASH_Lock();
 
   if (flashRes != HAL_OK)
@@ -319,9 +320,8 @@ Eeprom::Result Eeprom::ClearPage(const Eeprom::PageIdx idx)
   FLASH_EraseInitTypeDef erase;
   DBG("eeprom %s page:%i\n",__FUNCTION__, idx);
   erase.TypeErase = FLASH_TYPEERASE_PAGES;
-  erase.Banks = FLASH_BANK_1;
-  erase.PageAddress = pageAddress[idx];
-  erase.NbPages = PAGES;
+  erase.Page  = pageAddress[idx]/FLASH_PAGE_SIZE;
+  erase.NbPages = 1;
 
   HAL_StatusTypeDef flashRes = HAL_OK;
   uint32_t pageError = 0;

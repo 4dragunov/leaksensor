@@ -79,6 +79,16 @@
  */
 #define DIVC( X, N )                                ( ( ( X ) + ( N ) -1 ) / ( N ) )
 
+/*!
+ * RTC timer context
+ */
+typedef struct
+{
+	struct timeval   Time;         // Reference time
+    struct timeval   AlarmTime;
+    uint32_t SubSeconds;
+
+}RtcTimerContext_t;
 
 
 /*!

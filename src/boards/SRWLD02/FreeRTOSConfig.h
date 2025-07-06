@@ -51,12 +51,24 @@
 #if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
   #include <stdint.h>
   extern uint32_t SystemCoreClock;
+  void xPortSysTickHandler(void);
 /* USER CODE BEGIN 0 */
   extern void configureTimerForRunTimeStats(void);
   extern unsigned long getRunTimeCounterValue(void);
 /* USER CODE END 0 */
 #endif
-#define configENABLE_FPU                         1
+#ifndef CMSIS_device_header
+#ifndef STM32WL55xx
+#define STM32WL55xx
+#endif
+#define CMSIS_device_header "stm32wlxx.h"
+#endif /* CMSIS_device_header */
+
+extern char _end; /* Defined in the linker script */
+extern char _estack; /* Defined in the linker script */
+extern char _Min_Stack_Size; /* Defined in the linker script */
+
+#define configENABLE_FPU                         0
 #define configENABLE_MPU                         0
 
 #define configUSE_PREEMPTION                     1
@@ -115,7 +127,7 @@ to exclude the API function. */
 #define INCLUDE_xQueueGetMutexHolder         1
 #define INCLUDE_uxTaskGetStackHighWaterMark  1
 #define INCLUDE_eTaskGetState                1
-
+#define INCLUDE_xTaskGetCurrentTaskHandle    1
 /*
  * The CMSIS-RTOS V2 FreeRTOS wrapper is dependent on the heap implementation used
  * by the application thus the correct define need to be enabled below

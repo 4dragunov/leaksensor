@@ -146,7 +146,7 @@ uint32_t RtcGetAlarmValue(void);
  *
  * \retval RTC Elapsed time since the last alarm in ticks.
  */
-struct timeval  RtcGetTimerElapsedTime( void );
+uint32_t  RtcGetTimerElapsedTime( void );
 
 /*!
  * \brief Writes data0 and data1 to the RTC backup registers
@@ -180,18 +180,7 @@ void RtcProcess( void );
  */
 TimerTime_t RtcTempCompensation( TimerTime_t period, float temperature );
 
-/*!
- * RTC timer context
- */
-typedef struct
-{
-	struct timeval   Time;         // Reference time
-    struct timeval   AlarmTime;
-    uint32_t SubSeconds;
 
-}RtcTimerContext_t;
-
-extern RtcTimerContext_t RtcTimerContext;
 
 #ifdef __cplusplus
 }

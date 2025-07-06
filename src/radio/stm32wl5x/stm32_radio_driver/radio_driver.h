@@ -43,7 +43,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 #include "radio_conf.h"
-
+#include "stm32wlxx.h"
 /* Exported constants --------------------------------------------------------*/
 #define RFO_LP                                      1
 #define RFO_HP                                      2

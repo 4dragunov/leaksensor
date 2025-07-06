@@ -84,22 +84,23 @@ elseif(BOARD STREQUAL SRWLD02)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02)
 
     # Configure radio
-    set(BOARD_RADIO STM32WL5X CACHE INTERNAL "Radio stm32wl5x selected")
-    set(RADIO stm32wl5x CACHE INTERNAL "Radio stm32wl5x selected")
+    set(BOARD_RADIO STM32WL5XX CACHE INTERNAL "Radio stm32wl5xx selected")
+    set(RADIO stm32wl5xx CACHE INTERNAL "Radio stm32wl5xx selected")
 
 endif()
 
 #---------------------------------------------------------------------------------------
 # General Components
 #---------------------------------------------------------------------------------------
+include(CMakePrintHelpers)
 
 add_compile_options("$<$<CONFIG:DEBUG>:-DDEBUG>")
 
-set(BOARD_MCU "")
-
+set(BOARD_MCU "STM32WL55xx")
+add_compile_definitions(STM32WL55xx)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/boards)
+cmake_print_variables(BOARD_MCU)
 
-add_compile_definitions(${BOARD_MCU})
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/radio)
 

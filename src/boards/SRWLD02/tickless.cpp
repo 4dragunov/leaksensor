@@ -168,7 +168,7 @@ eSleepModeStatus eSleepStatus;
                microcontroller spent in its low power state. */
             uint64_t sleepMs = timeval2us(ulLowPowerTimeAfterSleep - ulLowPowerTimeBeforeSleep)/1000;
             uint32_t sleepTicks = sleepMs /portTICK_RATE_MS;
-            DBG("real sleep %li ms\n", sleepMs);
+            DBG("real sleep %lli ms\n", sleepMs);
             vTaskStepTick(sleepTicks);
         }
 

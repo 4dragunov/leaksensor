@@ -77,16 +77,21 @@ typedef union {
 Gpio_t Led1;
 
 Gpio_t BattPwr;
+Gpio_t SensorsEn[2];
+Gpio_t SensorsPolarity;
 
 /*
  * MCU objects
  */
 Adc_t  AdcVref = {.inst = ADC, .channel = ADC_CHANNEL_VREFINT };
 Adc_t  AdcTempSens = {.inst = ADC, .channel = ADC_CHANNEL_TEMPSENSOR};
-Uart_t LpUsart1;
-Uart_t Usart2;
+Adc_t  AdcInP = {.inst = ADC, .channel = ADC_CH_P};
+Adc_t  AdcInN = {.inst = ADC, .channel = ADC_CH_N};
 
-OneWire::Bus gOWI(&LpUsart1);
+Uart_t LpUart1;
+Uart_t Usart1;
+
+OneWire::Bus gOWI(&LpUart1);
 OneWire::DS18B20 gDs18b20(&gOWI, OneWire::DS18B20::Resolution::SR12BITS);
 
 Usid *UniqueSiliconID = (Usid *) U_ID;
@@ -120,17 +125,17 @@ static bool McuInitialized = false;
 /*!
  * UART2 FIFO buffers size
  */
-#define UART1_FIFO_TX_SIZE                                1024
-#define UART1_FIFO_RX_SIZE                                1024
+#define LPUART1_FIFO_TX_SIZE                                1024
+#define LPUART1_FIFO_RX_SIZE                                1024
 
-#define UART2_FIFO_TX_SIZE                                1024
-#define UART2_FIFO_RX_SIZE                                1024
+#define USART1_FIFO_TX_SIZE                                1024
+#define USART1_FIFO_RX_SIZE                                1024
 
-uint8_t Uart1TxBuffer[UART1_FIFO_TX_SIZE];
-uint8_t Uart1RxBuffer[UART1_FIFO_RX_SIZE];
+uint8_t LpUart1TxBuffer[LPUART1_FIFO_TX_SIZE];
+uint8_t LpUart1RxBuffer[LPUART1_FIFO_RX_SIZE];
 
-uint8_t Uart2TxBuffer[UART2_FIFO_TX_SIZE];
-uint8_t Uart2RxBuffer[UART2_FIFO_RX_SIZE];
+uint8_t Usart1TxBuffer[USART1_FIFO_TX_SIZE];
+uint8_t Usart1RxBuffer[USART1_FIFO_RX_SIZE];
 
 void BoardCriticalSectionBegin( UBaseType_t *mask )
 {
@@ -167,17 +172,19 @@ void BoardInitMcu( void )
 
         GpioInit( &BattPwr, BAT_PWR, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
 
-        FifoInit( &Usart1.FifoTx, Uart1TxBuffer, UART1_FIFO_TX_SIZE );
-        FifoInit( &Usart1.FifoRx, Uart1RxBuffer, UART1_FIFO_RX_SIZE );
+        FifoInit( &LpUart1.FifoTx, LpUart1TxBuffer, LPUART1_FIFO_TX_SIZE );
+        FifoInit( &LpUart1.FifoRx, LpUart1RxBuffer, LPUART1_FIFO_RX_SIZE );
 
-        FifoInit( &Usart2.FifoTx, Uart2TxBuffer, UART2_FIFO_TX_SIZE );
-        FifoInit( &Usart2.FifoRx, Uart2RxBuffer, UART2_FIFO_RX_SIZE );
+        FifoInit( &Usart1.FifoTx, Usart1TxBuffer, USART1_FIFO_TX_SIZE );
+        FifoInit( &Usart1.FifoRx, Usart1RxBuffer, USART1_FIFO_RX_SIZE );
+
+
         // Configure your terminal for 8 Bits data (7 data bit + 1 parity bit), no parity and no flow ctrl
-        UartInit( &Usart2, USART_2, RS485_TX, RS485_RX, PIN_PUSH_PULL);
-        UartConfig( &Usart2, RX_TX, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartInit( &Usart1, USART_1, RS485_TX, RS485_RX, PIN_PUSH_PULL);
+        UartConfig( &Usart1, RX_TX, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
-        UartInit( &Usart1, USART_1, OW_TX, OW_RX, PIN_OPEN_DRAIN );
-        UartConfig( &Usart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartInit( &LpUart1, LPUART_1, OW_TX, OW_RX, PIN_OPEN_DRAIN );
+        UartConfig( &LpUart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
         RtcInit( );
 
@@ -194,11 +201,12 @@ void BoardInitMcu( void )
         SystemClockReConfig( );
     }
     //includes vref and ts
-	for(int i = 0; i < ADC_CHANNEL_COUNT; i++) {
-		GpioInit( &gChannelsPins[i].ptp, gChannelConfig[i].toggle_pin1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-		GpioInit( &gChannelsPins[i].ntp, gChannelConfig[i].toggle_pin2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-		AdcInit( gChannelConfig[i].hadc, &gChannelsPins[i].ap, gChannelConfig[i].analog_pin, gChannelConfig[i].adc_channel);  // Just initialize ADC
-	}
+	GpioInit( &SensorsEn[0], EN0, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+	GpioInit( &SensorsEn[1], EN1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+	GpioInit( &SensorsPolarity, PSEL, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+	AdcInit( ADC, &AdcInP, ADC_IN_P, ADC_CH_P);  // Just initialize ADC
+	AdcInit( ADC, &AdcInN, ADC_IN_N, ADC_CH_N);  // Just initialize ADC
+
 	printf("\n\nCore=%li, %li MHz\n", SystemCoreClock, SystemCoreClock / 1000000);
 	printf("HCLK=%li\n", HAL_RCC_GetHCLKFreq());
 	printf("APB1=%li\n", HAL_RCC_GetPCLK1Freq());
@@ -218,8 +226,8 @@ void BoardDeInitMcu( void )
 {
     AdcDeInit( &AdcVref );
     AdcDeInit( &AdcTempSens );
-    for(int i = 0; i < WL_CHANNEL_COUNT; i++)
-    	AdcDeInit( &gChannelsPins[i].ap );
+    AdcDeInit( &AdcInP );
+    AdcDeInit( &AdcInN );
 
 #if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
     SpiDeInit( &SX126x.Spi );
@@ -638,9 +646,9 @@ void LpmEnterStopMode( void)
     HAL_PWR_DisablePVD( );
 
     // Clear wake up flag
-    SET_BIT( PWR->CR, PWR_CR_CWUF );
+   // SET_BIT( PWR->CR, PWR_CR_CWUF );
 
-    __HAL_RCC_PWR_CLK_ENABLE();
+  //  __HAL_RCC_PWR_CLK_ENABLE();
     // Enter Stop Mode
     HAL_SuspendTick();
     HAL_PWR_EnterSTOPMode( PWR_LOWPOWERREGULATOR_ON, PWR_STOPENTRY_WFI );

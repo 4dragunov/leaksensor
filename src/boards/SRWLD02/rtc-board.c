@@ -421,10 +421,9 @@ uint32_t RtcGetTimerElapsedTime( void )
 {
   RTC_TimeTypeDef time;
   RTC_DateTypeDef date;
-  
-  uint32_t calendarValue = ( uint32_t )RtcGetCalendarValue( &date, &time );
 
-  return( ( uint32_t )( calendarValue - RtcTimerContext.Time ) );
+  uint32_t calendarValue = ( uint32_t )RtcGetCalendarValue( &date, &time );
+  return  ( calendarValue - RtcTimerContext.Time );;
 }
 
 static uint64_t RtcGetCalendarValue( RTC_DateTypeDef* date, RTC_TimeTypeDef* time )

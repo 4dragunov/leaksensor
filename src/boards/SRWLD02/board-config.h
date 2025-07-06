@@ -56,8 +56,17 @@ typedef enum {
 	LED3
 } LedsType;
 
+typedef enum {
+	SE = 0,
+	DIFF,
+} AdcMode_t;
+
 #define LED_ON  1
 #define LED_OFF 0
+
+#define POL_SW_TIME 4
+#define CH_SEL_TIME 2
+#define HALF_SEL_TIME 2
 //Half of channels selection 0- 9
 #define EN0                                         PA_0
 //Half of channels selection 10-19
@@ -80,6 +89,9 @@ typedef enum {
 // Analog adc input channels
 #define ADC_IN_P                                    PB_3
 #define ADC_IN_N                                    PB_4
+#define ADC_CH_P                                    ADC_CHANNEL_2
+#define ADC_CH_N                                    ADC_CHANNEL_3
+#define ADC_MODE									SE
 // Modbus
 #define RS485_RE                                    PB_5
 #define RS485_DE									PA_12
@@ -98,7 +110,7 @@ typedef enum {
 #define SWDIO										PA_13
 #define SWCLK										PA_14
 //Power status - battery or mains
-#define PST											PA_15
+#define BAT_PWR										PA_15
 //Battery i2c
 #define I2C_SCL                                     PB_8
 #define I2C_SDA                                     PA_10

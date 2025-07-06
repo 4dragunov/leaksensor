@@ -22,12 +22,14 @@
 #ifndef RADIO_BOARD_IF_H
 #define RADIO_BOARD_IF_H
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-//#include "platform.h"
+#include "platform.h"
 /* USER CODE BEGIN include */
 
 /* USER CODE END include */

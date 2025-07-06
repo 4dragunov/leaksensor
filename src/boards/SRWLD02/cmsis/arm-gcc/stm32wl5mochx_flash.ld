@@ -44,13 +44,20 @@ _estack = ORIGIN(RAM1) + LENGTH(RAM1); /* end of "RAM1" Ram type memory */
 _Min_Heap_Size = 0x200; /* required amount of heap  */
 _Min_Stack_Size = 0x800; /* required amount of stack */
 
+_EEPROM_PAGES = 4;
+_EEPROM_SIZE = 2K * 2 * _EEPROM_PAGES; /*2x pages*/
+
 /* Memories definition */
 MEMORY
 {
   RAM1   (xrw)   : ORIGIN = 0x20000000, LENGTH = 32K
   NVM_RAM (rw)   : ORIGIN = 0x20008000, LENGTH = 4K
   RAM2   (xrw)   : ORIGIN = 0x20009000, LENGTH = 28K
-  FLASH   (rx)   : ORIGIN = 0x08000000, LENGTH = 248K
+  
+  BOOT    (rx)   : ORIGIN = 0x08000000, LENGTH = 16K
+  FLASH   (rx)   : ORIGIN = 0x08000000, LENGTH = 248K - 4 - _EEPROM_SIZE
+  CRC     (rx)   : ORIGIN = 0x08000000 + 248K - _EEPROM_SIZE - 4, LENGTH = 4
+  EEPROM  (rx)   : ORIGIN = 0x08000000 + 248K - _EEPROM_SIZE,     LENGTH = _EEPROM_SIZE
   USER_Key_region_ROM (rx)    : ORIGIN = 0x0803E500, LENGTH = 768
 }
 
@@ -157,6 +164,14 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
 
   } >RAM1 AT> FLASH
+  
+  .emulated_eeprom :
+  {
+   _emulated_eeprom_start = .;
+   *(.emulated_eeprom)
+   *(.emulated_eeprom.*)
+   _emulated_eeprom_end = .;
+  } >EEPROM
 
   /* NVM RAM Data */
   LW_NVM_RAM (NOLOAD) :

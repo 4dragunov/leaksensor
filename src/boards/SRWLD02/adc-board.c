@@ -34,6 +34,7 @@
   * @brief ADC handle
   */
 extern ADC_HandleTypeDef hadc;
+uint16_t SYS_GetBatteryLevel(void);
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */

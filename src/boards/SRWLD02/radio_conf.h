@@ -27,8 +27,9 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
+#include "stm32wlxx.h"
 #include "platform.h"
-#include "main.h"
+#include "board-config.h"
 #include "stm32_mem.h"       /* RADIO_MEMSET8 def in this file */
 #include "mw_log_conf.h"     /* mw trace conf */
 #include "radio_board_if.h"  /* low layer api (bsp) */
@@ -118,7 +119,7 @@ extern SUBGHZ_HandleTypeDef hsubghz;
 /**
   * @brief SUBGHZ interface init to radio Middleware
   */
-#define RADIO_INIT                              MX_SUBGHZ_Init
+#define RADIO_INIT                              SUBGHZRF_Init
 
 /**
   * @brief Delay interface to radio Middleware

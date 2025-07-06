@@ -33,6 +33,8 @@ typedef enum {
 	CHANNEL_WL7,
 	CHANNEL_WL8,
 	CHANNEL_WL9,
+	CHANNEL_WL_LREF_MIN,
+	CHANNEL_WL_LREF_MAX,
 	CHANNEL_WL10,
 	CHANNEL_WL11,
 	CHANNEL_WL12,
@@ -43,32 +45,21 @@ typedef enum {
 	CHANNEL_WL17,
 	CHANNEL_WL18,
 	CHANNEL_WL19,
+	CHANNEL_WL_HREF_MIN,
+	CHANNEL_WL_HREF_MAX,
 	CHANNEL_TS,
 	CHANNEL_VREF,
 	CHANNEL_COUNT
 	} CHANNEL_IDX;
 
 typedef struct {
-	PinNames toggle_pin1;      // Первый пин для ToggleCurrentDirection
-	PinNames toggle_pin2;      // Второй пин для ToggleCurrentDirection
-	PinNames analog_pin;       // Вход АЦП
-	uint32_t adc_channel;
-	void* hadc;               // Указатель на обработчик АЦП
+	PinNames channel_en_pin;      // Первый пин для ToggleCurrentDirection
+	uint8_t channel_code;
 } ChannelConfig;
 
 bool operator==(const Gpio_t& lhs, const Gpio_t& rhs);
 bool operator==(const Adc_t& lhs, const Adc_t& rhs);
 
-typedef struct ChannelPins{
-	Gpio_t ptp;
-	Gpio_t ntp;
-	Adc_t ap;
-	bool operator==(const ChannelPins &other){
-		return ((ptp == other.ptp) &&
-				(ntp == other.ntp) &&
-				(ap == other.ap));
-	}
-} ChannelPins;
 
 struct Channel{
 	typedef int16_t ValueType;
@@ -92,20 +83,19 @@ struct Channel{
 	    float    div;
 	}Limits;
 
-	Channel(const CHANNEL_IDX id, ChannelPins &pins,  Type type, Limits limits, OnLimit onLimit = nullptr);
+	Channel(const CHANNEL_IDX id, const ChannelConfig &config, const  Type type, const  Limits limits, const OnLimit onLimit = nullptr);
 	virtual ~Channel() = default;
 
 	void Measure(Channel::ValueType &val);
-	Channel::ValueType Process(const ChannelPins& pins);
-	void SetChannels(const ChannelPins& active_channel, uint8_t val);
-	void ToggleCurrentDirection(const Gpio_t &pin1, const Gpio_t &pin2, uint16_t time_delay);
+	Channel::ValueType Process();
+	void ToggleCurrentDirection(uint16_t time_delay);
 	Type chType(){return type;}
 	operator Channel::ValueType&() {Channel::ValueType val; Measure(val); return val;}
     const CHANNEL_IDX idx;
-	ChannelPins &pins;
-	Type type;
-	Limits limits;
-	OnLimit     onLimit;
+	const Type type;
+	const Limits limits;
+	const OnLimit     onLimit;
+	const ChannelConfig &config;
 
 };
 
@@ -210,7 +200,7 @@ typedef struct Samples{
 class DataSampler {
 	friend void SamplerTask(void* argument);
 public:
-	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2> Channels;
+	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2 + 4> Channels;
 
 	 static DataSampler &Instance() {
 		 static DataSampler instance;
@@ -242,8 +232,7 @@ protected:
 	 virtual ~DataSampler();
 	 void DoSamplerTask();
 };
-extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 2];
-extern  ChannelPins gChannelsPins[WL_CHANNEL_COUNT + 2];
+extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 4 + 2];
 #endif
 
 

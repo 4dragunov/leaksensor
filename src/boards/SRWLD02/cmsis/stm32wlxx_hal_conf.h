@@ -85,9 +85,9 @@
 #define USE_HAL_SMBUS_REGISTER_CALLBACKS       0u
 #define USE_HAL_SPI_REGISTER_CALLBACKS         0u
 #define USE_HAL_SUBGHZ_REGISTER_CALLBACKS      0u
-#define USE_HAL_TIM_REGISTER_CALLBACKS         0u
-#define USE_HAL_UART_REGISTER_CALLBACKS        0u
-#define USE_HAL_USART_REGISTER_CALLBACKS       0u
+#define USE_HAL_TIM_REGISTER_CALLBACKS         1u
+#define USE_HAL_UART_REGISTER_CALLBACKS        1u
+#define USE_HAL_USART_REGISTER_CALLBACKS       1u
 #define USE_HAL_WWDG_REGISTER_CALLBACKS        0u
 
 /* ########################## Oscillator Values adaptation ####################*/

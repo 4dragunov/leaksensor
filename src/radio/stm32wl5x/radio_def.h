@@ -40,7 +40,7 @@ extern "C"
 {
 #endif
 /* Includes ------------------------------------------------------------------*/
-
+#include "stm32wlxx.h"
 #include <stdint.h>
 #include <stdbool.h>
 
