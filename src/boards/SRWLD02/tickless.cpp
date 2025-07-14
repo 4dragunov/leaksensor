@@ -4,7 +4,7 @@
 #include <stm32wlxx_ll_pwr.h>
 #include <stm32wlxx_ll_rtc.h>
 
-#include "FreeRtos.h"
+#include "FreeRTOS.h"
 #include "task.h"
 #include "utilities.h"
 #include "rtc-board.h"
@@ -70,12 +70,12 @@ static inline void prvStartTickInterruptTimer(void)
 	portNVIC_SYSTICK_CTRL_REG |= portNVIC_SYSTICK_ENABLE_BIT;
 }
 
-static inline void vSetWakeTimeInterrupt( portTickType xExpectedIdleTime )
+static inline void vSetWakeTimeInterrupt( TickType_t xExpectedIdleTime )
 {
-	auto currenttime = RtcGetTimerValue();
 	auto currentAlarm = RtcGetAlarmValue();
+	auto currenttime = RtcGetTimerValue();
 	if(((currentAlarm - currenttime) * 1000) > xExpectedIdleTime)
-		RtcStartAlarm(xExpectedIdleTime * portTICK_RATE_MS);
+		RtcStartAlarm(xExpectedIdleTime * portTICK_PERIOD_MS);
 }
 
 static inline void disable_interrupts(){

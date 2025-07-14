@@ -1,186 +1,45 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file    lorawan_conf.h
-  * @author  MCD Application Team
-  * @brief   Header for LoRaWAN middleware instances
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+/** Copyright © 2021 The Things Industries B.V.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
+/**
+ * @file lorawan_conf.h
+ *
+ * @copyright Copyright (c) 2021 The Things Industries B.V.
+ *
+ */
+
 #ifndef __LORAWAN_CONF_H__
 #define __LORAWAN_CONF_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-/* Includes ------------------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 
-/* USER CODE END Includes */
+#include "systime.h"
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
 
-/* USER CODE END ET */
+/* Region configuration */
+/* 1- Configuration Region listed below will be linked in the MW code */
+/* 2- Must also configure ACTIVE_REGION in the application */
 
-/* Exported constants --------------------------------------------------------*/
-#if defined(__ICCARM__)
-#define SOFT_SE_PLACE_IN_NVM_START _Pragma(" default_variable_attributes = @ \".USER_embedded_Keys\"")
-#elif defined(__CC_ARM)
-#define SOFT_SE_PLACE_IN_NVM_START _Pragma("  arm section rodata = \".USER_embedded_Keys\"")
-#elif defined(__GNUC__)
-#define SOFT_SE_PLACE_IN_NVM_START __attribute__((section(".USER_embedded_Keys")))
-#endif /* __ICCARM__ | __CC_ARM | __GNUC__ */
-
-/* Stop placing data in specified section*/
-#if defined(__ICCARM__)
-#define SOFT_SE_PLACE_IN_NVM_STOP _Pragma("default_variable_attributes =")
-#elif defined(__CC_ARM)
-#define SOFT_SE_PLACE_IN_NVM_STOP _Pragma("arm section code")
-#endif /* __ICCARM__ | __CC_ARM | __GNUC__ */
-
-/*!
- * @brief LoRaWAN version definition
- * @note  possible values:
- *        - 0x01000300: Link Layer(L2) v1.0.3 + Regional Parameters(RP) v1.0.3
- *        - 0x01000400: Link Layer TS001-1.0.4 + Regional Parameters RP002-1.0.1
- *        - 0x01010100: soon available ...
- */
-#define LORAMAC_SPECIFICATION_VERSION                   0x01000300
-
-/*!
- * @brief Enable the additional LoRaWAN packages
- * @note  LoRaWAN Packages available when enabled:
- *  - Application Layer Clock Synchronization (Package ID: 1, Default Port: 202)
- *  - Remote Multicast Setup (Package ID: 2, Default Port: 200)
- *  - Fragmented Data Block Transport (Package ID: 3, Default Port: 201)
- *  - Firmware Management Protocol (Package ID: 4, Default Port: 203)
- *  The Certification Protocol is also defined as a mandatory package (Package ID: 0, Default Port: 224)
- */
-#define LORAWAN_DATA_DISTRIB_MGT                        0
-
-/*!
- * @brief LoRaWAN packages version
- * @note  When LORAWAN_DATA_DISTRIB_MGT is enabled, 2 possibles values:
- *        - 1: v1.0.0 packages including:
- *             - Application Layer Clock Synchronization v1.0.0
- *             - Remote Multicast Setup v1.0.0
- *             - Fragmented Data Block Transport v1.0.0
- *        - 2: v2.0.0 packages including:
- *             - Application Layer Clock Synchronization v2.0.0
- *             - Remote Multicast Setup v2.0.0
- *             - Fragmented Data Block Transport v2.0.0
- *             - Firmware Management Protocol v1.0.0
- */
-#define LORAWAN_PACKAGES_VERSION                        1
-
-/* Region ------------------------------------*/
-/* the region listed here will be linked in the MW code */
-/* the application (on sys_conf.h) shall just configure one region at the time */
-/*#define REGION_AS923*/
-/*#define REGION_AU915*/
-/*#define REGION_CN470*/
-/*#define REGION_CN779*/
-/*#define REGION_EU433*/
 #define REGION_EU868
-/*#define REGION_KR920*/
-/*#define REGION_IN865*/
-/*#define REGION_US915*/
-#define REGION_RU864
+// #define REGION_US915
+#ifndef LORAMAC_CLASSB_ENABLED
+#define LORAMAC_CLASSB_ENABLED  0
+#endif
 
-/*!
- * @brief Default channel plan for region AS923
- * @note  Possible selections:
- *        - CHANNEL_PLAN_GROUP_AS923_1    (Default configuration. Freq offset = 0.0 MHz / Freq range = 915-928MHz)
- *        - CHANNEL_PLAN_GROUP_AS923_2    (Freq offset = -1.80 MHz / Freq range = 915-928MHz)
- *        - CHANNEL_PLAN_GROUP_AS923_3    (Freq offset = -6.60 MHz / Freq range = 915-928MHz)
- *        - CHANNEL_PLAN_GROUP_AS923_4    (Freq offset = -5.90 MHz / Freq range = 917-920MHz)
- *        - CHANNEL_PLAN_GROUP_AS923_1_JP (Freq offset = 0.0 MHz   / Freq range = 920.6-923.4MHz)
- */
-#define REGION_AS923_DEFAULT_CHANNEL_PLAN              CHANNEL_PLAN_GROUP_AS923_1
-
-/*!
- * @brief Limits the number usable channels by default for AU915, CN470 and US915 regions
- * @note  the default channel mask with this option activates the first 8 channels. \
- *        this default mask can be modified in the RegionXXXXXInitDefaults function associated with the active region.
- */
-#define HYBRID_ENABLED                                  0
-
-/*!
- * @brief Define the read access of the keys in memory
- * @note  this value should be disabled after the development process
- */
-/* USER CODE BEGIN KEY_EXTRACTABLE */
-#define KEY_EXTRACTABLE                                 0
-/* USER CODE END KEY_EXTRACTABLE */
-
-/*!
- * @brief Enables/Disables the context storage management storage
- * @note  Must be enabled for LoRaWAN 1.0.4 or later.
- */
-#define CONTEXT_MANAGEMENT_ENABLED                      0
-
-/* Class B ------------------------------------*/
-/*!
- * @brief Enables/Disables the LoRaWAN Class B (Periodic ping downlink slots + Beacon for synchronization)
- */
-#define LORAMAC_CLASSB_ENABLED                          0
-
-#if ( LORAMAC_CLASSB_ENABLED == 1 )
-/* CLASS B LSE crystal calibration*/
-/*!
- * @brief Temperature coefficient of the clock source
- */
-#define RTC_TEMP_COEFFICIENT                            ( -0.035 )
-
-/*!
- * @brief Temperature coefficient deviation of the clock source
- */
-#define RTC_TEMP_DEV_COEFFICIENT                        ( 0.0035 )
-
-/*!
- * @brief Turnover temperature of the clock source
- */
-#define RTC_TEMP_TURNOVER                               ( 25.0 )
-
-/*!
- * @brief Turnover temperature deviation of the clock source
- */
-#define RTC_TEMP_DEV_TURNOVER                           ( 5.0 )
-#endif /* LORAMAC_CLASSB_ENABLED == 1 */
-
-/*!
- * @brief Disable the ClassA receive windows after Tx (after the Join Accept if OTAA mode defined)
- * @note  Behavior to reduce power consumption but not compliant with LoRa Alliance recommendations.
- *        All device parameters (Spreading Factor, channels selection, Tx Power, ...) should be fixed
- *        and the adaptive datarate should be disabled.
- * @warning This limitation may have consequences for the proper functioning of the device,
- *          if the LoRaMac ever generates MAC commands that require a response.
- */
-#define DISABLE_LORAWAN_RX_WINDOW                       0
-
-/* USER CODE BEGIN EC */
-
-/* USER CODE END EC */
-
-/* External variables --------------------------------------------------------*/
-/* USER CODE BEGIN EV */
-
-/* USER CODE END EV */
-
-/* Exported macro ------------------------------------------------------------*/
 #ifndef CRITICAL_SECTION_BEGIN
 #define CRITICAL_SECTION_BEGIN( )      UTILS_ENTER_CRITICAL_SECTION( )
 #endif /* !CRITICAL_SECTION_BEGIN */
@@ -188,14 +47,178 @@ extern "C" {
 #define CRITICAL_SECTION_END( )        UTILS_EXIT_CRITICAL_SECTION( )
 #endif /* !CRITICAL_SECTION_END */
 
-/* USER CODE BEGIN EM */
+/**
+ * @brief Maximum time to wait to receive a downlink packet or event after sending an uplink packet.
+ *
+ * As per LoRaWAN spec, class A end device uses two receive windows slots after sending an uplink packet. For US915the max window duration is
+ * 3000 ms and the second RX window max delay is 2 seconds. So setting the receive timeout to higher than the receive window slots.
+ */
+#define CLASSA_RECEIVE_WINDOW_DURATION_MS    ( 6000 )
 
-/* USER CODE END EM */
+/*
+ * @brief The version of LoRaWAN stack on Network Server, to be configured beforehand, only required for ABP activation.
+ * Version is set by default to 1.0.3.0.
+ */
+#define lorawanConfigABP_LORAWAN_VERSION        0x01000300
 
-/* Exported functions prototypes ---------------------------------------------*/
-/* USER CODE BEGIN EFP */
+/*
+ * @brief LoRaWAN network ID, only required for ABP activation.
+ */
+#define lorawanConfigNETWORK_ID                 ( ( uint32_t ) ( 0 ) )
 
-/* USER CODE END EFP */
+/**
+ * @brief Flag to indicate if application is using a public network such
+ * as The Things Network.
+ */
+#define lorawanConfigPUBLIC_NETWORK             ( 1 )
+
+/**
+ * @brief Maximum join attempts before giving up.
+ *
+ * Retry attempts tries to send join requests in different channels thereby finding a suitable gateway which
+ * is tuned to that channel.
+ */
+#define lorawanConfigMAX_JOIN_ATTEMPTS    ( 1000 )
+
+/**
+ * @brief Interval between retry attempts for OTAA join.
+ * It waits for a retry interval +- random jitter ( to avoid dos ) before attempting to
+ * join again with LoRaWAN network.
+ */
+#define lorawanConfigJOIN_RETRY_INTERVAL_MS    ( 2000 )
+
+/**
+ * @brief Defines a random jitter bound in milliseconds for application data transmission duty cycle.
+ *
+ * This allows devices to space their transmissions slightly between each other in cases like all devices reboots and tries to
+ * join server at same time.
+ */
+#define lorawanConfigMAX_JITTER_MS    ( 500 )
+
+/**
+ * @brief Default config to enable or disable adaptive data rate.
+ *
+ * Enabling adaptive data rate allows the network to set optimized data rates for end devices
+ * thereby optimizing on air time and power consumption. Its recommended to enable adaptive
+ * data rate for static devices and devices with stable RF conditions.
+ * Adaptive data rate can be toggled runtime using API.
+ *
+ */
+#define lorawanConfigADR_ON    ( 1 )
+
+/**
+ * @brief Default config to set the number of retries of a failed send attempt.
+ *
+ */
+#define lorawanConfigMAX_SEND_RETRIES    ( 8 )
+
+/**
+ * @brief Overall timing error threshold for the system.
+ */
+#define lorawanConfigRX_MAX_TIMING_ERROR    ( 50 )
+
+/**
+ * @brief Maximum payload length defined by LoRaWAN spec
+ *
+ * This can be used to cap the maximum packet size that can be transferred anytime by the application.
+ * LoRaWAN payload can vary up to 222 bytes. However applications should take care of duty cycle restrictions and
+ * fair access policies for each region while determining the size of a message to be transmitted.
+ * Larger messages leads to longer air-time and increased power consumption for the
+ * radio as well as using up all of the duty cycle for a channel.
+ */
+#define lorawanConfigMAX_MESSAGE_SIZE    ( 222 )
+
+/**
+ * @brief Size of response queue used to receive responses to requests.
+ * Queue is used to separate out events from responses so application can do a synchronous call to
+ * join to a network or send a confirmed message. Since there is at most 1 LoRaWAN operation at a time, queue size
+ * is set to 1.
+ */
+#define lorawanConfigRESPONSE_QUEUE_SIZE    ( 1 )
+
+/**
+ * @brief Queue size for downlink data.
+ *
+ * Class A application sends an uplink and then polls for downlink messages, the next two receive windows. Only one message is sent
+ * by downlink server for each uplink. Hence setting the queue size to 1.
+ */
+#define lorawanConfigDOWNLINK_QUEUE_SIZE    ( 1 )
+
+/**
+ * @brief Queue size for downlink events.
+ *
+ * For class A application at most 4 events can be received downlink per uplink at any time (SRV_MAC_LINK_CHECK_ANS, SRV_MAC_DEVICE_TIME_ANS, FRAME LOSS, DOWNLINK DATA)
+ * Queue size can be adjusted based on application needs.
+ */
+#define lorawanConfigEVENT_QUEUE_SIZE       ( 4 )
+
+/**
+ * @brief Stack size for LoRaMAC task.
+ * Set to a reasonable size as required for LoRaMAC layer functions.
+ */
+#define lorawanConfigLORAMAC_TASK_STACK_SIZE    ( 512 )
+
+/**
+ * @brief Priority for LoRaMAC task.
+ * LoRaMAC task is set to wake up on interrupts from radio layer and needs to process
+ * radio interrupts as soon as possible. Hence setting to the max possible priority.
+ */
+#define lorawanConfigLORAMAC_TASK_PRIORITY      ( configMAX_PRIORITIES - 1 )
+
+/**
+ * @brief Device EUI is a globally Unique identifier used to identify the devices across LoRaWAN networks.
+ * Device EUI is a 64 bit value and returned as an array of 8 hex byte values in big endian form.
+ * Example: { 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE }
+ *
+ * Note: If the device EUI is pre-provisioned using a secure element, remove this config parameter to use the pre-provisioned value.
+ */
+extern void getDeviceEUI( uint8_t * deviceEUI );
+#define lorawanConfigGET_DEV_EUI    getDeviceEUI
+
+/**
+ * @brief IN EUI or APP EUI is a globally Unique identifier used to identify the application this device is associated with..
+ * Join EUI is a 64 bit value and returned as an array of 8 hex values in big endian form.
+ * Example: { 0x11, 0x22, 0x33, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE }
+ *
+ * Note: If the join EUI is pre-provisioned using a secure element, remove this config parameter to use the pre-provisioned value.
+ */
+extern void getJoinEUI( uint8_t * joinEUI );
+#define lorawanConfigGET_JOIN_EUI    getJoinEUI
+
+/**
+ * @brief App key is used to derive session keys used for OTAA join session.
+ * App key is a 128 bit value and returned as an array of 16 hex values in big endian form.
+ *
+ * Note: If the App key is pre-provisioned using a secure element, remove this config parameter to use the pre-provisioned value.
+ */
+extern void getAppKey( uint8_t * appKey );
+#define lorawanConfigGET_APP_KEY    getAppKey
+
+/**
+ * @brief End-device address which is only used for ABP join .
+ *
+ */
+extern uint32_t getDeviceAddress( void );
+#define lorawanConfigGET_DEV_ADDR    getDeviceAddress
+
+/**
+ * @brief Application Session key to be configured beforehand, only required for ABP join.
+ * Application session key is a 128 bit value and returned as an array of 16 hex values in big endian form.
+ *
+ *  Note: If the application session key is pre-provisioned using a secure element, remove this config parameter to use the pre-provisioned value.
+ */
+extern void getGetAppSessionKey( uint8_t * appSessionKey );
+#define lorawanConfigGET_APP_SESSION_KEY    getGetAppSessionKey
+
+/**
+ * @brief Network session key to be configured beforehand, only required for ABP join.
+ * Network session key is a 128 bit value and returned as an array of 16 hex values in big endian form.
+ *
+ *  Note: If the network session key is pre-provisioned using a secure element, remove this config parameter to use the pre-provisioned value.
+ */
+extern void getGetNwkSessionKey( uint8_t * nwkSessionKey );
+#define lorawanConfigGET_NETWORK_SESSION_KEY    getGetNwkSessionKey
+
 
 #ifdef __cplusplus
 }

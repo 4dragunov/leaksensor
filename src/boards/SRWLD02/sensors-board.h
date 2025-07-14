@@ -113,6 +113,7 @@ typedef struct Samples{
     struct timeval timestamp;
     friend std::ostream& operator<<(std::ostream& os, const struct timeval& t){
     	std::cout << "s:" << t.tv_sec << " us:" << t.tv_usec << std::endl;
+    	return os;
     }
 
     friend  std::ostream& operator<<(std::ostream& os, const Samples& s) {
@@ -121,6 +122,7 @@ typedef struct Samples{
     	for(int i = 0; i <  19; i++){
     		std::cout << i << ":" << s.data.raw[i] << std::endl;
     	}
+    	return os;
     }
 
 	inline bool operator==(const Samples& other)

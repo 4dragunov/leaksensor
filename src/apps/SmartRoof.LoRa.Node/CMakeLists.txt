@@ -105,7 +105,7 @@ add_executable(${PROJECT_NAME}-${SUB_PROJECT}
                             $<TARGET_OBJECTS:${BOARD}>
 )
 
-target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE $<$<BOOL:${CLASSB_ENABLED}>:LORAMAC_CLASSB_ENABLED>)
+target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE LORAMAC_CLASSB_ENABLED="$<IF:$<BOOL:${CLASSB_ENABLED}>,1,0>")
 target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE ACTIVE_REGION=${ACTIVE_REGION})
 target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE $<$<CONFIG:Debug>:DEBUG>)
 

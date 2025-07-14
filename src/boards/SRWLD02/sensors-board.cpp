@@ -21,8 +21,6 @@
 #include "board-config.h"
 #include "adc.h"
 
-#define TEMPSENSOR_CAL1_ADDR               ((uint16_t*) (0x1FF800FAU))
-#define TEMPSENSOR_CAL2_ADDR               ((uint16_t*) (0x1FF800FEU))
 
 #define TEMPSENSOR_V25_TEMP           25.0
 

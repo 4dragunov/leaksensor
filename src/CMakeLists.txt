@@ -77,7 +77,7 @@ if(BOARD STREQUAL SRWLD01)
     endif()
 elseif(BOARD STREQUAL SRWLD02)
     # Configure toolchain for stm32fwl55
-    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02/cmsis/arm-gcc/stm32wl55_flash.ld)
+    set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02/cmsis/arm-gcc/stm32wl5mochx_flash.ld)
     include(stm32wl5x)
 
     # Build platform specific board implementation

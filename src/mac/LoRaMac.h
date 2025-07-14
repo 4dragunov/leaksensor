@@ -480,6 +480,8 @@ typedef enum eLoRaMacEventInfoStatus
      * ToDo
      */
     LORAMAC_EVENT_INFO_STATUS_BEACON_NOT_FOUND,
+
+	LORAMAC_EVENT_INFO_STATUS_DOWNLINK_TOO_MANY_FRAMES_LOSS,
 }LoRaMacEventInfoStatus_t;
 
 /*!
@@ -906,6 +908,8 @@ typedef struct sMcpsReqConfirmed
      * Uplink datarate, if ADR is off
      */
     int8_t Datarate;
+//TODO:Fix Usage of newly added!
+    uint8_t NbTrials;
 }McpsReqConfirmed_t;
 
 /*!
@@ -1205,6 +1209,7 @@ typedef enum eMlme
      * \remark The upper layer is required to trigger the Join process again.
      */
     MLME_REVERT_JOIN,
+	MLME_SCHEDULE_UPLINK,
 }Mlme_t;
 
 /*!

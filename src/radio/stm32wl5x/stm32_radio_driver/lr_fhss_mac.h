@@ -42,7 +42,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "radio_def.h"
+#include "radio.h"
 #include "lr_fhss_v1_base_types.h"
 
 /*

@@ -25,7 +25,7 @@ extern "C" {
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "radio_def.h"
+#include "../radio.h"
 #include "radio_ex.h"
 
 /* Exported types ------------------------------------------------------------*/

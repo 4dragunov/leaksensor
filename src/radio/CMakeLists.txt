@@ -89,7 +89,7 @@ elseif(${RADIO} STREQUAL sx1276)
         ${CMAKE_CURRENT_SOURCE_DIR}/sx1276
     )
 elseif(${RADIO} STREQUAL stm32wl5xx)
-target_compile_definitions(${PROJECT_NAME} PUBLIC  STM32WL5XX)
+target_compile_definitions(${PROJECT_NAME} PUBLIC  STM32WL55xx USE_HAL_DRIVER USE_BSP_DRIVER)
 message(STATUS "RADIO_HAL ${DIR_ONE_ABOVE}/boards/mcu/stm32/STM32WLxx_HAL_Driver/Inc")
     list(APPEND ${PROJECT_NAME}_INCLUDES
        ${CMAKE_CURRENT_SOURCE_DIR}/stm32wl5x

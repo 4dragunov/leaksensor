@@ -166,7 +166,7 @@ static void prvMcpsIndication( McpsIndication_t * mcpsIndication )
     /* Check Multicast */
     /* Check Port */
     /* Check Datarate */
-    if( mcpsIndication->FramePending == true )
+    if( mcpsIndication->IsUplinkTxPending == true )
     {
         /**
          * There are some pending commands to be sent uplink. Set an uplink event for the control task to
@@ -412,8 +412,9 @@ static LoRaMacStatus_t prvSetABPCredentials( void )
         if( status == LORAMAC_STATUS_OK )
         {
             lorawanConfigGET_NETWORK_SESSION_KEY( nwsKey );
-            mibReq.Type = MIB_NWK_S_KEY;
-            mibReq.Param.NwkSKey = nwsKey;
+//TODO:FIX this
+       //     mibReq.Type = MIB_NWK_S_KEY;
+       //     mibReq.Param.NwkSKey = nwsKey;
             status = LoRaMacMibSetRequestConfirm( &mibReq );
         }
     #endif
@@ -523,10 +524,13 @@ LoRaMacStatus_t LoRaWAN_Init( LoRaMacRegion_t region )
     {
         if( xTaskCreate( prvLoRaMACTask, "LoRaMac", lorawanConfigLORAMAC_TASK_STACK_SIZE, NULL, lorawanConfigLORAMAC_TASK_PRIORITY, &xLoRaMacTask ) == pdTRUE )
         {
+//TODO:FIX commented!
+        	/*
             if( Radio.SetEventNotify != NULL )
             {
                 Radio.SetEventNotify( &prvOnRadioNotify );
             }
+            */
         }
         else
         {
@@ -795,13 +799,15 @@ LoRaMacStatus_t LoRaWAN_Send( LoRaWANMessage_t * pMessage,
             mcpsReq.Req.Confirmed.fPort = pMessage->port;
             mcpsReq.Req.Confirmed.fBuffer = pMessage->data;
             mcpsReq.Req.Confirmed.fBufferSize = pMessage->length;
+
             mcpsReq.Req.Confirmed.NbTrials = lorawanConfigMAX_SEND_RETRIES;
             mcpsReq.Req.Confirmed.Datarate = pMessage->dataRate;
         }
 
         do
         {
-            status = LoRaMacMcpsRequest( &mcpsReq, false );
+//TODO:Fix removed false parameter!
+            status = LoRaMacMcpsRequest( &mcpsReq );
             ulDutyCycleTimeMS = mcpsReq.ReqReturn.DutyCycleWaitTime;
 
             if( status == LORAMAC_STATUS_DUTYCYCLE_RESTRICTED )
@@ -867,11 +873,3 @@ void LoRaWAN_Cleanup( void )
     vQueueDelete( xEventQueue );
     vQueueDelete( xResponseQueue );
 }
-
-/* Unique ID for the board used by LoRaMAC APIs. */
-#ifdef lorawanConfigGET_DEV_EUI
-    void BoardGetUniqueId( uint8_t * id )
-    {
-        lorawanConfigGET_DEV_EUI( id );
-    }
-#endif

@@ -1,117 +1,150 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file    timer.h
-  * @author  MCD Application Team
-  * @brief   Wrapper to timer server
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-
-/* Define to prevent recursive inclusion -------------------------------------*/
+/*!
+ * \file      timer.h
+ *
+ * \brief     Timer objects and scheduling management implementation
+ *
+ * \copyright Revised BSD License, see section \ref LICENSE.
+ *
+ * \code
+ *                ______                              _
+ *               / _____)             _              | |
+ *              ( (____  _____ ____ _| |_ _____  ____| |__
+ *               \____ \| ___ |    (_   _) ___ |/ ___)  _ \
+ *               _____) ) ____| | | || |_| ____( (___| | | |
+ *              (______/|_____)_|_|_| \__)_____)\____)_| |_|
+ *              (C)2013-2017 Semtech
+ *
+ * \endcode
+ *
+ * \author    Miguel Luis ( Semtech )
+ *
+ * \author    Gregory Cristian ( Semtech )
+ */
 #ifndef __TIMER_H__
 #define __TIMER_H__
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/* Includes ------------------------------------------------------------------*/
-#include "stm32_timer.h"
-/* USER CODE BEGIN Includes */
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-/* USER CODE END Includes */
+/*!
+ * \brief Timer object description
+ *  Forward declaration of the Timer event structure.
+ */
+struct TimerEvent_s;
+typedef struct TimerEvent_s * TimerEvent_t;
 
-/* Exported types ------------------------------------------------------------*/
-/* USER CODE BEGIN ET */
+/*!
+ * \brief Timer time variable definition
+ */
+#ifndef TimerTime_t
+typedef uint32_t TimerTime_t;
+#define TIMERTIME_T_MAX                             ( ( uint32_t )~0 )
+#endif
 
-/* USER CODE END ET */
+/*!
+ * \brief Initializes the timer object
+ *
+ * \remark TimerSetValue function must be called before starting the timer.
+ *         this function initializes timestamp and reload value at 0.
+ *
+ * \param [IN] obj          Structure containing the timer object parameters
+ * \param [IN] callback     Function callback called at the end of the timeout
+ */
+void TimerInit( TimerEvent_t *obj, void ( *callback )( void *context ) );
 
-/* Exported constants --------------------------------------------------------*/
-/**
-  * @brief Max timer mask
-  */
-#define TIMERTIME_T_MAX ( ( uint32_t )~0 )
+/*!
+ * \brief Sets a user defined object pointer
+ *
+ * \param [IN] context User defined data object pointer to pass back
+ *                     on IRQ handler callback
+ */
+void TimerSetContext( TimerEvent_t *obj, void* context );
 
-/* USER CODE BEGIN EC */
+/*!
+ * Timer IRQ event handler
+ */
+void TimerIrqHandler( void );
 
-/* USER CODE END EC */
+/*!
+ * \brief Starts and adds the timer object to the list of timer events
+ *
+ * \param [IN] obj Structure containing the timer object parameters
+ */
+void TimerStart( TimerEvent_t *obj );
 
-/* External variables --------------------------------------------------------*/
-/* USER CODE BEGIN EV */
+/*!
+ * \brief Checks if the provided timer is running
+ *
+ * \param [IN] obj Structure containing the timer object parameters
+ *
+ * \retval status  returns the timer activity status [true: Started,
+ *                                                    false: Stopped]
+ */
+bool TimerIsStarted( TimerEvent_t *obj );
 
-/* USER CODE END EV */
+/*!
+ * \brief Stops and removes the timer object from the list of timer events
+ *
+ * \param [IN] obj Structure containing the timer object parameters
+ */
+void TimerStop( TimerEvent_t *obj );
 
-/* Exported macro ------------------------------------------------------------*/
-/**
-  * @brief Timer value on 32 bits
-  */
-#define TimerTime_t UTIL_TIMER_Time_t
+/*!
+ * \brief Resets the timer object
+ *
+ * \param [IN] obj Structure containing the timer object parameters
+ */
+void TimerReset( TimerEvent_t *obj );
 
-/**
-  * @brief Timer object description
-  */
-#define TimerEvent_t UTIL_TIMER_Object_t
+/*!
+ * \brief Set timer new timeout value
+ *
+ * \param [IN] obj   Structure containing the timer object parameters
+ * \param [IN] value New timer timeout value
+ */
+void TimerSetValue( TimerEvent_t *obj, uint32_t value );
 
-/**
-  * @brief Create the timer object
-  */
-#define TimerInit(HANDLE, CB) do {\
-                                   UTIL_TIMER_Create( HANDLE, TIMERTIME_T_MAX, UTIL_TIMER_ONESHOT, CB, NULL);\
-                                 } while(0)
+/*!
+ * \brief Read the current time
+ *
+ * \retval time returns current time
+ */
+TimerTime_t TimerGetCurrentTime( void );
 
-/**
-  * @brief update the period and start the timer
-  */
-#define TimerSetValue(HANDLE, TIMEOUT) do{ \
-                                           UTIL_TIMER_SetPeriod(HANDLE, TIMEOUT);\
-                                         } while(0)
+/*!
+ * \brief Return the Time elapsed since a fix moment in Time
+ *
+ * \remark TimerGetElapsedTime will return 0 for argument 0.
+ *
+ * \param [IN] past         fix moment in Time
+ * \retval time             returns elapsed time
+ */
+TimerTime_t TimerGetElapsedTime( TimerTime_t past );
 
-/**
-  * @brief Start and adds the timer object to the list of timer events
-  */
-#define TimerStart(HANDLE)   do {\
-                                  UTIL_TIMER_Start(HANDLE);\
-                                } while(0)
+/*!
+ * \brief Computes the temperature compensation for a period of time on a
+ *        specific temperature.
+ *
+ * \param [IN] period Time period to compensate
+ * \param [IN] temperature Current temperature
+ *
+ * \retval Compensated time period
+ */
+TimerTime_t TimerTempCompensation( TimerTime_t period, float temperature );
 
-/**
-  * @brief Stop and removes the timer object from the list of timer events
-  */
-#define TimerStop(HANDLE)   do {\
-                                 UTIL_TIMER_Stop(HANDLE);\
-                               } while(0)
-
-/**
-  * @brief return the current time
-  */
-#define TimerGetCurrentTime  UTIL_TIMER_GetCurrentTime
-
-/**
-  * @brief return the elapsed time
-  */
-#define TimerGetElapsedTime UTIL_TIMER_GetElapsedTime
-
-/* USER CODE BEGIN EM */
-
-/* USER CODE END EM */
-
-/* Exported functions prototypes ---------------------------------------------*/
-/* USER CODE BEGIN EFP */
-
-/* USER CODE END EFP */
+/*!
+ * \brief Processes pending timer events
+ */
+void TimerProcess( void );
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __TIMER_H__*/
+#endif // __TIMER_H__

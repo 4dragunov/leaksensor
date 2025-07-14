@@ -292,6 +292,7 @@ void RtcSetAlarm( uint32_t timeout )
     RtcStartAlarm( timeout );
 }
 
+
 void RtcStopAlarm( void )
 {
     // Disable the Alarm A interrupt
@@ -301,7 +302,7 @@ void RtcStopAlarm( void )
     __HAL_RTC_ALARM_CLEAR_FLAG( &RtcHandle, RTC_FLAG_ALRAF );
 
     // Clear the EXTI's line Flag for RTC Alarm
-    __HAL_RTC_ALARM_EXTI_CLEAR_FLAG( );
+    EXTI->PR1 = RTC_EXTI_LINE_ALARM_EVENT;
 }
 
 void RtcStartAlarm( uint32_t timeout )
@@ -490,7 +491,7 @@ void RTC_Alarm_IRQHandler( void )
     LpmSetStopMode( LPM_RTC_ID, LPM_ENABLE );
 
     // Clear the EXTI's line Flag for RTC Alarm
-    __HAL_RTC_ALARM_EXTI_CLEAR_FLAG( );
+    EXTI->PR1 = RTC_EXTI_LINE_ALARM_EVENT;
 
     // Gets the AlarmA interrupt source enable status
     if( __HAL_RTC_ALARM_GET_IT_SOURCE( hrtc, RTC_IT_ALRA ) != RESET )
@@ -513,7 +514,7 @@ void RTC_Alarm_IRQHandler( void )
  */
 void HAL_RTC_AlarmAEventCallback( RTC_HandleTypeDef *hrtc )
 {
-    TimerIrqHandler( );
+
 }
 
 void RtcBkupWrite( uint32_t data0, uint32_t data1 )

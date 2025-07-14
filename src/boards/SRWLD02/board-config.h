@@ -52,8 +52,6 @@ extern "C"
 
 typedef enum {
 	LED1 = 0,
-	LED2,
-	LED3
 } LedsType;
 
 typedef enum {

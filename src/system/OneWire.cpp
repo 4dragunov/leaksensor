@@ -361,14 +361,13 @@ void Bus::selectWithPointer(uint8_t* ROM)
 
 void Bus::setPd(bool enabled){
 	if(mPdState!=enabled && enabled) {
-		mPdState = enabled;
+
 #ifdef OW_PD
 		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, OW_PD_ON );
 #endif
 		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_PUSH_PULL, PIN_PULL_UP, 1 );
 		DBG("enabling PD\n");
-	}else if(mPdState!= enabled &&!enabled){
-		mPdState = enabled;
+	}else if(mPdState!= enabled){
 		resetUART();
 #ifdef OW_PD
 		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, !OW_PD_ON );
@@ -376,7 +375,7 @@ void Bus::setPd(bool enabled){
 		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 		DBG("disabling PD\n");
 	}
-
+	mPdState = enabled;
 }
 
 } //namespace OneWire

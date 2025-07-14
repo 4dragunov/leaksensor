@@ -1,150 +1,114 @@
-/**
-  ******************************************************************************
-  * @file    stm32wlxx_nucleo_radio.h
-  * @author  MCD Application Team
-  * @brief   Header for stm32wlxx_nucleo_radio.c
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2020-2021 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+/** Copyright © 2021 The Things Industries B.V.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef STM32WLXX_NUCLEO_RADIO_H
-#define STM32WLXX_NUCLEO_RADIO_H
+/**
+ * @file GNSE_radio.h
+ *
+ * @copyright Copyright (c) 2021 The Things Industries B.V.
+ *
+ */
+
+#ifndef GNSE_BSP_RADIO_H
+#define GNSE_BSP_RADIO_H
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
+#include "stm32wlxx_hal.h"
 
-   
-/** @addtogroup BSP
-  * @{
-  */
-
-/** @addtogroup STM32WLXX_NUCLEO STM32WLXX-NUCLEO
-  * @{
-  */
-
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL RADIO LOW LEVEL
-  * @{
-  */
-
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL_Exported_Types RADIO LOW LEVEL Exported Types
-  * @{
-  */
-
-typedef enum 
-{
-  RADIO_SWITCH_OFF    = 0,
-  RADIO_SWITCH_RX     = 1,
-  RADIO_SWITCH_RFO_LP = 2,
-  RADIO_SWITCH_RFO_HP = 3,
-}BSP_RADIO_Switch_TypeDef;
+extern SUBGHZ_HandleTypeDef hsubghz; // `hsubghz` is used by radio_driver.c (can't rename!)
 
 typedef enum
 {
-  RADIO_RFO_LP_MAXPOWER = 0,
-  RADIO_RFO_HP_MAXPOWER,
-} BSP_RADIO_RFOMaxPowerConfig_TypeDef;
+RBI_SWITCH_OFF    = 0,
+RBI_SWITCH_RX     = 1,
+RBI_SWITCH_RFO_LP = 2,
+RBI_SWITCH_RFO_HP = 3,
 
-/**
-  * @}
-  */
+} RBI_Switch_TypeDef;
 
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL_Exported_Constants RADIO LOW LEVEL Exported Constants
-  * @{
-  */
+typedef enum
+{
+	RADIO_RFO_LP_MAXPOWER = 0,
+	RADIO_RFO_HP_MAXPOWER,
+} HAL_RADIO_RFOMaxPowerConfig_TypeDef;
 
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL_RADIOCONFIG RADIO LOW LEVEL RADIO CONFIG Constants
-  * @{
-  */
-#define RADIO_CONF_RFO_LP_HP                     0U
-#define RADIO_CONF_RFO_LP                        1U
-#define RADIO_CONF_RFO_HP                        2U
+typedef enum
+{
+	RBI_RFO_LP_MAXPOWER = RADIO_RFO_LP_MAXPOWER,
+	RBI_RFO_HP_MAXPOWER = RADIO_RFO_HP_MAXPOWER,
+} RBI_RFOMaxPowerConfig_TypeDef;
 
-#define RADIO_CONF_TCXO_NOT_SUPPORTED            0U
-#define RADIO_CONF_TCXO_SUPPORTED                1U
+#define RBI_CONF_RFO_LP_HP  0
+#define RBI_CONF_RFO_LP     1
+#define RBI_CONF_RFO_HP     2
 
-#define RADIO_CONF_DCDC_NOT_SUPPORTED            0U
-#define RADIO_CONF_DCDC_SUPPORTED                1U
+/* Indicates the type of switch between the ones proposed by CONFIG Constants
+ */
+#define RBI_CONF_RFO                        RBI_CONF_RFO_LP_HP
 
-#define RADIO_CONF_RFO_HP_MAX_22_dBm  ((int32_t) 22)
-#define RADIO_CONF_RFO_HP_MAX_20_dBm  ((int32_t) 20)
-#define RADIO_CONF_RFO_HP_MAX_17_dBm  ((int32_t) 17)
-#define RADIO_CONF_RFO_HP_MAX_14_dBm  ((int32_t) 14)
-#define RADIO_CONF_RFO_LP_MAX_15_dBm  ((int32_t) 15)
-#define RADIO_CONF_RFO_LP_MAX_14_dBm  ((int32_t) 14)
-#define RADIO_CONF_RFO_LP_MAX_10_dBm  ((int32_t) 10)
+/* Radio maximum wakeup time (in ms) */
+#define RF_WAKEUP_TIME                     10U
 
-/**
-  * @}
-  */
+/* Indicates whether or not TCXO is supported by the board
+ * 0: TCXO not supported
+ * 1: TCXO supported
+ */
+#define IS_TCXO_SUPPORTED                   1U
 
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL_RFSWITCH RADIO LOW LEVEL RF SWITCH Constants
-  * @{
-  */
+/* Indicates whether or not DCDC is supported by the board
+ * 0: DCDC not supported
+ * 1: DCDC supported
+ */
+#define IS_DCDC_SUPPORTED                   1U
 
-#define RF_SW_CTRL3_PIN                          GPIO_PIN_11
-#define RF_SW_CTRL3_GPIO_PORT                    GPIOA
-#define RF_SW_CTRL3_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
-#define RF_SW_CTRL3_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOA_CLK_DISABLE()
+#define RF_SW_CTRL3_PIN                          GPIO_PIN_8
+#define RF_SW_CTRL3_GPIO_PORT                    GPIOB
+#define RF_SW_CTRL3_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOB_CLK_ENABLE()
+#define RF_SW_CTRL3_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOB_CLK_DISABLE()
 
-#define RF_SW_CTRL2_PIN                          GPIO_PIN_13
-#define RF_SW_CTRL2_GPIO_PORT                    GPIOC
-#define RF_SW_CTRL2_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOC_CLK_ENABLE()
-#define RF_SW_CTRL2_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOC_CLK_DISABLE()
+#define RF_SW_CTRL1_PIN                          GPIO_PIN_0
+#define RF_SW_CTRL1_GPIO_PORT                    GPIOA
+#define RF_SW_CTRL1_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
+#define RF_SW_RX_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOA_CLK_DISABLE()
 
+#define RF_SW_CTRL2_PIN                          GPIO_PIN_1
+#define RF_SW_CTRL2_GPIO_PORT                    GPIOA
+#define RF_SW_CTRL2_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
+#define RF_SW_CTRL2_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOA_CLK_DISABLE()
+
+/* A verifier car le TCXO est genere par la clock config */
 #define RF_TCXO_VCC_PIN                          GPIO_PIN_0
 #define RF_TCXO_VCC_GPIO_PORT                    GPIOB
 #define RF_TCXO_VCC_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
 #define RF_TCXO_VCC_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
-/**
- * @}
- */
 
-/**
-  * @}
-  */
+int32_t BSP_SUBGHZ_Init(void);
+int32_t RBI_Init(void);
+int32_t RBI_DeInit(void);
+int32_t RBI_ConfigRFSwitch(RBI_Switch_TypeDef Config);
+int32_t RBI_GetRFOMaxPowerConfig(RBI_RFOMaxPowerConfig_TypeDef Config);
+int32_t RBI_GetTxConfig(void);
+int32_t RBI_GetWakeUpTime(void);
+int32_t RBI_IsTCXO(void);
+int32_t RBI_IsDCDC(void);
 
-/** @defgroup STM32WLXX_NUCLEO_RADIO_LOW_LEVEL_Exported_Functions RADIO LOW LEVEL Exported Functions
-  * @{
-  */
-int32_t BSP_RADIO_Init(void);
-int32_t BSP_RADIO_DeInit(void);
-int32_t BSP_RADIO_ConfigRFSwitch(BSP_RADIO_Switch_TypeDef Config);
-int32_t BSP_RADIO_GetTxConfig(void);
-int32_t BSP_RADIO_IsTCXO(void);
-int32_t BSP_RADIO_IsDCDC(void);
-int32_t BSP_RADIO_GetRFOMaxPowerConfig(BSP_RADIO_RFOMaxPowerConfig_TypeDef Config);
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* STM32WLXX_NUCLEO_RADIO_H */
+#endif /* GNSE_BSP_RADIO_H */
