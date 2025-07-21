@@ -245,7 +245,9 @@ Channel::Channel(const CHANNEL_IDX id, ChannelPins &pins, Type type, Limits limi
 		pins(pins),
 		type(type),
 		limits(limits),
-		onLimit(onLimit)
+		onLimit(onLimit),
+		shift(0),
+		scale(1)
 {
 }
 
@@ -341,7 +343,7 @@ DataSampler::DataSampler():
 		mSamplesMq(osMessageQueueNew(1, sizeof(Samples*), nullptr)),
 		mMav(),
 		mTs(),
-		mSamplePeriod(),
+		mSamplePeriodReal(),
 		mTaskHandle(osThreadNew(SamplerTask, this, &thread_attr))
 {
 }
@@ -421,7 +423,7 @@ void DataSampler::DoSamplerTask()
 				}
 			}
 			gettimeofday(&sensorsData->timestamp, 0);
-			mSamplePeriod = sensorsData->timestamp - mTs;
+			mSamplePeriodReal = sensorsData->timestamp - mTs;
 			*sensorsData = mMav.Filter(sensorsData);
 			vdda_voltage = (vdda_voltage + CALC_VDDA((*sensorsData)[CHANNEL_VREF]))/2.0;//mV;
 			mTs = sensorsData->timestamp;

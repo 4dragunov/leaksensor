@@ -430,18 +430,17 @@ uint32_t RtcGetTimerElapsedTime( void )
 static uint64_t RtcGetCalendarValue( RTC_DateTypeDef* date, RTC_TimeTypeDef* time )
 {
     uint64_t calendarValue = 0;
-    uint32_t firstRead;
     uint32_t correction;
     uint32_t seconds;
-
+    CRITICAL_SECTION_BEGIN( );
     // Make sure it is correct due to asynchronus nature of RTC
     do
     {
-        firstRead = RTC->SSR;
+    	time->SubSeconds = RTC->SSR;
         HAL_RTC_GetDate( &RtcHandle, date, RTC_FORMAT_BIN );
         HAL_RTC_GetTime( &RtcHandle, time, RTC_FORMAT_BIN );
-    }while( firstRead != RTC->SSR );
-
+    }while( time->SubSeconds != RTC->SSR );
+    CRITICAL_SECTION_END( );
     // Calculte amount of elapsed days since 01/01/2000
     seconds = DIVC( ( DAYS_IN_YEAR * 3 + DAYS_IN_LEAP_YEAR ) * date->Year , 4 );
 
@@ -567,4 +566,59 @@ TimerTime_t RtcTempCompensation( TimerTime_t period, float temperature )
 
     // Calculate the resulting period
     return ( TimerTime_t ) interim;
+}
+
+int _gettimeofday(struct timeval *tp, struct timezone *tzvp)
+{
+	uint32_t time_frac = 0;
+    if (tp) {
+        /* Entering a reentrant critical zone.*/
+
+        uint32_t msec;
+        tp->tv_sec = RtcGetCalendarTime(&msec);
+        tp->tv_usec = msec * 1000;
+
+    }else{
+    	assert_param(tp);
+    }
+    if (tzvp)  {
+    	tzvp->tz_minuteswest = HAL_RTCEx_BKUPRead( &RtcHandle, RTC_BKP_DR3);
+    	tzvp->tz_dsttime = HAL_RTCEx_BKUPRead( &RtcHandle, RTC_BKP_DR4 );
+
+    }else {
+    	// Allowed to be not set
+    	// Not a error
+    }
+    return 0;
+}
+
+
+int _settimeofday(const struct timeval *tp, const struct timezone *tzvp)
+{
+
+	 RTC_TimeTypeDef sTime;
+	 RTC_DateTypeDef sDate;
+
+	 struct tm time_tm;
+	 time_tm = *(localtime(&tp->tv_sec));
+
+	 sTime.Hours = (uint8_t)time_tm.tm_hour;
+	 sTime.Minutes = (uint8_t)time_tm.tm_min;
+	 sTime.Seconds = (uint8_t)time_tm.tm_sec;
+	 if (HAL_RTC_SetTime(&RtcHandle, &sTime, RTC_FORMAT_BIN) == HAL_OK)
+	 {
+		 if (time_tm.tm_wday == 0) { time_tm.tm_wday = 7; } // the chip goes mon tue wed thu fri sat sun
+		 sDate.WeekDay = (uint8_t)time_tm.tm_wday;
+		 sDate.Month = (uint8_t)time_tm.tm_mon+1; //momth 1- This is why date math is frustrating.
+		 sDate.Date = (uint8_t)time_tm.tm_mday;
+		 sDate.Year = (uint16_t)(time_tm.tm_year+1900-2000); // time.h is years since 1900, chip is years since 2000
+
+		 if (HAL_RTC_SetDate(&RtcHandle, &sDate, RTC_FORMAT_BIN) == HAL_OK)
+		 {
+			 RtcHandle.Instance->SSR = tp->tv_usec / 1000;
+			 HAL_RTCEx_BKUPWrite(&RtcHandle,RTC_BKP_DR0, 0x32F2); // lock it in with the backup registers
+				return 0;
+			 }
+		 }
+	 	 return -1;
 }

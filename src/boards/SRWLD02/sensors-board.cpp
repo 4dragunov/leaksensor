@@ -20,57 +20,78 @@
 #include "stm32wlxx_ll_adc.h"
 #include "board-config.h"
 #include "adc.h"
-
+#include "fsmlist.h"
+#include "board.h"
 
 #define TEMPSENSOR_V25_TEMP           25.0
 
-#define INTERNAL_TEMPSENSOR_V25        ((int32_t)1430)  //5.3.21 Temperature sensor characteristics
-#define INTERNAL_TEMPSENSOR_AVGSLOPE   ((int32_t)4300)  //5.3.21 Temperature sensor characteristics
+#define TEMPSENSOR_TYP_CAL1_V          (( int32_t)  760)        /*!< Internal temperature sensor, parameter V30 (unit: mV). Refer to device datasheet for min/typ/max values. */
+#define TEMPSENSOR_TYP_AVGSLOPE        (( int32_t) 2500)        /*!< Internal temperature sensor, parameter Avg_Slope (unit: uV/DegCelsius). Refer to device datasheet for min/typ/max values. */
 #define VREF_INT 1200                   //5.3.4 Embedded reference voltage
 #define CALC_VDDA(vref) (roundf(4095.0 * VREF_INT/(vref)))
 #define VDDA_MIN 2600
 #define VDDA_MAX 3610
 
+#define CHANNELS_PER_MUX_BLOCK 10
+#define MUX_BLOCKS 2
+#define REFERENCE_RES_HI 100000
+#define REFERENCE_RES_LO 1000
 
+#define DEFAULT_SAMPLE_PERIOD 1000 //ms
 
+#define OVSF(bits) (std::pow(4, bits)) // Фактор оверсэмлинга (4^2) - используем белый шум потому 4
+#define OVSD(bits) (std::pow(2, bits)) // Делитель для результатов оверсемплинга (деление на 4 эквивалентно сдвигу вправо на 2)
+#define FOVS(fADCmax, oversampling_bits) = (fADCmax/(2.4*oversampling_bits)) //зменение частоты
+#define OVSMV(new_resolution) ((1 << new_resolution) - 1) // Максимальное значение для нового разрешения
 
-template<unsigned int Bits=4>
-class ChannelSelector {
-	std::array<Gpio_t,Bits> mPins;
-	std::array<PinNames, Bits> mPinNames;
-	uint8_t mSelected;
-public:
-	ChannelSelector(const std::array<PinNames, Bits>& names):
-		mPins{},
-		mPinNames{names},
-		mSelected(0)
-	{
-		for(uint8_t bit = 0; bit < Bits; bit++){
-			GpioInit( &mPins[bit], mPinNames[bit], PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-		}
-	}
-	virtual ~ChannelSelector(void){
-		for(uint8_t bit = 0; bit < Bits; bit++){
-			GpioInit( &mPins[bit], mPinNames[bit], PIN_ANALOGIC, PIN_OPEN_DRAIN, PIN_NO_PULL, 0 );
-		}
-	}
-	bool Select(uint8_t channel){
+#define ADC_CALC_DATA_TO_VOLTAGE(VREFANALOG_VOLTAGE, ADC_DATA, ADC_RESOLUTION)  \
+((ADC_DATA) * (VREFANALOG_VOLTAGE)                                   \
+ / OVSMV(ADC_RESOLUTION)                                \
+)
 
-		if(channel && channel < (1 << Bits)){
-			for(uint8_t bit = 0; bit < Bits; bit++){
-				GpioWrite(&mPins[bit], ((channel - 1) >> bit) & 0x01);
-			}
-			mSelected = channel;
-			return true;
-		}else
-			return false;
-	}
-	operator int(){return mSelected;}
-	//0 means none selected
-	uint8_t Current(){return mSelected;}
-};
+#define ADC_CALC_VREFANALOG_VOLTAGE(__VREFINT_ADC_DATA__,\
+                                         __ADC_RESOLUTION__)                 \
+(((uint32_t)(*VREFINT_CAL_ADDR) * VREFINT_CAL_VREF)                          \
+ / __LL_ADC_CONVERT_DATA_RESOLUTION((__VREFINT_ADC_DATA__),                  \
+                                    (__ADC_RESOLUTION__),                    \
+                                    LL_ADC_RESOLUTION_12B)                   \
+)
 
-ChannelSelector<4> gChannelSelector({SCH0, SCH1, SCH2, SCH3});
+#define ADC_CALC_TEMPERATURE(__VREFANALOG_VOLTAGE__,\
+                                  __TEMPSENSOR_ADC_DATA__,\
+                                  __ADC_RESOLUTION__)\
+((((int32_t)*TEMPSENSOR_CAL2_ADDR - (int32_t)*TEMPSENSOR_CAL1_ADDR) != 0) ?        \
+  (((( ((int32_t)((__LL_ADC_CONVERT_DATA_RESOLUTION((__TEMPSENSOR_ADC_DATA__),     \
+                                                    (__ADC_RESOLUTION__),          \
+                                                    LL_ADC_RESOLUTION_12B)         \
+                   * (__VREFANALOG_VOLTAGE__))                                     \
+                  / TEMPSENSOR_CAL_VREFANALOG)                                     \
+        - (int32_t) *TEMPSENSOR_CAL1_ADDR)                                         \
+     ) * (int32_t)(TEMPSENSOR_CAL2_TEMP - TEMPSENSOR_CAL1_TEMP)                    \
+    ) / (int32_t)((int32_t)*TEMPSENSOR_CAL2_ADDR - (int32_t)*TEMPSENSOR_CAL1_ADDR) \
+   ) + TEMPSENSOR_CAL1_TEMP                                                        \
+  )                                                                                \
+  :                                                                                \
+  ((int32_t)LL_ADC_TEMPERATURE_CALC_ERROR)                                         \
+)
+
+#define ADC_CALC_TEMPERATURE_TYP_PARAMS(__TEMPSENSOR_TYP_AVGSLOPE__,\
+                                             __TEMPSENSOR_TYP_CALX_V__,\
+                                             __TEMPSENSOR_CALX_TEMP__,\
+                                             __VREFANALOG_VOLTAGE__,\
+                                             __TEMPSENSOR_ADC_DATA__,\
+                                             __ADC_RESOLUTION__)            \
+(((((int32_t)((((__TEMPSENSOR_ADC_DATA__) * (__VREFANALOG_VOLTAGE__))       \
+               / __LL_ADC_DIGITAL_SCALE(__ADC_RESOLUTION__))                \
+              * 1000UL)                                                     \
+    -                                                                       \
+    (int32_t)(((__TEMPSENSOR_TYP_CALX_V__))                                 \
+              * 1000UL)                                                     \
+   )                                                                        \
+  ) / (int32_t)(__TEMPSENSOR_TYP_AVGSLOPE__)                                \
+ ) + (int32_t)(__TEMPSENSOR_CALX_TEMP__)                                    \
+)
+
 
 //4 ref c channel (2 on each half) + ts and vref
 const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 4 + 2] = {
@@ -123,7 +144,7 @@ const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 4 + 2] = {
 	 .channel_en_pin = EN0,
 	 .channel_code = 15
 	},
-    { // канал 11
+    { // канал 11 (13)
     .channel_en_pin = EN1,
 	.channel_code = 0
     },
@@ -217,6 +238,11 @@ DataSampler::Channels DataSampler::mChannels ={
 		Channel(CHANNEL_VREF, gChannelConfig[CHANNEL_VREF], Channel::Type::VREF, default_vref_limits, DataSampler::OnChannelLimit)
 };
 
+struct CalibrationChannels {
+	CHANNEL_IDX lo;
+	CHANNEL_IDX hi;
+} gCalibrationChannels[MUX_BLOCKS] = {{CHANNEL_WL_LREF_MIN,	CHANNEL_WL_LREF_MAX}, {CHANNEL_WL_HREF_MIN,	CHANNEL_WL_HREF_MAX}};
+
 extern Adc_t  AdcVref;
 extern Adc_t  AdcTempSens;
 extern Gpio_t SensorsEn[2];
@@ -237,16 +263,21 @@ bool operator==(const Adc_t& lhs, const Adc_t& rhs)
 }
 
 Channel::Channel(const CHANNEL_IDX id, const ChannelConfig &config, const Type type, const Limits limits, const OnLimit onLimit):
+		tinyfsm::Fsm<Channel>(),
 		idx(id),
 		type(type),
 		limits(limits),
 		onLimit(onLimit),
-		config(config)
+		config(config),
+		shift(0),
+		factor(1.0),
+		calibration(UNCALIBRATED),
+		connection(DISCONNECTED)
 {
 }
 
 void Channel::Measure(Channel::ValueType &val){
-	val = Process();
+	val = Measure();
 	if((val > limits.hi || val) < limits.lo && onLimit)
 		onLimit(this);
 }
@@ -264,42 +295,93 @@ void Channel::ToggleCurrentDirection(uint16_t time_delay) {
 		osDelay(time_delay);
 }
 
-Channel::ValueType Channel::Process() {
-    const int num_measurements = 2;
-    uint16_t adc_values[num_measurements];
-    float sum = 0;
-    uint16_t max_value = 0;
-    uint16_t min_value = 0xFFFF; // �?нициализируем минимальное значение максимальным возможным
-    if(config.channel_en_pin != NC) {
+Channel::ValueType Channel::Measure() {
+    Channel::ValueType result;
+    uint16_t total = 0;
+    uint16_t resolution = 12; // Разрядность АЦП
+    uint16_t oversampling_bits = 2;
+    uint16_t oversampling_factor = (ADC_OVS_HARDWARE==ENABLE)? 1 : std::pow(4, oversampling_bits) - 1; // Фактор оверсэмлинга (4^bit) - используем белый шум потому 4
+    uint16_t new_resolution = resolution + oversampling_bits; // Новое разрешение (14 бит)
+    uint16_t oversampling_devider = std::pow(2, oversampling_bits);
+    //Fovs = fADCmax/(2.4*oversampling_bits) //зменение частоты
+    uint16_t max_value = (1 << new_resolution) - 1; // Максимальное значение для нового разрешения
+
+    if(type ==Type::WL) {
 		bool sensorsHalf = config.channel_en_pin == EN1;
 		GpioWrite(const_cast<Gpio_t*>(&SensorsEn[0]), sensorsHalf);
 		GpioWrite(const_cast<Gpio_t*>(&SensorsEn[1]), !sensorsHalf);
+		osDelay(MUX_ENABLE_TIMEOUT);
+		DataSampler::Instance().Mux().Select(config.channel_code);
+		osDelay(MUX_SELECT_TIMEOUT);
+		ToggleCurrentDirection(MUX_POL_SWITCH_TIMEOUT);
     }
-    gChannelSelector.Select(config.channel_code);
+    for (int i = 0; i < oversampling_factor; i++) {
+    	if(type == Type::WL) {
+			// Считывание значения АЦП
+			if(DataSampler::Instance().MeasureMode() == DataSampler::AdcMode::SE) {
 
-    for (int i = 0; i < num_measurements; i++) {
+				total+= AdcReadChannel(const_cast<Adc_t*>(&AdcInP));
+			}else {
+				total+= AdcReadChannel(const_cast<Adc_t*>(&AdcInP)) - AdcReadChannel(const_cast<Adc_t*>(&AdcInN));
+			}
 
-		ToggleCurrentDirection(30);
-		osDelay(10);
-
-        // Считывание значения АЦП
-		if(ADC_MODE == SE) {
-			adc_values[i] = AdcReadChannel(const_cast<Adc_t*>(&AdcInP));
-		}else {
-			adc_values[i] = AdcReadChannel(const_cast<Adc_t*>(&AdcInP)) - AdcReadChannel(const_cast<Adc_t*>(&AdcInN));
+    	}else{
+    		total+= AdcReadChannel(type == Type::TS? &AdcTempSens : &AdcVref);
+    	}
+    }
+#if(ADC_OVS_HARDWARE)
+    uint16_t average = total/oversampling_factor; //calc just average as result already shifted by hardware
+#else
+    //Сдвиг вправо для получения нового разрешения (14 бит)
+    uint16_t average = std::clamp(total /oversampling_devider, 0, (int)max_value);
+#endif
+    switch(type){
+    case Channel::Type::VREF:{
+    		//not needed - just placeholder
+    	result =  ADC_CALC_DATA_TO_VOLTAGE(DataSampler::vdda_voltage, average, 14);
+    	connection = CONNECTED;
+    }
+    break;
+	case Channel::Type::WL:{
+		result =  ADC_CALC_DATA_TO_VOLTAGE(DataSampler::vdda_voltage, average, 14);
+		result = (result / CHANNEL_NOMINAL_CURRENT) *  1000;
+		connection =result < CHANNEL_SHORTED_LIMIT? SHORTED: result < CHANNEL_DISCONNECTED_LIMIT?  CONNECTED : DISCONNECTED;
+	}
+	break;
+	case Channel::Type::TS:{
+		 if (((int32_t)*TEMPSENSOR_CAL2_ADDR - (int32_t)*TEMPSENSOR_CAL1_ADDR) != 0) {
+			 result = ADC_CALC_TEMPERATURE(DataSampler::vdda_voltage,
+					 	 	 	 	 	 	 	 average,
+			                                     14);
+		 }else{
+			 result = ADC_CALC_TEMPERATURE_TYP_PARAMS(TEMPSENSOR_TYP_AVGSLOPE,
+					 	 	 	 	 	 	 	 	 	   TEMPSENSOR_TYP_CAL1_V,
+														   TEMPSENSOR_CAL1_TEMP,
+														   DataSampler::vdda_voltage,
+														   average,
+														   14);
+		 }
+		connection = CONNECTED;
+	}
+	break;
+	default:{
 		}
-
-        sum += adc_values[i];
-        if (adc_values[i] > max_value) {
-            max_value = adc_values[i];
-        }
-        if (adc_values[i] < min_value) {
-            min_value = adc_values[i];
-        }
     }
+    Channel::ValueType value = (result  + shift) * factor;
+    dispatch (MeasureEvent(idx, value));
+    return value;
+}
 
-    uint16_t average = (uint16_t)round(sum / num_measurements);
-    return average;
+
+void Channel::react(const CalibrationStatusEvent& e){
+	if((idx < e.channel) && (idx > e.channel - 10)){
+		shift = e.shift;
+		factor = e.factor;
+		calibration = {CALIBRATED, std::chrono::system_clock::now()} ;
+	}
+}
+
+void Channel::react(const MeasureEvent& e){
 }
 
 
@@ -314,19 +396,107 @@ const osMemoryPoolAttr_t samples_attr = {
 
 float DataSampler::vdda_voltage = 0;
 
+class Idle
+: public DataSampler{
+	void entry() override {
+	  }
+	void exit(void)  { };
+};
+
+class Sampling
+: public DataSampler{
+	 osThreadId_t mTaskHandle;
+public:
+	Sampling():
+		mTaskHandle(osThreadNew(SamplerTask, this, &thread_attr)){
+	}
+	~Sampling(){
+		osThreadTerminate(mTaskHandle);
+	}
+	void entry() override {
+	  }
+	void exit(void)  { };
+};
+
+class SelfTest
+: public DataSampler{
+	void entry() override {
+		uint16_t total = 0;
+		uint16_t resolution = 12; // Разрядность АЦП
+	    uint16_t oversampling_bits = 2;
+		uint16_t oversampling_factor = std::pow(4, oversampling_bits); // Фактор оверсэмлинга (4^2) - используем белый шум потому 4
+		uint16_t new_resolution = resolution + oversampling_bits; // Новое разрешение (14 бит)
+		uint16_t oversampling_devider = std::pow(2, oversampling_bits);
+		uint16_t max_value = (1 << new_resolution) - 1; // Максимальное значение для нового разрешения
+		//Initial vdda calibration
+		DBG("ADC Sampler self test started\n");
+		for(int i=0; i< oversampling_factor - 1; i++) {
+			total += AdcReadChannel(&AdcVref);
+		}
+		total/=oversampling_devider;
+		    //VDDA=4095 * 1.20 / ADC
+
+		vdda_voltage = __LL_ADC_CALC_VREFANALOG_VOLTAGE(total,LL_ADC_RESOLUTION_12B);//mV
+		if(vdda_voltage > VDDA_MIN && vdda_voltage < VDDA_MAX) {
+			DBG("VDDA: %.3f\r\n", , vdda_voltage);
+			dispatch(SelfTestStatusEvent(Status::PASSED));
+		}else {
+			vdda_voltage = 0;
+			DBG("vdda %0.3f- exceed limits\r\n", vdda_voltage);
+			dispatch(SelfTestStatusEvent(Status::FAILED));
+	   }
+	  }
+	void exit(void)  { };
+};
+
+class Calibrating
+: public DataSampler{
+	void entry() override {
+
+		for(auto cb:gCalibrationChannels) {
+			float shift;
+			float factor;
+			float voltage[MUX_BLOCKS];
+			voltage[0] =  ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, mChannels[cb.lo].Measure(), 14);
+			voltage[1] =  ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, mChannels[cb.hi].Measure(), 14);
+
+			shift =   REFERENCE_RES_LO - (voltage[0] / (CHANNEL_NOMINAL_CURRENT / 1000.0));
+			factor =  REFERENCE_RES_HI / (voltage[1] / (CHANNEL_NOMINAL_CURRENT / 1000.0)) - shift;
+			if(shift < 200 && factor < 1.2 && factor > 0.8) {
+				dispatch(CalibrationStatusEvent{PASSED, cb.lo, shift, factor});
+			}else{
+				dispatch(CalibrationStatusEvent{FAILED, cb.lo, shift, factor});
+			}
+		}
+	}
+	void exit(void)  { };
+};
+
+class CalibrationFailed
+: public DataSampler{
+	void entry() override {
+	  }
+	void exit(void)  { };
+};
+
 DataSampler::DataSampler():
+		tinyfsm::Fsm<DataSampler>(),
 		mSamplesMp(osMemoryPoolNew(2, sizeof(struct Samples), &samples_attr)),
 		mSamplesMq(osMessageQueueNew(1, sizeof(Samples*), nullptr)),
 		mMav(),
 		mTs(),
-		mSamplePeriod(),
-		mTaskHandle(osThreadNew(SamplerTask, this, &thread_attr))
+		mSamplePeriod(DEFAULT_SAMPLE_PERIOD),
+		mSamplePeriodReal(0),
+		mAdcMode(AdcMode::SE),
+		mSelfTest(UNKNOWN),
+		mSelector({SCH0, SCH1, SCH2, SCH3})
 {
+	//dispatch(InitDoneEvent());
 }
 
 DataSampler::~DataSampler(){
 	DeInit();
-	osThreadTerminate(mTaskHandle);
+
 	osMemoryPoolDelete(mSamplesMp);
 	osMessageQueueDelete(mSamplesMq);
 }
@@ -337,25 +507,14 @@ void DataSampler::DeInit(){
 	AdcDeInit( &AdcInN );
 }
 
+SamplerMode DataSampler::Mode() {
+	return (BoardGetPowerSource() == EXT_POWER)? CONTINUOUS: ONESHOT;
+}
+
 void DataSampler::DoSamplerTask()
 {
 	DBG("ADC Sampler started\n");
-	float vref = 0;
-	uint16_t vref_iteration = 0;
-	float vref_tmp = 1500; // initial vref in adc units
-	//Initial vdda calibration
-	do {
-		vref = vref_tmp;
-		auto adc = AdcReadChannel(&AdcVref);
-		vref_tmp =  (vref + adc)/2.0;
-		vref_iteration++;
-	}while((std::abs(vref - vref_tmp) >= 1) && vref_iteration < 30);
-	assert(vref_iteration < 30);
-	//VDDA=4095 * 1.20 / ADC
-	DBG("VREF_IT:%i\r\n", vref_iteration);
-    vdda_voltage = CALC_VDDA(vref);//mV
-	assert(vdda_voltage > VDDA_MIN);
-	assert(vdda_voltage < VDDA_MAX);
+
 
 	while( 1 ){
 		Samples* sensorsData = static_cast<Samples*>(new(osMemoryPoolAlloc(mSamplesMp, osWaitForever)) Samples);
@@ -363,38 +522,9 @@ void DataSampler::DoSamplerTask()
 		if(sensorsData) {
 			for (auto& channel: mChannels) {
 				channel.Measure((*sensorsData)[channel.idx]);
-				//Initial channel scale
-				switch(channel.chType()){
-					case Channel::Type::WL:{
-						auto voltage =  __LL_ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, (*sensorsData)[channel.idx], LL_ADC_RESOLUTION_12B);
-						(*sensorsData)[channel.idx] = roundf(100 * (voltage/vdda_voltage));
-					}
-					break;
-					case Channel::Type::TS:{
-						    /* Device with temperature sensor not calibrated in production:
-						       use generic parameters */
-							float temperature = __LL_ADC_CALC_TEMPERATURE_TYP_PARAMS(INTERNAL_TEMPSENSOR_AVGSLOPE,
-									INTERNAL_TEMPSENSOR_V25,
-									TEMPSENSOR_V25_TEMP,
-									vdda_voltage,
-									(*sensorsData)[channel.idx],
-									LL_ADC_RESOLUTION_12B);
-							(*sensorsData)[channel.idx] = temperature * 10;
 
-					}
-					break;
-					case Channel::Type::VREF:{
-					//not needed - just placeholder
-					}
-					break;
-					default:{
-						DBG("Unsupported adc channel type\r\n");
-						assert(0);
-					}
-				}
-			}
-			gettimeofday(&sensorsData->timestamp, 0);
-			mSamplePeriod = sensorsData->timestamp - mTs;
+			sensorsData->timestamp = std::chrono::system_clock::now();
+			mSamplePeriodReal = std::chrono::duration_cast<std::chrono::milliseconds>(sensorsData->timestamp - mTs);
 			*sensorsData = mMav.Filter(sensorsData);
 			vdda_voltage = (vdda_voltage + CALC_VDDA((*sensorsData)[CHANNEL_VREF]))/2.0;//mV;
 			mTs = sensorsData->timestamp;
@@ -410,9 +540,48 @@ void DataSampler::DoSamplerTask()
 #else
 			osMessageQueuePut(mSamplesMq, &sensorsData, 0, osWaitForever);
 #endif
+			osDelay(std::chrono::duration_cast<std::chrono::milliseconds>(mSamplePeriod  - (mSamplePeriodReal - mSamplePeriod)).count());
 		}
 	}
 }
+}
+
+void DataSampler::react(const InitStatusEvent &e)
+{
+
+}
+
+void DataSampler::react(const SelfTestStatusEvent &e)
+{
+	mSelfTest  = e.result;
+	if(e.result.status == PASSED){
+		transit<Calibrating>();
+	}else{
+		transit<Idle>();
+	}
+}
+
+void DataSampler::react(const  CalibrationStatusEvent &e)
+{
+	if(e.status == PASSED){
+		for(auto ch:mChannels){
+			ch.dispatch(e);
+		}
+		transit<Sampling>();
+	}else{
+		transit<Idle>();
+	}
+}
+
+void DataSampler::react(const SampleEvent &e)
+{
+
+}
+void DataSampler::react(const SampleDoneEvent &e)
+{
+
+}
+
 
 void SamplerTask(void * argument){
 	static_cast<DataSampler*>(argument)->DoSamplerTask();
@@ -437,3 +606,5 @@ struct timeval getSamplerate(void)
 {
 	DBG("Sample rate:\n");
 }
+
+//FSM_INITIAL_STATE(DataSampler, SelfTest)

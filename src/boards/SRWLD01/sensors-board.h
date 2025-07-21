@@ -235,7 +235,7 @@ protected:
 	 osMessageQueueId_t mSamplesMq;
 	 MAV<Samples, MAV_WINDOW> mMav;
 	 struct timeval mTs;
-	 struct timeval  mSamplePeriod;
+	 struct timeval  mSamplePeriodReal;
 	 osThreadId_t mTaskHandle;
 
 	 DataSampler();

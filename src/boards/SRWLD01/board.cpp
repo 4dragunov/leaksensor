@@ -202,7 +202,7 @@ void BoardInitMcu( void )
         GpioInit( &Led2, LED_2, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, LED_OFF );
         GpioInit( &Led3, LED_3, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, LED_OFF );
 
-        GpioInit( &BattPwr, BAT_PWR, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_DOWN, 0 );
+        GpioInit( &BattPwr, BAT_PWR, PIN_INPUT, PIN_PUSH_PULL, PIN_PULL_DOWN, 1 );
 
         FifoInit( &Usart1.FifoTx, Uart1TxBuffer, UART1_FIFO_TX_SIZE );
         FifoInit( &Usart1.FifoRx, Uart1RxBuffer, UART1_FIFO_RX_SIZE );
@@ -219,7 +219,7 @@ void BoardInitMcu( void )
         RtcInit( );
 
         BoardUnusedIoInit( );
-        if( GetBoardPowerSource( ) == EXT_POWER )
+        if( BoardGetPowerSource( ) == EXT_POWER )
         {
             // Disables OFF mode - Enables lowest power mode (STOP)
             LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
@@ -427,7 +427,7 @@ uint8_t BoardGetBatteryLevel( void )
 
     BatteryVoltage = BoardBatteryMeasureVoltage( );
 
-    if( GetBoardPowerSource( ) == EXT_POWER )
+    if( BoardGetPowerSource( ) == EXT_POWER )
     {
         batteryLevel = BATTERY_LORAWAN_EXT_PWR;
     }
@@ -630,7 +630,7 @@ void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
 	 __HAL_RCC_GPIOG_CLK_ENABLE( );
 }
 
-uint8_t GetBoardPowerSource( void )
+uint8_t BoardGetPowerSource( void )
 {
    return (GpioRead(&BattPwr) == GPIO_PIN_SET)? EXT_POWER : BATTERY_POWER;
 }

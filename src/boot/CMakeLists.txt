@@ -1,115 +1,127 @@
+##
+##   ______                              _
+##  / _____)             _              | |
+## ( (____  _____ ____ _| |_ _____  ____| |__
+##  \____ \| ___ |    (_   _) ___ |/ ___)  _ \
+##  _____) ) ____| | | || |_| ____( (___| | | |
+## (______/|_____)_|_|_| \__)_____)\____)_| |_|
+## (C)2013-2017 Semtech
+##  ___ _____ _   ___ _  _____ ___  ___  ___ ___
+## / __|_   _/_\ / __| |/ / __/ _ \| _ \/ __| __|
+## \__ \ | |/ _ \ (__| ' <| _| (_) |   / (__| _|
+## |___/ |_/_/ \_\___|_|\_\_| \___/|_|_\\___|___|
+## embedded.connectivity.solutions.==============
+##
+## License:  Revised BSD License, see LICENSE.TXT file included in the project
+## Authors:  Johannes Bruder (STACKFORCE), Miguel Luis (Semtech)
+##
 cmake_minimum_required(VERSION 3.10)
+project(SmartRoof.LoRa.Node-boot)
 
-# Setup compiler settings
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED       ON)
-set(CMAKE_C_EXTENSIONS              ON)
-set(CMAKE_CXX_STANDARD_REQUIRED     ON)
-set(CMAKE_CXX_EXTENSIONS            ON)
-set(PROJ_PATH                       ${CMAKE_CURRENT_SOURCE_DIR})
-if(NOT CMAKE_BUILD_TYPE)
-  set(CMAKE_BUILD_TYPE Release)
+#---------------------------------------------------------------------------------------
+# Options
+#---------------------------------------------------------------------------------------
+enable_language(C ASM CXX)
+
+# Allow switching of sub projects
+set(SUB_PROJECT_LIST LeakDetector)
+set(SUB_PROJECT LeakDetector-boot CACHE STRING "Default sub project is LeakDetector")
+set_property(CACHE SUB_PROJECT PROPERTY STRINGS ${SUB_PROJECT_LIST})
+
+# Allow LORAWAN_DEFAULT_CLASS overriding for LeakDetector project
+if(SUB_PROJECT STREQUAL LeakDetector)
+    set(LORAWAN_DEFAULT_CLASS_LIST CLASS_A CLASS_B CLASS_C)
+    set(LORAWAN_DEFAULT_CLASS CLASS_A CACHE STRING "Default LoRaWAN class is ClassA")
+    set_property(CACHE LORAWAN_DEFAULT_CLASS PROPERTY STRINGS ${LORAWAN_DEFAULT_CLASS_LIST})
 endif()
-message("Build type: "              ${CMAKE_BUILD_TYPE})
 
-#
-# Core project settings
-#
-project(PowerController C CXX ASM)
-enable_language(C CXX ASM)
-
-#
-# Core MCU flags, CPU, instruction set and FPU setup
-# Needs to be set properly for your MCU
-#
-set(CPU_PARAMETERS
-    -mthumb
-    -mthumb-interwork 
-    -ffunction-sections 
-    -fdata-sections 
-    -g 
-    -fno-common 
-    -fmessage-length=0
-    -mcpu=cortex-m0
-    -mfloat-abi=soft
+# Allow switching of active region
+set(ACTIVE_REGION_LIST   LORAMAC_REGION_EU868 LORAMAC_REGION_US915 LORAMAC_REGION_CN779
+    LORAMAC_REGION_EU433 LORAMAC_REGION_AU915 LORAMAC_REGION_AS923 LORAMAC_REGION_CN470
+    LORAMAC_REGION_KR920 LORAMAC_REGION_IN865 LORAMAC_REGION_RU864
 )
+set(ACTIVE_REGION LORAMAC_REGION_EU868 CACHE STRING "Default active region is EU868")
+set_property(CACHE ACTIVE_REGION PROPERTY STRINGS ${ACTIVE_REGION_LIST})
 
-# Set linker script
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32F030C8TX_FLASH.ld)
-#
-# List of source files to compile
-#
-file(GLOB_RECURSE SOURCES "Core/*.*" "Drivers/*.*" "Middlewares/*.*")
-#
-# Include directories
-#
-set(INCLUDE_DIRS
-    Core/Inc
-    Drivers/STM32F0xx_HAL_Driver/Inc
-    Drivers/STM32F0xx_HAL_Driver/Inc/Legacy
-    Middlewares/Third_Party/FreeRTOS/Source/include
-    Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM0
-    Drivers/CMSIS/Device/ST/STM32F0xx/Include
-    Drivers/CMSIS/Include
-    Core/ThreadSafe
+if((SUB_PROJECT STREQUAL LeakDetector) AND NOT CLASSB_ENABLED )
+    message(FATAL_ERROR "Please turn on Class B support of LoRaMac ( CLASSB_ENABLED=ON ) to use LeakDetector sub projects")
+endif()
+
+# Allow selection of secure-element provisioning method
+option(SECURE_ELEMENT_PRE_PROVISIONED "Secure-element pre-provisioning" ON)
+
+if(SUB_PROJECT STREQUAL LeakDetector)
+
+    #---------------------------------------------------------------------------------------
+    # Application common features handling
+    #---------------------------------------------------------------------------------------
+    list(APPEND ${PROJECT_NAME}_COMMON
     )
-#
-# Symbols definition
-#
-set(DEFINES
-$<$<CONFIG:Debug>:DEBUG>
-USE_HAL_DRIVER
-STM32F030x8
-CPP_FREERTOS_NO_EXCEPTIONS
-STM32_THREAD_SAFE_STRATEGY=2
+
+else()
+    message(FATAL_ERROR "Unknown SUB_PROJECT")
+endif()
+
+#---------------------------------------------------------------------------------------
+# Application
+#---------------------------------------------------------------------------------------
+file(GLOB ${PROJECT_NAME}_SOURCES 
+	"${CMAKE_CURRENT_LIST_DIR}/${SUB_PROJECT}/${BOARD}/*.c"
+	"${CMAKE_CURRENT_LIST_DIR}/${SUB_PROJECT}/${BOARD}/*.cpp"
+	)
+
+add_executable(${PROJECT_NAME}-${SUB_PROJECT}
+                            ${${PROJECT_NAME}_COMMON}
+                            ${${PROJECT_NAME}_SOURCES}
+                            $<TARGET_OBJECTS:${BOARD}>
 )
 
-set(EXECUTABLE ${CMAKE_PROJECT_NAME})
-# Executable files
-add_executable(${EXECUTABLE} ${SOURCES} ${LINKER_SCRIPT})
-# Include paths
-target_include_directories(${EXECUTABLE} PRIVATE ${INCLUDE_DIRS})
-# Project symbols
-target_compile_definitions(${EXECUTABLE} PRIVATE ${DEFINES})
+target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE LORAMAC_CLASSB_ENABLED="$<IF:$<BOOL:${CLASSB_ENABLED}>,1,0>")
+target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE ACTIVE_REGION=${ACTIVE_REGION})
+target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE $<$<CONFIG:Debug>:DEBUG>)
 
-# Compiler options
-target_compile_options(${EXECUTABLE} PRIVATE
-    ${CPU_PARAMETERS}
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Wno-unused-parameter
-    -fstack-usage 
-    
-    # Debug configuration
-    $<$<CONFIG:Debug>:-Og -g3 -ggdb>
-    # Release configuration
-    $<$<CONFIG:Release>:-Os>
+if(SUB_PROJECT STREQUAL LeakDetector)
+    target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE LORAWAN_DEFAULT_CLASS=${LORAWAN_DEFAULT_CLASS}
+    $<$<CONFIG:Debug>:DEBUG>
+#	-D_USE_32BIT_TIME_T 
 )
 
-# Linker options
-target_link_options(${EXECUTABLE} PRIVATE
-    -T${LINKER_SCRIPT}
-    ${CPU_PARAMETERS}
-    -Wl,--cref
-    -Wl,-Map=${CMAKE_PROJECT_NAME}.map
-    --specs=nosys.specs
-    -Wl,--gc-sections -static
-    -Wl,--print-memory-usage
+endif()
+if(${SECURE_ELEMENT_PRE_PROVISIONED} MATCHES ON)
+    target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE -DSECURE_ELEMENT_PRE_PROVISIONED)
+endif()
+if(${SECURE_ELEMENT} MATCHES SOFT_SE)
+    target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT} PRIVATE -DSOFT_SE)
+endif()
+target_compile_definitions(${PROJECT_NAME}-${SUB_PROJECT}  PUBLIC
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:mac,INTERFACE_COMPILE_DEFINITIONS>>
 )
 
-# Execute post-build to print size
-add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
-    COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${EXECUTABLE}>
+target_include_directories(${PROJECT_NAME}-${SUB_PROJECT} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/${SUB_PROJECT}/${BOARD}
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:${BOARD},INTERFACE_INCLUDE_DIRECTORIES>>
 )
 
-# Convert output to hex and binary
-add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${EXECUTABLE}> ${EXECUTABLE}.hex
-)
+set_property(TARGET ${PROJECT_NAME}-${SUB_PROJECT} PROPERTY C_STANDARD 11 CXX_STANDARD 17)
 
-# Convert to bin file -> add conditional check?
-add_custom_command(TARGET ${EXECUTABLE} POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${EXECUTABLE}> ${EXECUTABLE}.bin
-)
+target_link_libraries(${PROJECT_NAME}-${SUB_PROJECT} m)
+
+#---------------------------------------------------------------------------------------
+# Debugging and Binutils
+#---------------------------------------------------------------------------------------
+
+include(gdb-helper)
+include(binutils-arm-none-eabi)
+
+# Generate debugger configurations
+generate_run_gdb_stlink(${PROJECT_NAME}-${SUB_PROJECT})
+generate_run_gdb_openocd(${PROJECT_NAME}-${SUB_PROJECT})
+generate_vscode_launch_openocd(${PROJECT_NAME}-${SUB_PROJECT})
+
+# Print section sizes of target
+print_section_sizes(${PROJECT_NAME}-${SUB_PROJECT})
+
+# Create output in hex and binary format
+create_bin_output(${PROJECT_NAME}-${SUB_PROJECT})
+create_hex_output(${PROJECT_NAME}-${SUB_PROJECT})

@@ -125,7 +125,7 @@ void BoardLowPowerHandler( void );
  *
  * \retval value  power source [0: USB_POWER, 1: BATTERY_POWER]
  */
-uint8_t GetBoardPowerSource( void );
+uint8_t BoardGetPowerSource( void );
 
 /*!
  * \brief Get the board version

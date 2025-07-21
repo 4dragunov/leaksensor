@@ -16,7 +16,7 @@
 ## Authors:  Johannes Bruder (STACKFORCE), Miguel Luis (Semtech)
 ##
 cmake_minimum_required(VERSION 3.10)
-project(SmartRoof.LoRa.Node)
+project(SmartRoof.LoRa.Node-app)
 
 #---------------------------------------------------------------------------------------
 # Options

@@ -12,7 +12,7 @@ extern uint32_t _EEPROM_PAGES[];
 #define PAGE_SIZE        (uint32_t)FLASH_PAGE_SIZE  /* Page size */
 #define PAGES            ((uint32_t)_EEPROM_PAGES)
 #define PAGE_0_ADDRESS   ((uint32_t)_emulated_eeprom_start)
-#define PAGE_1_ADDRESS   ((uint32_t)_emulated_eeprom_start + (PAGES * PAGE_SIZE))
+#define PAGE_1_ADDRESS   ((uint32_t)_emulated_eeprom_start + (PAGES/2 * PAGE_SIZE))
 
 #define FLASH_READ(address) static_cast<uint32_t>(*(__IO uint32_t*)address)
 
@@ -116,7 +116,7 @@ Eeprom::Result Eeprom::WriteRecord(const uint32_t address, const Eeprom::address
   Eeprom::data_record dataRecord = static_cast<Eeprom::data_record>((Eeprom::data)varValue << std::numeric_limits<typename Eeprom::address>::digits) | (Eeprom::address)varId;
 
   HAL_FLASH_Unlock();
-  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, address, dataRecord);
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, address, dataRecord);
   HAL_FLASH_Lock();
   if (flashRes != HAL_OK)
   {
@@ -136,7 +136,7 @@ Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
   {
 	  auto read_time_start = osKernelSysTick();
 	  uint32_t startAddr = pageAddress[activePage] + sizeof(Eeprom::page_state_record);
-	  uint32_t endAddr = pageAddress[activePage] + (PAGES * PAGE_SIZE) - sizeof(Eeprom::data_record);
+	  uint32_t endAddr = pageAddress[activePage] + (PAGES/2 * PAGE_SIZE) - sizeof(Eeprom::data_record);
 	  uint32_t addr = endAddr;
 	  Eeprom::address empty = 0;
 
@@ -301,7 +301,7 @@ Eeprom::Result Eeprom::SetPageState(const Eeprom::PageIdx idx, const Eeprom::Pag
   DBG("eeprom %s page:%i state:%s\n",__FUNCTION__, idx, pageStateNames[state]);
   assert(state < Eeprom::PageState::UNDEFINED);
   HAL_FLASH_Unlock();
-  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_FAST, pageAddress[idx], pageStateValues[state]);
+  flashRes = HAL_FLASH_Program(FLASH_TYPEPROGRAM_DOUBLEWORD, pageAddress[idx], pageStateValues[state]);
   HAL_FLASH_Lock();
 
   if (flashRes != HAL_OK)
@@ -320,8 +320,8 @@ Eeprom::Result Eeprom::ClearPage(const Eeprom::PageIdx idx)
   FLASH_EraseInitTypeDef erase;
   DBG("eeprom %s page:%i\n",__FUNCTION__, idx);
   erase.TypeErase = FLASH_TYPEERASE_PAGES;
-  erase.Page  = pageAddress[idx]/FLASH_PAGE_SIZE;
-  erase.NbPages = 1;
+  erase.Page  = (pageAddress[idx] - FLASH_BASE)/FLASH_PAGE_SIZE;
+  erase.NbPages = PAGES/2;
 
   HAL_StatusTypeDef flashRes = HAL_OK;
   uint32_t pageError = 0;

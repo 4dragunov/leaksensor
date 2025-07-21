@@ -16,7 +16,6 @@
 #pragma pack(push, 1)
 template<typename T, const uint8_t WindowLength>
 class MAV{
-	const bool debug = true;
 public:
 	MAV():History(), Sum(), WindowPointer(0), FirstRun(true){};
 	virtual ~MAV() = default;

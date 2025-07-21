@@ -113,9 +113,6 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/peripherals)
 #---------------------------------------------------------------------------------------
 # Applications
 #---------------------------------------------------------------------------------------
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/apps)
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/boot)
 
-if(APPLICATION STREQUAL LeakDetector)
-
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/apps/SmartRoof.LoRa.Node)
-
-endif()

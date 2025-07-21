@@ -62,9 +62,13 @@ typedef enum {
 #define LED_ON  1
 #define LED_OFF 0
 
-#define POL_SW_TIME 4
-#define CH_SEL_TIME 2
-#define HALF_SEL_TIME 2
+
+#define MUX_ENABLE_TIMEOUT 2
+#define MUX_SELECT_TIMEOUT 2
+#define MUX_POL_SWITCH_TIMEOUT 4
+
+#define ADC_OVS_HARDWARE DISABLE
+
 //Half of channels selection 0- 9
 #define EN0                                         PA_0
 //Half of channels selection 10-19

@@ -150,19 +150,13 @@ void BoardCriticalSectionEnd( UBaseType_t *mask )
 void BoardInitPeriph( void )
 {
 
-#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
-        SX1276IoDbgInit( );
-        SX1276IoTcxoInit( );
-#endif
 }
 
 void BoardInitMcu( void )
 {
     if( McuInitialized == false )
     {
-
-        HAL_Init( );
-
+    	HAL_Init( );
     	SystemClockConfig( );
 #ifdef DEBUG
     	initialise_monitor_handles();
@@ -189,7 +183,7 @@ void BoardInitMcu( void )
         RtcInit( );
 
         BoardUnusedIoInit( );
-        if( GetBoardPowerSource( ) == EXT_POWER )
+        if( BoardGetPowerSource( ) == EXT_POWER )
         {
             // Disables OFF mode - Enables lowest power mode (STOP)
             LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
@@ -228,20 +222,6 @@ void BoardDeInitMcu( void )
     AdcDeInit( &AdcTempSens );
     AdcDeInit( &AdcInP );
     AdcDeInit( &AdcInN );
-
-#if defined( SX1261MBXBAS ) || defined( SX1262MBXCAS ) || defined( SX1262MBXDAS )
-    SpiDeInit( &SX126x.Spi );
-    SX126xIoDeInit( );
-#elif defined( LR1110MB1XXS )
-    SpiDeInit( &LR1110.spi );
-    lr1110_board_deinit_io( &LR1110 );
-#elif defined( SX1272MB2DAS )
-    SpiDeInit( &SX1272.Spi );
-    SX1272IoDeInit( );
-#elif defined( SX1276MB1LAS ) || defined( SX1276MB1MAS )
-    SpiDeInit( &SX1276.Spi );
-    SX1276IoDeInit( );
-#endif
 }
 
 uint32_t BoardGetRandomSeed( void )
@@ -430,7 +410,7 @@ uint8_t BoardGetBatteryLevel( void )
 
     BatteryVoltage = BoardBatteryMeasureVoltage( );
 
-    if( GetBoardPowerSource( ) == EXT_POWER )
+    if( BoardGetPowerSource( ) == EXT_POWER )
     {
         batteryLevel = BATTERY_LORAWAN_EXT_PWR;
     }
@@ -478,76 +458,65 @@ static void BoardUnusedIoInit( void )
 
 void SystemClockConfig( void )
 {
-	RCC_OscInitTypeDef RCC_OscInitStruct = {0};
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+	  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-	/** Configure LSE Drive Capability
-	 */
-	HAL_PWR_EnableBkUpAccess();
-	__HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+	  /** Configure LSE Drive Capability
+	  */
+	  HAL_PWR_EnableBkUpAccess();
+	  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
 
-	/** Configure the main internal regulator output voltage
-	 */
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+	  /** Configure the main internal regulator output voltage
+	  */
+	  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
-                            |RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
-	RCC_OscInitStruct.HSEState = RCC_HSE_BYPASS_PWR;
-	RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
-	RCC_OscInitStruct.HSEDiv = RCC_HSE_DIV1;
-	RCC_OscInitStruct.LSIState = RCC_LSI_ON;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-	RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV2;
-	RCC_OscInitStruct.PLL.PLLN = 6;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-	RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-	RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-	{
-		assert_param( LMN_STATUS_ERROR );
-	}
+	  /** Initializes the CPU, AHB and APB buses clocks
+	  */
+	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
+	                              |RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+	  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+	  RCC_OscInitStruct.HSIState = RCC_HSI_OFF;
+	  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
+	  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+	  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+	  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_11;
+	  RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
+	  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
+	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+	  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+	  {
 
-	/** Configure the SYSCLKSource, HCLK, PCLK1 and PCLK2 clocks dividers
-	*/
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK3|RCC_CLOCKTYPE_HCLK
-								|RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1
-								|RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.AHBCLK3Divider = RCC_SYSCLK_DIV1;
+	  }
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-	{
-		assert_param( LMN_STATUS_ERROR );
-	}
+	  /** Configure the SYSCLKSource, HCLK, PCLK1 and PCLK2 clocks dividers
+	  */
+	  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK3|RCC_CLOCKTYPE_HCLK
+	                              |RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1
+	                              |RCC_CLOCKTYPE_PCLK2;
+	  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+	  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+	  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+	  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+	  RCC_ClkInitStruct.AHBCLK3Divider = RCC_SYSCLK_DIV1;
 
-
-    HAL_SYSTICK_Config( HAL_RCC_GetHCLKFreq( ) / 1000 );
-
-    HAL_SYSTICK_CLKSourceConfig( SYSTICK_CLKSOURCE_HCLK );
+	  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+	  {
+	  }
 
     // SysTick_IRQn interrupt configuration
-    HAL_NVIC_SetPriority( SysTick_IRQn, 0, 0 );
-    SystemCoreClockUpdate();
+ //   HAL_NVIC_SetPriority( SysTick_IRQn, 0, 0 );
+  //  SystemCoreClockUpdate();
 }
 
 void SystemClockReConfig( void )
 {
   //  __HAL_RCC_PWR_CLK_ENABLE( );
 
-    // Enable HSI
-    __HAL_RCC_HSI_ENABLE( );
+    // Enable MSI
+    __HAL_RCC_MSI_ENABLE( );
 
     // Wait till HSI is ready
-    while( __HAL_RCC_GET_FLAG( RCC_FLAG_HSIRDY ) == RESET )
+    while( __HAL_RCC_GET_FLAG( RCC_FLAG_MSIRDY ) == RESET )
     {
     }
 
@@ -574,7 +543,7 @@ void SysTick_Handler( void )
     /* USER CODE BEGIN SysTick_IRQn 0 */
 
     /* USER CODE END SysTick_IRQn 0 */
-    HAL_IncTick();
+   // HAL_IncTick();
   #if (INCLUDE_xTaskGetSchedulerState == 1 )
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
     {
@@ -622,17 +591,6 @@ void HAL_MspInit(void)
 	  */
 	  HAL_PWR_EnablePVD();
 
-	  /** Configure the internal voltage reference buffer voltage scale
-	  */
-	  HAL_SYSCFG_VREFBUF_VoltageScalingConfig(SYSCFG_VREFBUF_VOLTAGE_SCALE0);
-
-	  /** Enable the Internal Voltage Reference buffer
-	  */
-	  HAL_SYSCFG_EnableVREFBUF();
-
-	  /** Configure the internal voltage reference buffer high impedance mode
-	  */
-	  HAL_SYSCFG_VREFBUF_HighImpedanceConfig(SYSCFG_VREFBUF_HIGH_IMPEDANCE_ENABLE);
 
 	  /* USER CODE BEGIN MspInit 1 */
 
@@ -681,7 +639,7 @@ void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
 	  (void) ulExpectedIdleTime;
 }
 
-uint8_t GetBoardPowerSource( void )
+uint8_t BoardGetPowerSource( void )
 {
    return (GpioRead(&BattPwr) == GPIO_PIN_SET)? EXT_POWER : BATTERY_POWER;
 }

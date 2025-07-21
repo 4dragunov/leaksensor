@@ -60,13 +60,29 @@ void AdcMcuConfig( Adc_t *obj )
 	assert(obj);
 	assert(obj->inst);
 	ADC_HandleTypeDef * h = &hadc;
-	assert(h);
-	h->Init.ScanConvMode = ADC_SCAN_DISABLE;
-	h->Init.ContinuousConvMode = DISABLE;
-	h->Init.DiscontinuousConvMode = DISABLE;
-	h->Init.ExternalTrigConv = ADC_SOFTWARE_START;
-	h->Init.DataAlign = ADC_DATAALIGN_RIGHT;
-	h->Init.NbrOfConversion = 1;
+	hadc.Instance = ADC;
+	hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+	hadc.Init.Resolution = ADC_RESOLUTION_12B;
+	hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+	hadc.Init.ScanConvMode = ADC_SCAN_DISABLE;
+	hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+	hadc.Init.LowPowerAutoWait = DISABLE;
+	hadc.Init.LowPowerAutoPowerOff = DISABLE;
+	hadc.Init.ContinuousConvMode = DISABLE;
+	hadc.Init.NbrOfConversion = 1;
+	hadc.Init.DiscontinuousConvMode = ENABLE;
+	hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+	hadc.Init.DMAContinuousRequests = DISABLE;
+	hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+	hadc.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
+	hadc.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
+
+	hadc.Init.OversamplingMode = ADC_OVS_HARDWARE;
+	hadc.Init.Oversampling.Ratio = ADC_OVERSAMPLING_RATIO_16;
+	hadc.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_2;
+	hadc.Init.Oversampling.TriggeredMode = ADC_TRIGGEREDMODE_SINGLE_TRIGGER;
+	hadc.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_LOW;
     HAL_ADC_Init( h );
     HAL_ADCEx_Calibration_Start(h);
 }

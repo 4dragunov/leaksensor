@@ -18,9 +18,20 @@
 #include "mav.h"
 #include "arm_math.h"
 #include <cmsis_os.h>
+#include <ctime>
+#include <chrono>
+
+#include "tinyfsm.hpp"
+//#include "fsmlist.hpp"
 
 #define WL_CHANNEL_COUNT 20
+#define CAL_CHANNEL_COUNT 4
+#define VREF_TS_CHANNEL_COUNT 2
 #define MAV_WINDOW 4
+
+#define CHANNEL_SHORTED_LIMIT 100 //ohm
+#define CHANNEL_DISCONNECTED_LIMIT 120000 //ohm
+#define CHANNEL_NOMINAL_CURRENT 20 //uA
 
 typedef enum {
 	CHANNEL_WL0 = 0,
@@ -60,9 +71,66 @@ typedef struct {
 bool operator==(const Gpio_t& lhs, const Gpio_t& rhs);
 bool operator==(const Adc_t& lhs, const Adc_t& rhs);
 
+//self test state
+typedef enum  {
+	UNKNOWN,
+	PASSED,
+	FAILED
+} Status;
 
-struct Channel{
-	typedef int16_t ValueType;
+typedef struct SelfTestResult{
+   Status status;
+   std::chrono::time_point<std::chrono::system_clock> time;
+   SelfTestResult(const Status st):
+	   status(st),
+	   time(std::chrono::system_clock::now()){}
+}  SelfTestResult;
+
+//Connection state
+typedef enum  {
+	DISCONNECTED,
+	CONNECTED,
+	SHORTED
+} ChannelConnectionStatus;
+
+typedef enum  {
+	UNCALIBRATED,
+	CALIBRATED
+} ChannelCalibrationStatus;
+
+typedef struct {
+	ChannelCalibrationStatus status;
+	std::chrono::time_point<std::chrono::system_clock> time;
+} ChannelCalibration;
+
+struct ChannelEvent: tinyfsm::Event {
+	CHANNEL_IDX channel;
+	ChannelEvent(CHANNEL_IDX ch):
+		tinyfsm::Event(),
+		channel(ch) {}
+};
+
+
+struct CalibrationStatusEvent: ChannelEvent {
+  const Status status;
+  const float &shift;
+  const float &factor;
+  CalibrationStatusEvent(const Status st, const CHANNEL_IDX &ch, const float &sh, const float &fa):
+	  ChannelEvent(ch),
+	  status(st),
+	  shift(sh),
+	  factor(fa)
+ {
+
+ }
+};
+
+struct MeasurementEvent       : ChannelEvent { };
+
+
+class Channel: public tinyfsm::Fsm<Channel>{
+public:
+	typedef float ValueType;
 	typedef void (*OnLimit)(const Channel *ch);
 	enum class Units:uint8_t {
 		VOLTAGE,
@@ -83,20 +151,34 @@ struct Channel{
 	    float    div;
 	}Limits;
 
+	struct MeasureEvent: ChannelEvent {
+		const Channel::ValueType &value;
+		MeasureEvent(const CHANNEL_IDX &ch, const Channel::ValueType &v):ChannelEvent(ch), value(v) {}
+	};
+
 	Channel(const CHANNEL_IDX id, const ChannelConfig &config, const  Type type, const  Limits limits, const OnLimit onLimit = nullptr);
 	virtual ~Channel() = default;
 
+	virtual void entry(void) {};
+	void exit(void)  { };
+	virtual void react(const CalibrationStatusEvent& e);
+	virtual void react(const MeasureEvent& e);
+
 	void Measure(Channel::ValueType &val);
-	Channel::ValueType Process();
+	Channel::ValueType Measure();
 	void ToggleCurrentDirection(uint16_t time_delay);
 	Type chType(){return type;}
-	operator Channel::ValueType&() {Channel::ValueType val; Measure(val); return val;}
+	operator Channel::ValueType() {Channel::ValueType val; Measure(val); return val;}
     const CHANNEL_IDX idx;
 	const Type type;
 	const Limits limits;
 	const OnLimit     onLimit;
 	const ChannelConfig &config;
-
+	Channel::ValueType value;
+	float shift;
+	float factor;
+	ChannelCalibration calibration;
+	ChannelConnectionStatus  connection;
 };
 
 
@@ -110,17 +192,12 @@ typedef struct Samples{
 			Channel::ValueType Vref;
 		} ch;
 	}data;
-    struct timeval timestamp;
-    friend std::ostream& operator<<(std::ostream& os, const struct timeval& t){
-    	std::cout << "s:" << t.tv_sec << " us:" << t.tv_usec << std::endl;
-    	return os;
-    }
-
+	std::chrono::time_point<std::chrono::system_clock> timestamp;
     friend  std::ostream& operator<<(std::ostream& os, const Samples& s) {
-    	std::cout << "ts s:" << s.timestamp.tv_sec << "  us:" <<  s.timestamp.tv_usec << std::endl;
+    	os << "ts s:" << s.timestamp << std::endl;
     	auto size = s.data.raw.size();
-    	for(int i = 0; i <  19; i++){
-    		std::cout << i << ":" << s.data.raw[i] << std::endl;
+    	for(unsigned i = 0; i <  size -1; i++){
+    		os << i << ":" << s.data.raw[i] << std::endl;
     	}
     	return os;
     }
@@ -198,15 +275,77 @@ typedef struct Samples{
 	}
 }Samples;
 
+typedef enum {
+	ONESHOT,
+	CONTINUOUS
+}SamplerMode;
 
-class DataSampler {
+struct InitStatusEvent       : tinyfsm::Event { };
+struct SelfTestStatusEvent      : tinyfsm::Event {
+	SelfTestResult result;
+	SelfTestStatusEvent(const Status &st):tinyfsm::Event(), result(st){}
+};
+
+struct SampleEvent  : tinyfsm::Event { };
+struct SampleDoneEvent : tinyfsm::Event {};
+
+
+template<unsigned int Bits=4>
+class ChannelSelector {
+	std::array<Gpio_t,Bits> mPins;
+	std::array<PinNames, Bits> mPinNames;
+	uint8_t mSelected;
+public:
+	ChannelSelector(const std::array<PinNames, Bits>& names):
+		mPins{},
+		mPinNames{names},
+		mSelected(0)
+	{
+		for(uint8_t bit = 0; bit < Bits; bit++){
+			GpioInit( &mPins[bit], mPinNames[bit], PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+		}
+	}
+	virtual ~ChannelSelector(void){
+		for(uint8_t bit = 0; bit < Bits; bit++){
+			GpioInit( &mPins[bit], mPinNames[bit], PIN_ANALOGIC, PIN_OPEN_DRAIN, PIN_NO_PULL, 0 );
+		}
+	}
+	bool Select(uint8_t channel){
+
+		if(channel && channel < (1 << Bits)){
+			for(uint8_t bit = 0; bit < Bits; bit++){
+				GpioWrite(&mPins[bit], ((channel - 1) >> bit) & 0x01);
+			}
+			mSelected = channel;
+			return true;
+		}else
+			return false;
+	}
+	operator int(){return mSelected;}
+	//0 means none selected
+	uint8_t Current(){return mSelected;}
+};
+
+
+class DataSampler: public tinyfsm::Fsm<DataSampler> {
 	friend void SamplerTask(void* argument);
 public:
 	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2 + 4> Channels;
+	 typedef ChannelSelector<4> Multiplexer;
+     typedef enum {SE,DIFF}AdcMode;
+	 virtual void entry(void) {};
+	 virtual void exit(void)  {};
+
+	 void react(tinyfsm::Event &e) {};
+	 virtual void react(const InitStatusEvent &e);
+	 virtual void react(const SelfTestStatusEvent &e);
+	 virtual void react(const CalibrationStatusEvent &e);
+	 virtual void react(const SampleEvent &e);
+	 virtual void react(const SampleDoneEvent &e);
 
 	 static DataSampler &Instance() {
-		 static DataSampler instance;
-		 return instance;
+		 //static DataSampler instance;
+		 return  *DataSampler::current_state_ptr;
 	 }
 	 void DeInit();
 
@@ -221,15 +360,20 @@ public:
 	 osMemoryPoolId_t Pool() { return mSamplesMp;}
 	 osMessageQueueId_t Queue() {return mSamplesMq;}
 	 static float vdda_voltage;
+	 SamplerMode Mode();
+	 AdcMode     MeasureMode(){return mAdcMode;}
+	 Multiplexer& Mux() { return mSelector;};
 protected:
 	 static Channels mChannels;
 	 osMemoryPoolId_t mSamplesMp;
 	 osMessageQueueId_t mSamplesMq;
 	 MAV<Samples, MAV_WINDOW> mMav;
-	 struct timeval mTs;
-	 struct timeval  mSamplePeriod;
-	 osThreadId_t mTaskHandle;
-
+	 std::chrono::time_point<std::chrono::system_clock> mTs;
+	 std::chrono::milliseconds  mSamplePeriod;
+	 std::chrono::milliseconds  mSamplePeriodReal;
+	 AdcMode      mAdcMode;
+	 SelfTestResult  mSelfTest;
+	 Multiplexer mSelector;
 	 DataSampler();
 	 virtual ~DataSampler();
 	 void DoSamplerTask();
