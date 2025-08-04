@@ -51,18 +51,18 @@ if(${SECURE_ELEMENT_PRE_PROVISIONED} MATCHES ON)
 endif()
 
 if(${SECURE_ELEMENT} MATCHES SOFT_SE)
-    target_include_directories( ${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/soft-se)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/soft-se)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -DSOFT_SE)
 endif()
 
 if(${BOARD_OWI} MATCHES OWI_UART)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE -DOWIUART)
-	target_include_directories( ${PROJECT_NAME} PUBLIC	 ${CMAKE_CURRENT_SOURCE_DIR}/onewire )
+	target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/onewire )
 endif()
 
 if(${BOARD_GAUGE} MATCHES BQ35100)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE -DBQ35100)
-	target_include_directories( ${PROJECT_NAME} PUBLIC	 ${CMAKE_CURRENT_SOURCE_DIR}/gauge )
+	target_include_directories(${PROJECT_NAME} PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/gauge )
 endif()
 
 target_include_directories( ${PROJECT_NAME} PUBLIC
