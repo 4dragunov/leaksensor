@@ -388,7 +388,8 @@ void Channel::react(const MeasureEvent& e){
 void SamplerTask(void * argument);
 const osThreadAttr_t thread_attr = {
   .name = "DataSampler",
-  .stack_size = 2048                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 512 * 4,                            // Create the thread stack with a size of 1024 bytes
+  .priority = (osPriority_t) osPriorityNormal
 };
 const osMemoryPoolAttr_t samples_attr = {
 		.name = "samples"
@@ -397,29 +398,24 @@ const osMemoryPoolAttr_t samples_attr = {
 float DataSampler::vdda_voltage = 0;
 
 class Idle
-: public DataSampler{
+: public DataSamplerFsm{
 	void entry() override {
 	  }
 	void exit(void)  { };
 };
 
 class Sampling
-: public DataSampler{
-	 osThreadId_t mTaskHandle;
+: public DataSamplerFsm{
+
 public:
-	Sampling():
-		mTaskHandle(osThreadNew(SamplerTask, this, &thread_attr)){
-	}
-	~Sampling(){
-		osThreadTerminate(mTaskHandle);
-	}
 	void entry() override {
-	  }
-	void exit(void)  { };
+	}
+	void exit(void)  {
+	};
 };
 
 class SelfTest
-: public DataSampler{
+: public DataSamplerFsm {
 	void entry() override {
 		uint16_t total = 0;
 		uint16_t resolution = 12; // Разрядность АЦП
@@ -436,13 +432,13 @@ class SelfTest
 		total/=oversampling_devider;
 		    //VDDA=4095 * 1.20 / ADC
 
-		vdda_voltage = __LL_ADC_CALC_VREFANALOG_VOLTAGE(total,LL_ADC_RESOLUTION_12B);//mV
-		if(vdda_voltage > VDDA_MIN && vdda_voltage < VDDA_MAX) {
-			DBG("VDDA: %.3f\r\n", , vdda_voltage);
+		s->vdda_voltage = __LL_ADC_CALC_VREFANALOG_VOLTAGE(total,LL_ADC_RESOLUTION_12B);//mV
+		if(s->vdda_voltage > VDDA_MIN && s->vdda_voltage < VDDA_MAX) {
+			DBG("VDDA: %.3f\r\n", s->vdda_voltage);
 			dispatch(SelfTestStatusEvent(Status::PASSED));
 		}else {
-			vdda_voltage = 0;
-			DBG("vdda %0.3f- exceed limits\r\n", vdda_voltage);
+			s->vdda_voltage = 0;
+			DBG("vdda %0.3f- exceed limits\r\n", s->vdda_voltage);
 			dispatch(SelfTestStatusEvent(Status::FAILED));
 	   }
 	  }
@@ -450,15 +446,15 @@ class SelfTest
 };
 
 class Calibrating
-: public DataSampler{
+: public DataSamplerFsm{
 	void entry() override {
 
 		for(auto cb:gCalibrationChannels) {
 			float shift;
 			float factor;
 			float voltage[MUX_BLOCKS];
-			voltage[0] =  ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, mChannels[cb.lo].Measure(), 14);
-			voltage[1] =  ADC_CALC_DATA_TO_VOLTAGE(vdda_voltage, mChannels[cb.hi].Measure(), 14);
+			voltage[0] =  ADC_CALC_DATA_TO_VOLTAGE(s->vdda_voltage, s->mChannels[cb.lo].Measure(), 14);
+			voltage[1] =  ADC_CALC_DATA_TO_VOLTAGE(s->vdda_voltage, s->mChannels[cb.hi].Measure(), 14);
 
 			shift =   REFERENCE_RES_LO - (voltage[0] / (CHANNEL_NOMINAL_CURRENT / 1000.0));
 			factor =  REFERENCE_RES_HI / (voltage[1] / (CHANNEL_NOMINAL_CURRENT / 1000.0)) - shift;
@@ -473,14 +469,16 @@ class Calibrating
 };
 
 class CalibrationFailed
-: public DataSampler{
+: public DataSamplerFsm{
 	void entry() override {
 	  }
 	void exit(void)  { };
 };
 
+FSM_INITIAL_STATE(DataSamplerFsm, SelfTest)
+
 DataSampler::DataSampler():
-		tinyfsm::Fsm<DataSampler>(),
+		fsm(),
 		mSamplesMp(osMemoryPoolNew(2, sizeof(struct Samples), &samples_attr)),
 		mSamplesMq(osMessageQueueNew(1, sizeof(Samples*), nullptr)),
 		mMav(),
@@ -489,14 +487,15 @@ DataSampler::DataSampler():
 		mSamplePeriodReal(0),
 		mAdcMode(AdcMode::SE),
 		mSelfTest(UNKNOWN),
-		mSelector({SCH0, SCH1, SCH2, SCH3})
+		mSelector({SCH0, SCH1, SCH2, SCH3}),
+		mTaskHandle(osThreadNew(SamplerTask, this, &thread_attr))
 {
-	//dispatch(InitDoneEvent());
+	fsm.s = this;
+	fsm.start();
 }
 
 DataSampler::~DataSampler(){
 	DeInit();
-
 	osMemoryPoolDelete(mSamplesMp);
 	osMessageQueueDelete(mSamplesMq);
 }
@@ -546,43 +545,6 @@ void DataSampler::DoSamplerTask()
 }
 }
 
-void DataSampler::react(const InitStatusEvent &e)
-{
-
-}
-
-void DataSampler::react(const SelfTestStatusEvent &e)
-{
-	mSelfTest  = e.result;
-	if(e.result.status == PASSED){
-		transit<Calibrating>();
-	}else{
-		transit<Idle>();
-	}
-}
-
-void DataSampler::react(const  CalibrationStatusEvent &e)
-{
-	if(e.status == PASSED){
-		for(auto ch:mChannels){
-			ch.dispatch(e);
-		}
-		transit<Sampling>();
-	}else{
-		transit<Idle>();
-	}
-}
-
-void DataSampler::react(const SampleEvent &e)
-{
-
-}
-void DataSampler::react(const SampleDoneEvent &e)
-{
-
-}
-
-
 void SamplerTask(void * argument){
 	static_cast<DataSampler*>(argument)->DoSamplerTask();
 }
@@ -607,4 +569,40 @@ struct timeval getSamplerate(void)
 	DBG("Sample rate:\n");
 }
 
-//FSM_INITIAL_STATE(DataSampler, SelfTest)
+void DataSamplerFsm::react(const InitStatusEvent &e)
+{
+
+}
+
+void DataSamplerFsm::react(const SelfTestStatusEvent &e)
+{
+	s->mSelfTest  = e.result;
+	if(e.result.status == PASSED){
+		transit<Calibrating>();
+	}else{
+		transit<Idle>();
+	}
+}
+
+void DataSamplerFsm::react(const  CalibrationStatusEvent &e)
+{
+	if(e.status == PASSED){
+		for(auto ch:s->mChannels){
+			ch.dispatch(e);
+		}
+		transit<Sampling>();
+	}else{
+		transit<Idle>();
+	}
+}
+
+void DataSamplerFsm::react(const SampleEvent &e)
+{
+
+}
+void DataSamplerFsm::react(const SampleDoneEvent &e)
+{
+
+}
+
+

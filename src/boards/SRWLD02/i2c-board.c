@@ -30,37 +30,52 @@
  */
 #define TIMEOUT_MAX                                 0x8000
 
-static I2C_HandleTypeDef I2cHandle = { 0 };
+static I2C_HandleTypeDef I2cHandle[3] = { 0 };
 
 static I2cAddrSize I2cInternalAddrSize = I2C_ADDR_SIZE_8;
 
 void I2cMcuInit( I2c_t *obj, I2cId_t i2cId, PinNames scl, PinNames sda )
 {
-    __HAL_RCC_I2C1_CLK_DISABLE( );
-    __HAL_RCC_I2C1_CLK_ENABLE( );
-    __HAL_RCC_I2C1_FORCE_RESET( );
-    __HAL_RCC_I2C1_RELEASE_RESET( );
-
-    obj->I2cId = i2cId;
-
-    I2cHandle.Instance  = ( I2C_TypeDef * )I2C1_BASE;
-
-    GpioInit( &obj->Scl, scl, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
-    GpioInit( &obj->Sda, sda, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
+	uint8_t af;
+	obj->I2cId = i2cId;
+	if(obj->I2cId == I2C_1)  {
+		__HAL_RCC_I2C1_CLK_DISABLE( );
+		__HAL_RCC_I2C1_CLK_ENABLE( );
+		__HAL_RCC_I2C1_FORCE_RESET( );
+		__HAL_RCC_I2C1_RELEASE_RESET( );
+		 I2cHandle[obj->I2cId].Instance  = ( I2C_TypeDef * )I2C1_BASE;
+		 af = GPIO_AF4_I2C1;
+	}else if(obj->I2cId == I2C_2) {
+		__HAL_RCC_I2C2_CLK_DISABLE( );
+	    __HAL_RCC_I2C2_CLK_ENABLE( );
+	    __HAL_RCC_I2C2_FORCE_RESET( );
+	    __HAL_RCC_I2C2_RELEASE_RESET( );
+	    I2cHandle[obj->I2cId].Instance  = ( I2C_TypeDef * )I2C2_BASE;
+	    af = GPIO_AF4_I2C2;
+	}else if(obj->I2cId == I2C_3) {
+		__HAL_RCC_I2C3_CLK_DISABLE( );
+	    __HAL_RCC_I2C3_CLK_ENABLE( );
+	    __HAL_RCC_I2C3_FORCE_RESET( );
+	    __HAL_RCC_I2C3_RELEASE_RESET( );
+	    I2cHandle[obj->I2cId].Instance  = ( I2C_TypeDef * )I2C3_BASE;
+	    af = GPIO_AF4_I2C3;
+	}
+    GpioInit( &obj->Scl, scl, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, af );
+    GpioInit( &obj->Sda, sda, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, af );
 }
 
 void I2cMcuFormat( I2c_t *obj, I2cMode mode, I2cDutyCycle dutyCycle, bool I2cAckEnable, I2cAckAddrMode AckAddrMode, uint32_t I2cFrequency )
 {
     __HAL_RCC_I2C1_CLK_ENABLE( );
-    I2cHandle.Init.Timing = 0x0090194B;
-    I2cHandle.Init.OwnAddress1 = 0;
-    I2cHandle.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-    I2cHandle.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-    I2cHandle.Init.OwnAddress2 = 0;
-    I2cHandle.Init.GeneralCallMode = I2C_GENERALCALL_DISABLED;
-    I2cHandle.Init.NoStretchMode = I2C_NOSTRETCH_DISABLED;
+    I2cHandle[obj->I2cId].Init.Timing = 0x0090194B;
+    I2cHandle[obj->I2cId].Init.OwnAddress1 = 0;
+    I2cHandle[obj->I2cId].Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    I2cHandle[obj->I2cId].Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    I2cHandle[obj->I2cId].Init.OwnAddress2 = 0;
+    I2cHandle[obj->I2cId].Init.GeneralCallMode = I2C_GENERALCALL_DISABLED;
+    I2cHandle[obj->I2cId].Init.NoStretchMode = I2C_NOSTRETCH_DISABLED;
 
-    HAL_I2C_Init( &I2cHandle );
+    HAL_I2C_Init( &I2cHandle[obj->I2cId] );
 }
 
 void I2cMcuResetBus( I2c_t *obj )
@@ -70,8 +85,10 @@ void I2cMcuResetBus( I2c_t *obj )
     __HAL_RCC_I2C1_FORCE_RESET( );
     __HAL_RCC_I2C1_RELEASE_RESET( );
 
-    GpioInit( &obj->Scl, I2C_SCL, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
-    GpioInit( &obj->Sda, I2C_SDA, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, GPIO_AF4_I2C1 );
+    uint8_t af =(obj->I2cId == I2C_1)? GPIO_AF4_I2C1 : \
+    		    (obj->I2cId == I2C_2)? GPIO_AF4_I2C2 : GPIO_AF4_I2C3;
+    GpioInit( &obj->Scl,  obj->Scl.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, af );
+    GpioInit( &obj->Sda,  obj->Sda.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, af );
 
     I2cMcuFormat( obj, MODE_I2C, I2C_DUTY_CYCLE_2, true, I2C_ACK_ADD_7_BIT, 0x0090194B );
 }
@@ -79,7 +96,7 @@ void I2cMcuResetBus( I2c_t *obj )
 void I2cMcuDeInit( I2c_t *obj )
 {
 
-    HAL_I2C_DeInit( &I2cHandle );
+    HAL_I2C_DeInit( & I2cHandle[obj->I2cId] );
 
     __HAL_RCC_I2C1_FORCE_RESET();
     __HAL_RCC_I2C1_RELEASE_RESET();
@@ -98,7 +115,7 @@ LmnStatus_t I2cMcuWriteBuffer( I2c_t *obj, uint8_t deviceAddr, uint8_t *buffer, 
 {
     LmnStatus_t status = LMN_STATUS_ERROR;
 
-    status = ( HAL_I2C_Master_Transmit( &I2cHandle, deviceAddr, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
+    status = ( HAL_I2C_Master_Transmit( & I2cHandle[obj->I2cId], deviceAddr, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
 }
@@ -107,7 +124,7 @@ LmnStatus_t I2cMcuReadBuffer( I2c_t *obj, uint8_t deviceAddr, uint8_t *buffer, u
 {
     LmnStatus_t status = LMN_STATUS_ERROR;
 
-    status = ( HAL_I2C_Master_Receive( &I2cHandle, deviceAddr, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
+    status = ( HAL_I2C_Master_Receive( & I2cHandle[obj->I2cId], deviceAddr, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
 }
@@ -125,7 +142,7 @@ LmnStatus_t I2cMcuWriteMemBuffer( I2c_t *obj, uint8_t deviceAddr, uint16_t addr,
     {
         memAddSize = I2C_MEMADD_SIZE_16BIT;
     }
-    status = ( HAL_I2C_Mem_Write( &I2cHandle, deviceAddr, addr, memAddSize, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
+    status = ( HAL_I2C_Mem_Write( & I2cHandle[obj->I2cId], deviceAddr, addr, memAddSize, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
 }
@@ -143,7 +160,7 @@ LmnStatus_t I2cMcuReadMemBuffer( I2c_t *obj, uint8_t deviceAddr, uint16_t addr, 
     {
         memAddSize = I2C_MEMADD_SIZE_16BIT;
     }
-    status = ( HAL_I2C_Mem_Read( &I2cHandle, deviceAddr, addr, memAddSize, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
+    status = ( HAL_I2C_Mem_Read( & I2cHandle[obj->I2cId], deviceAddr, addr, memAddSize, buffer, size, 2000 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
 }
@@ -152,7 +169,7 @@ LmnStatus_t I2cMcuWaitStandbyState( I2c_t *obj, uint8_t deviceAddr )
 {
     LmnStatus_t status = LMN_STATUS_ERROR;
 
-    status = ( HAL_I2C_IsDeviceReady( &I2cHandle, deviceAddr, 300, 4096 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
+    status = ( HAL_I2C_IsDeviceReady( & I2cHandle[obj->I2cId], deviceAddr, 300, 4096 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
 }

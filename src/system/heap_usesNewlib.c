@@ -152,6 +152,26 @@ register char * stack_ptr asm("sp");
 #endif
 extern char __HeapBase, __HeapLimit;  // symbols from linker LD command file
 
+typedef enum heapCap{
+   ISR = 1,
+   DMA = 2,
+   GPH = 4,
+   ALL = ISR | DMA | GPH
+}HeapCap; 
+
+typedef struct HeapRegionInfo
+{
+    HeapCap  cap;
+	uint8_t *pCurrentHeapEnd;
+	uint32_t heapBytesRemaining;
+	HeapRegion_t region;
+} HeapRegionInfo_t;
+
+static HeapRegionInfo_t  ucHeap[] = {
+								{ALL,     (uint8_t *) (uint32_t)&__HeapBase, 0, {(uint8_t *) (uint32_t)&__HeapBase,  (uint8_t *) (uint32_t)&__HeapLimit }},\
+                                {ISR|GPH, (uint8_t *) (uint32_t)0x10000000,  0, {(uint8_t *) (uint32_t)0x10000000,   (uint8_t *) (uint32_t) 0x10007FFF  }}
+								};
+
 // Use of vTaskSuspendAll() in _sbrk_r() is normally redundant, as newlib malloc family routines call
 // __malloc_lock before calling _sbrk_r(). Note vTaskSuspendAll/xTaskResumeAll support nesting.
 
@@ -160,17 +180,22 @@ void * _sbrk_r(struct _reent *pReent, int incr) {
     #ifdef MALLOCS_INSIDE_ISRs // block interrupts during free-storage use
       UBaseType_t usis; // saved interrupt status
     #endif
-    static char *currentHeapEnd = &__HeapBase;
-    #ifdef STM_VERSION // Use STM CubeMX LD symbols for heap
-      if(TotalHeapSize==0) {
-        TotalHeapSize = heapBytesRemaining = (int)((&__HeapLimit)-(&__HeapBase))-ISR_STACK_LENGTH_BYTES;
-      };
-    #endif
-    char* limit = (xTaskGetSchedulerState()==taskSCHEDULER_NOT_STARTED) ?
-            stack_ptr   :  // Before scheduler is started, limit is stack pointer (risky!)
-            &__HeapLimit-ISR_STACK_LENGTH_BYTES;  // Once running, OK to reuse all remaining RAM except ISR stack (MSP) stack
+    static int regionCount =  (sizeof(ucHeap) / sizeof(ucHeap[0]));
+
+  	for(int i = 0; i < regionCount; i++) {
+
+		if(TotalHeapSize ==0) {
+			for(int j = 0; j < regionCount; j++) {
+			ucHeap[j].heapBytesRemaining = ucHeap[j].region.pucEndAddress - ucHeap[j].pCurrentHeapEnd;
+			TotalHeapSize += ucHeap[j].heapBytesRemaining;
+			}
+		}
+  	bool isLastRegion = (i == regionCount - 1);
+    uint8_t* limit =(ucHeap[i].cap & ISR)? ucHeap[i].region.pucEndAddress - ISR_STACK_LENGTH_BYTES: ucHeap[i].region.pucEndAddress;  // Once running, OK to reuse all remaining RAM except ISR stack (MSP) stack
+
     DRN_ENTER_CRITICAL_SECTION(usis);
-    if (currentHeapEnd + incr > limit) {
+    if ((ucHeap[i].pCurrentHeapEnd + incr > limit)) {
+    	if(isLastRegion) {
         // Ooops, no more memory available...
         #if( configUSE_MALLOC_FAILED_HOOK == 1 )
           {
@@ -188,16 +213,21 @@ void * _sbrk_r(struct _reent *pReent, int incr) {
             DRN_EXIT_CRITICAL_SECTION(usis);
         #endif
         return (char *)-1; // the malloc-family routine that called sbrk will return 0
-    }
-    // 'incr' of memory is available: update accounting and return it.
-    char *previousHeapEnd = currentHeapEnd;
-    currentHeapEnd += incr;
-    heapBytesRemaining -= incr;
-    #ifndef NDEBUG
-        totalBytesProvidedBySBRK += incr;
-    #endif
-    DRN_EXIT_CRITICAL_SECTION(usis);
-    return (char *) previousHeapEnd;
+    	} else  continue;
+    }else {
+		// 'incr' of memory is available: update accounting and return it.
+		uint8_t *previousHeapEnd = ucHeap[i].pCurrentHeapEnd;
+		ucHeap[i].pCurrentHeapEnd+= incr;
+		ucHeap[i].heapBytesRemaining -= incr;
+		TotalHeapSize -= incr;
+		#ifndef NDEBUG
+			totalBytesProvidedBySBRK += incr;
+		#endif
+		DRN_EXIT_CRITICAL_SECTION(usis);
+		return (char *) previousHeapEnd;
+	}
+  	}
+  	return (char *)-1;
 }
 //! non-reentrant sbrk uses is actually reentrant by using current context
 // ... because the current _reent structure is pointed to by global _impure_ptr
@@ -275,7 +305,7 @@ void vPortFree( void *pv ) PRIVILEGED_FUNCTION {
 
 size_t xPortGetFreeHeapSize( void ) PRIVILEGED_FUNCTION {
     struct mallinfo mi = mallinfo(); // available space now managed by newlib
-    return mi.fordblks + heapBytesRemaining; // plus space not yet handed to newlib by sbrk
+    return mi.fordblks + TotalHeapSize; // plus space not yet handed to newlib by sbrk
 }
 
 // GetMinimumEverFree is not available in newlib's malloc implementation.

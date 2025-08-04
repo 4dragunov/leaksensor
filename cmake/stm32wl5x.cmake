@@ -25,7 +25,7 @@ endif(NOT DEFINED LINKER_SCRIPT)
 message("Linker script: ${LINKER_SCRIPT}")
 
 set(MCU STM32WL55xx)
-set(MCU_SPEC  cortex-m4)
+set(MCU_SPEC cortex-m4)
 
 #---------------------------------------------------------------------------------------
 # Set compiler/linker flags

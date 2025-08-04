@@ -26,10 +26,9 @@ set(BOARD_MCU ${MCU} PARENT_SCOPE)
 set(BOARD_MCU ${MCU})
 
 set(SECURE_ELEMENT SOFT_SE PARENT_SCOPE)
+set(BOARD_OWI OWI_UART PARENT_SCOPE)
 
 include(CMakePrintHelpers)
-
-cmake_print_variables(BOARD_MCU)
 
 list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/adc-board.c"

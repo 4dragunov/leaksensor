@@ -310,10 +310,8 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 	  while(1); //Error Modbus type not supported choose a valid Type
 	 }
 
-	 if(mTaskHandle == nullptr)
-	 {
-	  while(1); //Error creating Modbus task, check heap and stack size
-	 }
+	 assert(mTaskHandle); //Error creating Modbus task, check heap and stack size
+
 	 mTimerT35 = osTimerNew(vTimerCallbackT35,  osTimerPeriodic , &mTimerT35, nullptr);
 
 	 mSpHandle = osSemaphoreNew(1, 0, nullptr);

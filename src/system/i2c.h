@@ -23,13 +23,9 @@
 #ifndef __I2C_H__
 #define __I2C_H__
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 #include "utilities.h"
 #include "gpio.h"
+#include <cmsis_os.h>
 
 /*!
  * I2C peripheral ID
@@ -38,6 +34,7 @@ typedef enum
 {
     I2C_1,
     I2C_2,
+	I2C_3
 }I2cId_t;
 
 /*!
@@ -49,6 +46,11 @@ typedef struct
     Gpio_t Scl;
     Gpio_t Sda;
 }I2c_t;
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
 
 /*!
  * \brief Initializes the I2C object and MCU peripheral
@@ -153,8 +155,37 @@ LmnStatus_t I2cReadMem( I2c_t *obj, uint8_t deviceAddr, uint16_t addr, uint8_t *
  */
 LmnStatus_t I2cReadMemBuffer( I2c_t *obj, uint8_t deviceAddr, uint16_t addr, uint8_t *buffer, uint16_t size );
 
+LmnStatus_t I2cWaitStandbyState( I2c_t *obj, uint8_t deviceAddr );
+
 #ifdef __cplusplus
 }
 #endif
+#ifdef __cplusplus
 
+class I2C: I2c_t {
+	osMutexId_t mMtx;
+	PinNames mSclPin;
+	PinNames mSdaPin;
+public:
+	I2C(I2cId_t i2cId, PinNames scl, PinNames sda):I2c_t(), mMtx(osMutexNew(NULL)),
+	mSclPin(scl), mSdaPin(sda){
+		this->I2cId = i2cId;
+	};
+	virtual ~I2C() {I2cDeInit(this);};
+	virtual void init(){I2cInit( this, this->I2cId, mSclPin, mSdaPin );};
+	virtual osStatus_t lock(uint32_t ms=osWaitForever) {return  osMutexAcquire(mMtx, ms);};
+	virtual osStatus_t unlock() {return osMutexRelease(mMtx);};
+	virtual void reset() {I2cResetBus(this);};
+	virtual void frequency(uint32_t freq) {};
+	virtual LmnStatus_t write(uint8_t deviceAddr, uint8_t data, bool cmd = false) {return I2cWrite( this , deviceAddr, data );};
+	virtual LmnStatus_t write(uint8_t deviceAddr, uint8_t *buffer, uint16_t size, bool cmd = false) {return I2cWriteBuffer(this, deviceAddr, buffer, size);};
+	virtual LmnStatus_t writeMem(uint8_t deviceAddr, uint16_t addr, uint8_t data ) {return I2cWriteMem( this, deviceAddr, addr, data );};
+	virtual LmnStatus_t writeMem(uint8_t deviceAddr, uint16_t addr, uint8_t *buffer, uint16_t size ) {return I2cWriteMemBuffer(this, deviceAddr, addr, buffer, size);};
+
+	virtual LmnStatus_t read(uint8_t deviceAddr, uint8_t *data ) {return I2cRead(this, deviceAddr, data);};
+	virtual LmnStatus_t read( uint8_t deviceAddr, uint8_t *buffer, uint16_t size ) {return I2cReadBuffer(this, deviceAddr, buffer, size);};
+	virtual LmnStatus_t readMem( uint8_t deviceAddr, uint16_t addr, uint8_t *data ) {return I2cReadMem(this, deviceAddr, addr, data);};
+	virtual LmnStatus_t readMem( uint8_t deviceAddr, uint16_t addr, uint8_t *buffer, uint16_t size ){return I2cReadMemBuffer(this, deviceAddr, addr, buffer, size);};
+};
+#endif
 #endif // __I2C_H__

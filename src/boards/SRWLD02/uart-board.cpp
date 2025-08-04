@@ -52,7 +52,7 @@ uint8_t TxData[UART_COUNT] = {0};
 
 
 UartId_t IdByHandle(const UART_HandleTypeDef *handle){
-	for(int i = (int)USART_1; i < (int)UART_NONE; i++)
+	for(int i = (int)LPUART_1; i < (int)UART_NONE; i++)
 	{
 		if(&UartHandle[i] == handle) {
 			return (UartId_t) i;
@@ -111,7 +111,7 @@ void UartMcuConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baud
     }
     else
     {
-    	assert_param(obj->UartId >= USART1 && obj->UartId <= UART5);
+    	assert_param(obj->UartId >= LPUART_1 && obj->UartId <= USART_2);
         UartHandle[obj->UartId].Instance = (USART_TypeDef*)UsartTypeDefs[obj->UartId];
         UartHandle[obj->UartId].Init.BaudRate = baudrate;
         obj->fifo = fifo;

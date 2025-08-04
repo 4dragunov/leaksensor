@@ -38,9 +38,6 @@
 #endif
 
 
-#define XSTR(x) STR(x)
-#define STR(x) #x
-
 /**
   \page CMSIS_MISRA_Exceptions  MISRA-C:2004 Compliance Exceptions
   CMSIS violates the following MISRA-C:2004 rules:
@@ -102,9 +99,6 @@
   #endif
 
 #elif defined ( __GNUC__ )
-#pragma message "The value of __VFP_FP__: " XSTR(__VFP_FP__)
-#pragma message "The value of __SOFTFP__: " XSTR(defined(__SOFTFP__))
-#pragma message "The value of __FPU_PRESENT: " XSTR(__FPU_PRESENT)
   #if defined (__VFP_FP__) && !defined(__SOFTFP__)
     #if defined (__FPU_PRESENT) && (__FPU_PRESENT == 1U)
       #define __FPU_USED       1U

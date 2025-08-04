@@ -35,6 +35,12 @@ set(SECURE_ELEMENT_LIST SOFT_SE LR1110_SE ATECC608A_TNGLORA_SE)
 set(SECURE_ELEMENT SOFT_SE CACHE STRING "Default secure element is SOFT_SE")
 set_property(CACHE SECURE_ELEMENT PROPERTY STRINGS ${SECURE_ELEMENT_LIST})
 
+# Do not allow switching of board one wire bus drivers
+set(BOARD_OWI "")
+
+# do not allow switching board battery gauges
+set(BOARD_GAUGE "")
+
 # Allow switching of Applications
 set(APPLICATION_LIST LeakDetector )
 set(APPLICATION LeakDetector CACHE STRING "Default Application is LeakDetector")
@@ -75,6 +81,9 @@ if(BOARD STREQUAL SRWLD01)
     else()
         message(STATUS "Please specify the BOARD_RADIO!\nPossible values are: SX1276MB1LAS, SX1276MB1MAS")
     endif()
+    
+    set(BOARD_OWI OWI_UART CACHE INTERNAL "One wire bus using uart selected")
+    
 elseif(BOARD STREQUAL SRWLD02)
     # Configure toolchain for stm32fwl55
     set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/boards/SRWLD02/cmsis/arm-gcc/stm32wl5mochx_flash.ld)
@@ -86,7 +95,9 @@ elseif(BOARD STREQUAL SRWLD02)
     # Configure radio
     set(BOARD_RADIO STM32WL5XX CACHE INTERNAL "Radio stm32wl5xx selected")
     set(RADIO stm32wl5xx CACHE INTERNAL "Radio stm32wl5xx selected")
-
+    
+	set(BOARD_GAUGE BQ35100 CACHE INTERNAL "Gauge bq35100 selected")
+	set(BOARD_OWI OWI_UART CACHE INTERNAL "One wire bus using uart selected")
 endif()
 
 #---------------------------------------------------------------------------------------
@@ -94,13 +105,11 @@ endif()
 #---------------------------------------------------------------------------------------
 include(CMakePrintHelpers)
 
-add_compile_options("$<$<CONFIG:DEBUG>:-DDEBUG>")
+add_compile_options("$<$<CONFIG:Debug>:-Og>")
+add_compile_definitions("$<$<CONFIG:Debug>:DEBUG>")
+add_compile_definitions("$<$<CONFIG:Debug>:CURRENT_TRACE_LEVEL=DEBUG>")
 
-set(BOARD_MCU "STM32WL55xx")
-add_compile_definitions(STM32WL55xx)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/boards)
-cmake_print_variables(BOARD_MCU)
-
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/radio)
 

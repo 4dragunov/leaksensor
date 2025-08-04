@@ -20,6 +20,7 @@
 #include <cmsis_os.h>
 #include <ctime>
 #include <chrono>
+#include "arm_math.h"
 
 #include "tinyfsm.hpp"
 //#include "fsmlist.hpp"
@@ -127,6 +128,9 @@ struct CalibrationStatusEvent: ChannelEvent {
 
 struct MeasurementEvent       : ChannelEvent { };
 
+
+#define Q2F(q) (q / 32768)
+#define F2Q(f) (f * 32768)
 
 class Channel: public tinyfsm::Fsm<Channel>{
 public:
@@ -326,13 +330,12 @@ public:
 	uint8_t Current(){return mSelected;}
 };
 
-
-class DataSampler: public tinyfsm::Fsm<DataSampler> {
-	friend void SamplerTask(void* argument);
+class DataSampler;
+class DataSamplerFsm: public tinyfsm::Fsm<DataSamplerFsm> {
 public:
-	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2 + 4> Channels;
-	 typedef ChannelSelector<4> Multiplexer;
-     typedef enum {SE,DIFF}AdcMode;
+	DataSamplerFsm():tinyfsm::Fsm<DataSamplerFsm>(),s(), mTaskHandle(){}
+	virtual ~DataSamplerFsm(){}
+
 	 virtual void entry(void) {};
 	 virtual void exit(void)  {};
 
@@ -342,10 +345,31 @@ public:
 	 virtual void react(const CalibrationStatusEvent &e);
 	 virtual void react(const SampleEvent &e);
 	 virtual void react(const SampleDoneEvent &e);
+	 DataSampler* s;
+	 osThreadId_t mTaskHandle;
+};
+
+class DataSampler {
+	friend void SamplerTask(void* argument);
+	friend class DataSamplerFsm;
+	friend class Calibrating;
+	friend class SelfTest;
+public:
+	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2 + 4> Channels;
+	 typedef ChannelSelector<4> Multiplexer;
+     typedef enum {SE,DIFF}AdcMode;
+
+
+	 void react(tinyfsm::Event &e) {fsm.react(e);};
+	 virtual void react(const InitStatusEvent &e) {fsm.react(e);};
+	 virtual void react(const SelfTestStatusEvent &e){fsm.react(e);};
+	 virtual void react(const CalibrationStatusEvent &e){fsm.react(e);};
+	 virtual void react(const SampleEvent &e){fsm.react(e);};
+	 virtual void react(const SampleDoneEvent &e){fsm.react(e);};
 
 	 static DataSampler &Instance() {
-		 //static DataSampler instance;
-		 return  *DataSampler::current_state_ptr;
+		 static DataSampler instance;
+		 return  instance;
 	 }
 	 void DeInit();
 
@@ -364,7 +388,9 @@ public:
 	 AdcMode     MeasureMode(){return mAdcMode;}
 	 Multiplexer& Mux() { return mSelector;};
 protected:
+
 	 static Channels mChannels;
+	 DataSamplerFsm fsm;
 	 osMemoryPoolId_t mSamplesMp;
 	 osMessageQueueId_t mSamplesMq;
 	 MAV<Samples, MAV_WINDOW> mMav;
@@ -374,6 +400,7 @@ protected:
 	 AdcMode      mAdcMode;
 	 SelfTestResult  mSelfTest;
 	 Multiplexer mSelector;
+	 osThreadId_t mTaskHandle;
 	 DataSampler();
 	 virtual ~DataSampler();
 	 void DoSamplerTask();

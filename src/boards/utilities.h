@@ -285,6 +285,7 @@ void print_bytes(std::ostream& out, const char *title, const unsigned char *data
 
 #endif //cpp
 
+
 #ifdef DEBUG
     #include <stdio.h>
     /*!
@@ -300,5 +301,32 @@ void print_bytes(std::ostream& out, const char *title, const unsigned char *data
     #define DBG( fmt, ... )
 	#define DBG_HEX(x,y,z) do{}while(0)
 #endif
+
+// Define trace levels
+typedef enum {
+	TLNONE = 0,
+	TLERROR,
+	TLWARNING,
+	TLINFO,
+	TLDEBUG
+} TRACE_LEVEL;
+
+// Set the current trace level (can be changed at compile time or runtime)
+#ifndef CURRENT_TRACE_LEVEL
+#define CURRENT_TRACE_LEVEL TLINFO // Default level
+#endif
+
+// Define the TRACE macro
+#define TRACE(level, format, ...) \
+    do { \
+        if (level <= CURRENT_TRACE_LEVEL) { \
+            fprintf(stderr, "[%s] %s:%d: " format "\n", \
+                    (level == TLERROR) ? "ERROR" : \
+                    (level == TLWARNING) ? "WARNING" : \
+                    (level == TLINFO) ? "INFO" : \
+                    (level == TLDEBUG) ? "DEBUG" : "UNKNOWN", \
+                    __FILE__, __LINE__, ##__VA_ARGS__); \
+        } \
+    } while (0)
 
 #endif // __UTILITIES_H__

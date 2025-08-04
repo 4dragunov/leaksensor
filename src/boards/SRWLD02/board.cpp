@@ -24,6 +24,7 @@
 #include <cstring>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 #include "stm32wlxx.h"
 #include "utilities.h"
 #include "gpio.h"
@@ -41,28 +42,38 @@
 #include "Ds18B20.h"
 #include "FreeRTOS.h"
 #include "sensors-board.h"
-
+#include "bq35100.h"
 #include "stm32wlxx_board_radio.h"
-
+#include "timemacro.h"
 #include "board.h"
+#include "nonvol.h"
+
+/*!
+ * Unique Devices IDs register set ( STM32WL5x )
+ */
+#define U_ID          0x1FFF7590
 
 /*!
  * Unique Devices IDs register set ( STM32F103xE )
  */
-
-typedef union {
-	struct USID{
-		uint32_t LotNumber:24;
-		uint8_t  SiliconWaferNumber;
-		uint32_t AnotherLotNumber;
-		uint32_t UniqueID;
-	} field;
+#pragma pack(push, 1)
+union Usid {
+	struct{
+		union {
+			struct{
+				uint16_t x;
+				uint16_t y;
+			};
+			uint32_t xy;
+		}pos;
+		uint8_t  wafer;
+		char     lot[7];
+	};
 	uint8_t bytes[12];
-}Usid;
-/*!
- * Unique Devices IDs register set ( STM32F103xE )
- */
-#define U_ID          0x1ffff7e8
+} *UniqueSiliconID = (union Usid *)U_ID;
+#pragma pack(pop)
+
+
 
 #define ID1 ((uint32_t*)(U_ID + 0x0))
 #define ID2 ((uint32_t*)(U_ID + 0x4))
@@ -70,7 +81,9 @@ typedef union {
 
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
-
+#define INITIAL_BATTERY_DATE UNIX_TIMESTAMP(2025, 5, 10, 9, 26, 13)
+#define MAX_BATTERY_DATE UNIX_TIMESTAMP(2055, 5, 10, 9, 26, 13)
+#define INITIAL_BATTERY_CAPACITY 6500
 /*!
  * LED GPIO pins objects
  */
@@ -91,11 +104,49 @@ Adc_t  AdcInN = {.inst = ADC, .channel = ADC_CH_N};
 Uart_t LpUart1;
 Uart_t Usart1;
 
+I2C  i2c1(I2C_1, I2C1_SCL, I2C1_SDA);
+BatteryGaugeBq35100 gauge(&i2c1);
+
+IWDG_HandleTypeDef hiwdg;
+PKA_HandleTypeDef hpka;
+RNG_HandleTypeDef hrng;
+
 OneWire::Bus gOWI(&LpUart1);
 OneWire::DS18B20 gDs18b20(&gOWI, OneWire::DS18B20::Resolution::SR12BITS);
 
-Usid *UniqueSiliconID = (Usid *) U_ID;
+NvProperty<uint32_t>  gBatteryReplacementDate(INITIAL_BATTERY_DATE,  MAX_BATTERY_DATE , INITIAL_BATTERY_DATE, NvVar::BATT_INS_DATE);
 
+static void MX_GPIO_Init(void);
+static void MX_IWDG_Init(void);
+
+int bcd2int(uint16_t bcd_value) {
+    int result = 0;
+    int multiplier = 1;
+
+    // Process each 4-bit nibble from right to left (least significant to most significant)
+    while (bcd_value > 0) {
+        // Extract the rightmost BCD digit (4 bits)
+        int digit = bcd_value & 0xF;
+
+        // Check if the extracted digit is a valid BCD digit (0-9)
+        if (digit > 9) {
+            // Handle invalid BCD digit (e.g., return an error or specific value)
+            // For simplicity, this example assumes valid BCD.
+            return -1; // Indicate an error
+        }
+
+        // Add the decimal value of the digit to the result, scaled by its place value
+        result += digit * multiplier;
+
+        // Shift the BCD value to the right by 4 bits to process the next digit
+        bcd_value >>= 4;
+
+        // Increase the multiplier for the next digit's place value (tens, hundreds, etc.)
+        multiplier *= 10;
+    }
+
+    return result;
+}
 
 /*!
  * Initializes the unused GPIO to a know status
@@ -116,7 +167,7 @@ extern "C" void initialise_monitor_handles(void);
 
 void configureTimerForRunTimeStats(void);
 unsigned long getRunTimeCounterValue(void);
-
+void Error_Handler(void);
 /*!
  * Flag to indicate if the MCU is Initialized
  */
@@ -158,6 +209,8 @@ void BoardInitMcu( void )
     {
     	HAL_Init( );
     	SystemClockConfig( );
+
+
 #ifdef DEBUG
     	initialise_monitor_handles();
 #endif
@@ -181,12 +234,22 @@ void BoardInitMcu( void )
         UartConfig( &LpUart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
         RtcInit( );
+        i2c1.init();
+        gauge.init();
 
         BoardUnusedIoInit( );
         if( BoardGetPowerSource( ) == EXT_POWER )
         {
             // Disables OFF mode - Enables lowest power mode (STOP)
-            LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
+            LpmSetOffMode( LPM_APPLI_ID, LPM_ENABLE );
+        }else{
+        	if(gBatteryReplacementDate == INITIAL_BATTERY_DATE)
+        	{
+        	    time_t replaced;
+        	    gauge.newBattery(INITIAL_BATTERY_CAPACITY);
+        	    gBatteryReplacementDate = time(&replaced);
+        	    LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
+        	}
         }
         McuInitialized = true;
     }
@@ -290,9 +353,9 @@ uint8_t UIDtoString(const Usid *sid, char *buf, size_t bufSize)
 
 void BoardPrintSID(void) {
 	printf( "######     Silicon ID    ######\r\n");
-	printf( "######   UID 0x%lx  ######\r\n", UniqueSiliconID->field.UniqueID);
-	printf( "######   Wafer %i         ######\r\n", UniqueSiliconID->field.SiliconWaferNumber);
-	printf( "######   Lot  %i   ######\r\n", UniqueSiliconID->field.LotNumber);
+	printf( "######   chip x/y on wafer %i:%i  ######\r\n", bcd2int(UniqueSiliconID->pos.x), bcd2int(UniqueSiliconID->pos.y));
+	printf( "######   Wafer %i         ######\r\n", UniqueSiliconID->wafer);
+	printf( "######   Lot %.6s   ######\r\n", UniqueSiliconID->lot);
 }
 
 void BoardPrintUUID(void) {
@@ -416,23 +479,28 @@ uint8_t BoardGetBatteryLevel( void )
     }
     else
     {
-        if( BatteryVoltage >= BATTERY_MAX_LEVEL )
-        {
-            batteryLevel = BATTERY_LORAWAN_MAX_LEVEL;
-        }
-        else if( ( BatteryVoltage > BATTERY_MIN_LEVEL ) && ( BatteryVoltage < BATTERY_MAX_LEVEL ) )
-        {
-            batteryLevel =
-                ( ( 253 * ( BatteryVoltage - BATTERY_MIN_LEVEL ) ) / ( BATTERY_MAX_LEVEL - BATTERY_MIN_LEVEL ) ) + 1;
-        }
-        else if( ( BatteryVoltage > BATTERY_SHUTDOWN_LEVEL ) && ( BatteryVoltage <= BATTERY_MIN_LEVEL ) )
-        {
-            batteryLevel = 1;
-        }
-        else  // if( BatteryVoltage <= BATTERY_SHUTDOWN_LEVEL )
-        {
-            batteryLevel = BATTERY_LORAWAN_UNKNOWN_LEVEL;
-        }
+    	int32_t BatteryPercentage;
+    	if(gauge.getRemainingPercentage(&BatteryPercentage)) {
+    		batteryLevel = BatteryPercentage;
+    	}else {
+			if( BatteryVoltage >= BATTERY_MAX_LEVEL )
+			{
+				batteryLevel = BATTERY_LORAWAN_MAX_LEVEL;
+			}
+			else if( ( BatteryVoltage > BATTERY_MIN_LEVEL ) && ( BatteryVoltage < BATTERY_MAX_LEVEL ) )
+			{
+				batteryLevel =
+					( ( 253 * ( BatteryVoltage - BATTERY_MIN_LEVEL ) ) / ( BATTERY_MAX_LEVEL - BATTERY_MIN_LEVEL ) ) + 1;
+			}
+			else if( ( BatteryVoltage > BATTERY_SHUTDOWN_LEVEL ) && ( BatteryVoltage <= BATTERY_MIN_LEVEL ) )
+			{
+				batteryLevel = 1;
+			}
+			else  // if( BatteryVoltage <= BATTERY_SHUTDOWN_LEVEL )
+			{
+				batteryLevel = BATTERY_LORAWAN_UNKNOWN_LEVEL;
+			}
+    	}
     }
     return batteryLevel;
 }
@@ -451,20 +519,21 @@ float BoardGetTemperature( void )
 
 static void BoardUnusedIoInit( void )
 {
-    HAL_DBGMCU_EnableDBGSleepMode( );
-    HAL_DBGMCU_EnableDBGStopMode( );
-    HAL_DBGMCU_EnableDBGStandbyMode( );
+
 }
 
 void SystemClockConfig( void )
 {
 	  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
 	  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+	  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
 	  /** Configure LSE Drive Capability
 	  */
 	  HAL_PWR_EnableBkUpAccess();
 	  __HAL_RCC_LSEDRIVE_CONFIG(RCC_LSEDRIVE_LOW);
+	  /** Configure LSE Drive Capability
+	    */
 
 	  /** Configure the main internal regulator output voltage
 	  */
@@ -472,20 +541,15 @@ void SystemClockConfig( void )
 
 	  /** Initializes the CPU, AHB and APB buses clocks
 	  */
-	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
-	                              |RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+	  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
 	  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
-	  RCC_OscInitStruct.HSIState = RCC_HSI_OFF;
 	  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-	  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
 	  RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
 	  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_11;
-	  RCC_OscInitStruct.LSIDiv = RCC_LSI_DIV1;
-	  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
 	  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
 	  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
 	  {
-
+	    Error_Handler();
 	  }
 
 	  /** Configure the SYSCLKSource, HCLK, PCLK1 and PCLK2 clocks dividers
@@ -501,11 +565,16 @@ void SystemClockConfig( void )
 
 	  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
 	  {
+	    Error_Handler();
 	  }
 
-    // SysTick_IRQn interrupt configuration
- //   HAL_NVIC_SetPriority( SysTick_IRQn, 0, 0 );
-  //  SystemCoreClockUpdate();
+	  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC;
+	  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
+	  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
+	  if( HAL_RCCEx_PeriphCLKConfig( &PeriphClkInit ) != HAL_OK )
+	  {
+	      assert_param( LMN_STATUS_ERROR );
+	  }
 }
 
 void SystemClockReConfig( void )
@@ -519,43 +588,16 @@ void SystemClockReConfig( void )
     while( __HAL_RCC_GET_FLAG( RCC_FLAG_MSIRDY ) == RESET )
     {
     }
-
-    // Enable PLL
-    __HAL_RCC_PLL_ENABLE( );
-
-    // Wait till PLL is ready
-    while( __HAL_RCC_GET_FLAG( RCC_FLAG_PLLRDY ) == RESET )
-    {
-    }
-
-    // Select PLL as system clock source
-    __HAL_RCC_SYSCLK_CONFIG ( RCC_SYSCLKSOURCE_PLLCLK );
+    // Select MSI as system clock source
+    __HAL_RCC_SYSCLK_CONFIG ( RCC_SYSCLKSOURCE_MSI );
 
     // Wait till PLL is used as system clock source
-    while( __HAL_RCC_GET_SYSCLK_SOURCE( ) != RCC_SYSCLKSOURCE_STATUS_PLLCLK )
+    while( __HAL_RCC_GET_SYSCLK_SOURCE( ) != RCC_SYSCLKSOURCE_STATUS_MSI )
     {
     }
     SystemCoreClockUpdate();
 }
 
-void SysTick_Handler( void )
-{
-    /* USER CODE BEGIN SysTick_IRQn 0 */
-
-    /* USER CODE END SysTick_IRQn 0 */
-   // HAL_IncTick();
-  #if (INCLUDE_xTaskGetSchedulerState == 1 )
-    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
-    {
-  #endif /* INCLUDE_xTaskGetSchedulerState */
-    xPortSysTickHandler();
-  #if (INCLUDE_xTaskGetSchedulerState == 1 )
-    }
-  #endif /* INCLUDE_xTaskGetSchedulerState */
-    /* USER CODE BEGIN SysTick_IRQn 1 */
-
-    /* USER CODE END SysTick_IRQn 1 */
-}
 
 void HAL_MspInit(void)
 {
@@ -568,7 +610,19 @@ void HAL_MspInit(void)
 
 	  /* System interrupt init*/
 	  /* PendSV_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(MemoryManagement_IRQn, 0, 0);
+	  /* BusFault_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(BusFault_IRQn, 0, 0);
+	  /* UsageFault_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(UsageFault_IRQn, 0, 0);
+	  /* SVCall_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(SVCall_IRQn, 0, 0);
+	  /* DebugMonitor_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(DebugMonitor_IRQn, 0, 0);
+	  /* PendSV_IRQn interrupt configuration */
 	  HAL_NVIC_SetPriority(PendSV_IRQn, 15, 0);
+	  /* SysTick_IRQn interrupt configuration */
+	  HAL_NVIC_SetPriority(SysTick_IRQn, 15, 0);
 
 	  /* Peripheral interrupt init */
 	  /* HSEM_IRQn interrupt configuration */
@@ -701,6 +755,133 @@ void BoardLowPowerHandler( void )
     LpmEnterLowPower( );
 
     __enable_irq( );
+}
+
+static void MX_IWDG_Init(void)
+{
+
+  /* USER CODE BEGIN IWDG_Init 0 */
+
+  /* USER CODE END IWDG_Init 0 */
+
+  /* USER CODE BEGIN IWDG_Init 1 */
+
+  /* USER CODE END IWDG_Init 1 */
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+  hiwdg.Init.Window = 4095;
+  hiwdg.Init.Reload = 4095;
+  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN IWDG_Init 2 */
+
+  /* USER CODE END IWDG_Init 2 */
+
+}
+
+static void MX_GPIO_Init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOC_CLK_ENABLE();
+/*
+
+  HAL_GPIO_WritePin(GPIOA, EN0_Pin | FE_CTRL3_Pin, GPIO_PIN_RESET);
+
+
+  HAL_GPIO_WritePin(GPIOB, OWPD_Pin |OFF_Pin, GPIO_PIN_RESET);
+
+
+  HAL_GPIO_WritePin(FE_CTRL2_GPIO_Port, FE_CTRL2_Pin, GPIO_PIN_RESET);
+*/
+  /*Configure GPIO pins : EN0_Pin FE_CTRL3_Pin */
+ // GPIO_InitStruct.Pin = EN0_Pin | FE_CTRL3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  //HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : EN1_Pin PST_Pin */
+ /*
+  GPIO_InitStruct.Pin = EN1_Pin | PST_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+*/
+  /*Configure GPIO pins : PA6 PA7 */
+ // GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+ // HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : OWPD_Pin OFF_Pin */
+  /*
+  GPIO_InitStruct.Pin = OWPD_Pin|OFF_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+*/
+  /*Configure GPIO pin : FE_CTRL2_Pin */
+  //GPIO_InitStruct.Pin = FE_CTRL2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  //HAL_GPIO_Init(FE_CTRL2_GPIO_Port, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
+}
+
+void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  if(hadc->Instance==ADC)
+  {
+    /* USER CODE BEGIN ADC_MspInit 0 */
+
+    /* USER CODE END ADC_MspInit 0 */
+    /* Peripheral clock enable */
+    __HAL_RCC_ADC_CLK_ENABLE();
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    /**ADC GPIO Configuration
+    PB3     ------> ADC_IN2
+    PB4     ------> ADC_IN3
+    */
+    /*
+   // GPIO_InitStruct.Pin = SSBP_Pin|SSBN_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    */
+
+    /* USER CODE BEGIN ADC_MspInit 1 */
+
+    /* USER CODE END ADC_MspInit 1 */
+
+  }
+
+}
+
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef USE_FULL_ASSERT

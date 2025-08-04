@@ -210,8 +210,10 @@ void StartTaskModBus(void * argument){
 
 const osThreadAttr_t thread_attr = {
   .name = "ModBusNode",
-  .stack_size = 2048                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 512 * 4,                        // Create the thread stack with a size of 2048 bytes
+  .priority = (osPriority_t) osPriorityNormal
 };
+
 ModBusNode::ModBusNode(MessageBus& mbus):
 	BusNode(&mbus),
 	mModbusTaskHandle(osThreadNew(StartTaskModBus, this, &thread_attr)),
@@ -230,8 +232,8 @@ ModBusNode::~ModBusNode(){
 
 ModBusNode& ModBusNode::Instance(MessageBus &b)
 {
-	static ModBusNode n(b);
-	return n;
+	static ModBusNode node(b);
+	return node;
 }
 
 void ModBusNode::onNotify(MessageBus::Message &message){

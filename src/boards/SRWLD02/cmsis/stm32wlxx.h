@@ -97,10 +97,8 @@
   */
 
 #if defined(STM32WL55xx)
-#pragma message "The STM32WL55xx defined"
   #include "stm32wl55xx.h"
 #elif defined(STM32WLE5xx)
-
   #include "stm32wle5xx.h"
 #elif defined(STM32WL54xx)
   #include "stm32wl54xx.h"

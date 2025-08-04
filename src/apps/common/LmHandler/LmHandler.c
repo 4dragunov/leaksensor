@@ -261,6 +261,9 @@ LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *handlerCallbacks,
     IsClassBSwitchPending = false;
     IsUplinkTxPending = false;
 
+
+    while(1){osDelay(2);};
+
     if( LoRaMacInitialization( &LoRaMacPrimitives, &LoRaMacCallbacks, LmHandlerParams->Region ) != LORAMAC_STATUS_OK )
     {
         return LORAMAC_HANDLER_ERROR;

@@ -21,7 +21,8 @@ void StartTaskLoraNode(void * argument){
 
 const osThreadAttr_t thread_attr = {
   .name = "LoraNode",
-  .stack_size = 512                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal
 };
 
 LoraNode::LoraNode(MessageBus &b):

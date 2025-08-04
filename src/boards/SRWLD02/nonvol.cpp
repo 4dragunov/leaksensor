@@ -25,17 +25,13 @@ const uint8_t NvStore::registry[NV_LAST_VAR] = {
 		[LORA_DEFAULT_DATARATE] = sizeof(uint8_t), //12
 		[LORA_ADR_STATE] = sizeof(uint8_t), //13
 		[LORA_APP_PORT] = sizeof(uint8_t), //14
-		[CHECKSUMM] = sizeof(uint8_t), //15
+		[BATT_INS_DATE] = sizeof(uint32_t),//15
+		[CHECKSUMM] = sizeof(uint8_t), //16
 };
 
 NvStore& NvStore::Instance()
 {
       volatile static NvStore s;
       return const_cast<NvStore&>(s);
-}
-
-std::ostream& operator<<(std::ostream& os, const NvStore& st)
-{
-	return os;
 }
 

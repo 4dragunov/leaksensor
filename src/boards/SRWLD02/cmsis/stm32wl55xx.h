@@ -193,9 +193,6 @@ typedef enum
 #define __NVIC_PRIO_BITS          2U /*!< M0 core uses 2 Bits for the Priority Levels   */
 #define __Vendor_SysTickConfig    0U /*!< Set to 1 if different SysTick Config is used  */
 #define __FPU_PRESENT             0U /*!< FPU not present                               */
-#ifndef __SOFTFP__
-#define __SOFTFP__
-#endif
 #include "core_cm0plus.h"            /* Cortex-M0+ processor and core peripherals */
 
 #else /* CORE_CM4 */
@@ -208,9 +205,6 @@ typedef enum
 #define __NVIC_PRIO_BITS          4U /*!< STM32WLxx uses 4 Bits for the Priority Levels */
 #define __Vendor_SysTickConfig    0U /*!< Set to 1 if different SysTick Config is used  */
 #define __FPU_PRESENT             0U /*!< FPU not present                               */
-#ifndef __SOFTFP__
-#define __SOFTFP__
-#endif
 #include "core_cm4.h"                /* Cortex-M4 processor and core peripherals */
 
 #endif

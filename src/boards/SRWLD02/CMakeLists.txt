@@ -25,13 +25,10 @@ enable_language(C ASM CXX)
 set(MCU STM32WL55xx)
 set(BOARD_MCU ${MCU} PARENT_SCOPE)
 set(BOARD_MCU ${MCU})
-add_compile_definitions(${BOARD_MCU})
-add_compile_definitions(STM32WL55xx)
+
 set(SECURE_ELEMENT SOFT_SE PARENT_SCOPE)
-
-include(CMakePrintHelpers)
-
-cmake_print_variables(BOARD_MCU)
+set(BOARD_OWI OWI_UART PARENT_SCOPE)
+set(BOARD_GAUGE BQ35100 PARENT_SCOPE)
 
 list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/adc-board.c"
@@ -58,6 +55,9 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/stm32_tiny_vsnprintf.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/stm32wlxx_board_radio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/stm32wlxx_hal_timebase_tim.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stm32wlxx_it.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/subghz.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/syscalls.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/sysIrqHandlers.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tickless.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/timer.c"
@@ -105,6 +105,9 @@ add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
 target_compile_options(${PROJECT_NAME} PUBLIC
 	-DUSE_HAL_DRIVER
 	-DUSE_BSP_DRIVER
+	-DCORE_CM4
+	-DUSER_VECT_TAB_ADDRESS
+	 $<$<CONFIG:Debug>:-DDEBUG>
 	-DSTM32WL55xx
 	-DSTM32_THREAD_SAFE_STRATEGY=4
     -mcpu=cortex-m4

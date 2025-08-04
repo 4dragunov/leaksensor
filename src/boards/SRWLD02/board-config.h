@@ -114,8 +114,8 @@ typedef enum {
 //Power status - battery or mains
 #define BAT_PWR										PA_15
 //Battery i2c
-#define I2C_SCL                                     PB_8
-#define I2C_SDA                                     PA_10
+#define I2C1_SCL                                     PB_8
+#define I2C1_SDA                                     PA_10
 
 
 #ifdef __cplusplus

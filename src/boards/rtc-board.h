@@ -58,6 +58,7 @@ extern "C"
  * \remark The timer is based on the RTC
  */
 void RtcInit( void );
+void RtcDeinit(void);
 
 /*!
  * \brief Returns the minimum timeout value

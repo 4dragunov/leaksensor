@@ -42,17 +42,19 @@ ENTRY(Reset_Handler)
 _estack = ORIGIN(RAM1) + LENGTH(RAM1); /* end of "RAM1" Ram type memory */
 
 _Min_Heap_Size = 0x200; /* required amount of heap  */
-_Min_Stack_Size = 0x800; /* required amount of stack */
+_Min_Stack_Size = 0x400; /* required amount of stack */
 
 _EEPROM_PAGES = 4;
-_EEPROM_SIZE = 2K * 2 * _EEPROM_PAGES; /*2x pages*/
+_EEPROM_SIZE = 2K * _EEPROM_PAGES; /*2x pages*/
 
 /* Memories definition */
 MEMORY
 {
+  
   RAM1   (xrw)   : ORIGIN = 0x20000000, LENGTH = 32K
   NVM_RAM (rw)   : ORIGIN = 0x20008000, LENGTH = 4K
   RAM2   (xrw)   : ORIGIN = 0x20009000, LENGTH = 28K
+  C1CCM   (rw)   : ORIGIN = 0x10000000, LENGTH = 32K
   
   BOOT    (rx)   : ORIGIN = 0x08000000, LENGTH = 16K
   FLASH   (rx)   : ORIGIN = 0x08000000, LENGTH = 248K - 4 - _EEPROM_SIZE
@@ -172,6 +174,15 @@ SECTIONS
    *(.emulated_eeprom.*)
    _emulated_eeprom_end = .;
   } >EEPROM
+  
+  .ccm_data :
+  {
+     . = ALIGN(4);
+	 _ccm_data_start = .;
+	 *(.ccm_data*)
+	 . = ALIGN(4);
+	 _ccm_data_end = .;
+  } > C1CCM
 
   /* NVM RAM Data */
   LW_NVM_RAM (NOLOAD) :

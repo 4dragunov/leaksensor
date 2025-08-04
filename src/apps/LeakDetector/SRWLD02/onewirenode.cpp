@@ -88,7 +88,8 @@ void StartTaskOneWire(void * argument){
 
 const osThreadAttr_t thread_attr = {
   .name = "OneWireNode",
-  .stack_size = 1024                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 128 * 4,                            // Create the thread stack with a size of 1024 bytes
+  .priority = (osPriority_t) osPriorityNormal
 };
 
 OneWireNode::OneWireNode():

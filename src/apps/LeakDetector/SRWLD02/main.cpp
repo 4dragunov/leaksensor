@@ -374,7 +374,7 @@ void StartTaskDefault(void * argument)
 
 const osThreadAttr_t thread_attr = {
   .name = "default",
-  .stack_size = 2048                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 512 * 4                            // Create the thread stack with a size of 1024 bytes
 };
 /*!
  * Main application entry point.
@@ -383,9 +383,10 @@ int main( void )
 {
 	//Not needed but for compatibility
     BoardInitMcu( );
-
     osKernelInitialize();   // pre initialize CMSIS-RTOS
+    DBG("Heap %i\n", xPortGetFreeHeapSize());
     MessageBus& mbus = InitOneWire();
+    DBG("Heap %i\n", xPortGetFreeHeapSize());
     InitModBus(mbus);
 
     gLoraNode = &InitLoraNode(mbus);

@@ -123,7 +123,7 @@ that together comprise the total FreeRTOS heap space. */
 typedef struct HeapRegion
 {
 	uint8_t *pucStartAddress;
-	size_t xSizeInBytes;
+	uint8_t *pucEndAddress;
 } HeapRegion_t;
 
 /* Used to pass information about the heap out of vPortGetHeapStats(). */

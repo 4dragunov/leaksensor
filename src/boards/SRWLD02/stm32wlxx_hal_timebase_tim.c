@@ -109,6 +109,8 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
         /* Configure the TIM IRQ priority */
         HAL_NVIC_SetPriority(TIM17_IRQn, TickPriority, 0U);
         uwTickPrio = TickPriority;
+        HAL_SYSTICK_CLKSourceConfig( SYSTICK_CLKSOURCE_HCLK );
+        status = HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq() / (1000U / (uint32_t)uwTickFreq));
       }
       else
       {
@@ -134,6 +136,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
+void TIM17_IRQHandler(void)
+{
+  HAL_TIM_IRQHandler(&htim17);
+}
 
 /**
   * @brief  Suspend Tick increment.

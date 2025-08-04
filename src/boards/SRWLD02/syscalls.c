@@ -23,6 +23,7 @@
 /* Includes */
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <errno.h>
 #include <stdio.h>
 #include <signal.h>
@@ -41,20 +42,43 @@
 #define __weak   __attribute__((weak))
 #endif /* __weak */
 
+
+#define CAN_SLEEP_UNDER_DEBUGGER
+
 /* Variables */
 char *__env[1] = { 0 };
 char **environ = __env;
 volatile int32_t ITM_RxBuffer;
-
+int gFpu;
 osSemaphoreId_t gIoGuardSem;
 const osSemaphoreAttr_t gIoGuardSem_attr = {
 		.name = "io",
 };
+
+static bool runningUnderDebugger;
+
+
 /* Functions */
 void initialise_monitor_handles()
 {
 	gIoGuardSem = osSemaphoreNew(1, 1, &gIoGuardSem_attr);
+	gFpu = SCB_GetFPUType();
+	// enable all fault types
+	SCB->SHCSR |=
+	      SCB_SHCSR_USGFAULTENA_Msk |
+	      SCB_SHCSR_BUSFAULTENA_Msk |
+	      SCB_SHCSR_MEMFAULTENA_Msk;
 
+	runningUnderDebugger = (CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk);
+
+#ifdef CAN_SLEEP_UNDER_DEBUGGER
+	if (runningUnderDebugger)
+	{
+		HAL_DBGMCU_EnableDBGSleepMode( );
+		HAL_DBGMCU_EnableDBGStopMode( );
+		HAL_DBGMCU_EnableDBGStandbyMode( );
+	}
+#endif
 	SEGGER_RTT_Init();
 	SEGGER_SYSVIEW_Init(osKernelGetTickFreq(), SystemCoreClock, 0, 0);
 	SEGGER_SYSVIEW_Start();

@@ -206,3 +206,15 @@ LmnStatus_t I2cReadMemBuffer( I2c_t *obj, uint8_t deviceAddr, uint16_t addr, uin
         return LMN_STATUS_ERROR;
     }
 }
+
+LmnStatus_t I2cWaitStandbyState( I2c_t *obj, uint8_t deviceAddr ){
+	if( I2cInitialized == true )
+	{
+	    return I2cMcuWaitStandbyState( obj, deviceAddr);
+    }
+    else
+	{
+        return LMN_STATUS_ERROR;
+	}
+}
+
