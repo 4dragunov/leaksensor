@@ -52,6 +52,8 @@ namespace OneWire {
 
 	 void init(void);
 
+	 void deInit(void);
+
 	/**
 	 * @brief Each communication with OneWire bus must start with
 	 * this function.
@@ -166,6 +168,7 @@ namespace OneWire {
 
 	private:
 	    void setPd(bool enabled);
+	    bool getPd(void);
 		void resetUART(void);
 		uint8_t receiveBit(void);
 		void sendBit(const uint8_t b);

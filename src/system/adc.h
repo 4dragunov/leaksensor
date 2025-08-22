@@ -41,6 +41,16 @@ typedef struct
     uint32_t channel;
 }Adc_t;
 
+typedef enum {
+	SE,
+	DIFF
+}AdcMode;
+
+//Macro to scale one bitness data to another bitness
+//usage FB2B(1023, 12, 14)
+#define FB2B(x, from, to) (x << (to - from))
+#define F12B214B(x) FB2B(x, 12, 14)
+
 /*!
  * \brief Initializes the ADC input
  *
@@ -63,7 +73,7 @@ void AdcDeInit( Adc_t *obj );
  * \param [IN] channel ADC channel
  * \retval value    Analogue pin value
  */
-uint16_t AdcReadChannel( Adc_t *obj );
+uint16_t AdcReadChannel( Adc_t *obj, AdcMode mode, uint8_t averaging);
 
 #ifdef __cplusplus
 }

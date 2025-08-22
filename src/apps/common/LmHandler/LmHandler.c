@@ -36,7 +36,7 @@
 #include "LmhpClockSync.h"
 #include "LmhpRemoteMcastSetup.h"
 #include "LmhpFragmentation.h"
-
+#include "cmsis_gcc.h"
 #include "LoRaMacTest.h"
 
 static CommissioningParams_t CommissioningParams =
@@ -261,8 +261,8 @@ LmHandlerErrorStatus_t LmHandlerInit( LmHandlerCallbacks_t *handlerCallbacks,
     IsClassBSwitchPending = false;
     IsUplinkTxPending = false;
 
-
-    while(1){osDelay(2);};
+    uint32_t primask_status = __get_PRIMASK();
+    DBG("PRIMASK Status: %lu\r\n", primask_status); // 0: enabled, 1: disabled
 
     if( LoRaMacInitialization( &LoRaMacPrimitives, &LoRaMacCallbacks, LmHandlerParams->Region ) != LORAMAC_STATUS_OK )
     {

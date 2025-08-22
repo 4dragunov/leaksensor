@@ -42,7 +42,7 @@ ENTRY(Reset_Handler)
 _estack = ORIGIN(RAM1) + LENGTH(RAM1); /* end of "RAM1" Ram type memory */
 
 _Min_Heap_Size = 0x200; /* required amount of heap  */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+_Min_Stack_Size = 0x960; /* required amount of stack */
 
 _EEPROM_PAGES = 4;
 _EEPROM_SIZE = 2K * _EEPROM_PAGES; /*2x pages*/

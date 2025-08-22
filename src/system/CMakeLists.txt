@@ -42,12 +42,14 @@ file(GLOB  ${PROJECT_NAME}_SOURCES
     "${SEGGER_RTT_DIR}/*.c"
     "${SEGGER_RTT_DIR}/*.s"
     "${SEGGER_SYSVIEW_DIR}/*.c"
-#    "${MRHEAP_DIR}/*.c"
 )
 
 add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC -DCPP_FREERTOS_NO_EXCEPTIONS)
+target_compile_definitions(${PROJECT_NAME} PUBLIC 
+CPP_FREERTOS_NO_EXCEPTIONS
+"$<$<BOOL:${ENABLE_OWPD}>:OW_PD>"
+)
 
 target_include_directories( ${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -59,7 +61,6 @@ target_include_directories( ${PROJECT_NAME} PUBLIC
     ${SEGGER_RTT_DIR}
     ${SEGGER_SYSVIEW_DIR}
     ${FSM_DIR}/include
-#    ${MRHEAP_DIR}
     $<TARGET_PROPERTY:peripherals,INTERFACE_INCLUDE_DIRECTORIES>
     $<TARGET_PROPERTY:board,INTERFACE_INCLUDE_DIRECTORIES>
 )

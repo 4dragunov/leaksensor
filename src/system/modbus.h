@@ -21,6 +21,7 @@
 #include <map>
 #include <vector>
 #include <functional>
+#include <atomic>
 #include <variant>
 #include <ostream>
 #include "utilities.h"
@@ -199,7 +200,7 @@ public:
 	typedef std::function<uint16_t (const Register::ValuesType &vs)> GetterType;
 	typedef std::function<void(Register::ValuesType &vs, const uint16_t value)> SetterType;
 	const SetterType defaultSetter = [&, this](Register::ValuesType &nvp, const uint16_t value){
-		DBG("defaultSetter reg:%i- %s value %i\n", mIdx, mName, value);
+		DBG("defaultSetter reg:%i- %s value %i\n", (int) mIdx, mName, value);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			std::get<Register::nvb_ref>(nvp[0]).get() = value;
 		} else
@@ -224,12 +225,12 @@ public:
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			std::get<Register::RefValue<uint32_t>>(nvp[0]) = value;
 		}else{
-			DBG("defaultSetter - reg:%i unknown value type!\n", mIdx);
+			DBG("defaultSetter - reg:%i unknown value type!\n", (int) mIdx);
 		}
 	};
 
 	const GetterType defaultGetter = [&, this](const Register::ValuesType &nvp)->uint16_t{
-		DBG("defaultGetter reg:%i - %s\n", mIdx, mName);
+		DBG("defaultGetter reg:%i - %s\n",(int)  mIdx, mName);
 		if(std::holds_alternative<Register::nvb_ref>(nvp[0])) {
 			return std::get<Register::nvb_ref>(nvp[0]).get();
 		} else
@@ -254,7 +255,7 @@ public:
 		if(std::holds_alternative<Register::RefValue<uint32_t>>(nvp[0])) {
 			return std::get<Register::RefValue<uint32_t>>(nvp[0]);
 		}else {
-			DBG("defaultGetter reg:%i - %s unknown value type!\n", mIdx, mName);
+			DBG("defaultGetter reg:%i - %s unknown value type!\n",(int) mIdx, mName);
 		}
 		return 0;
 	};
@@ -467,7 +468,7 @@ public:
 	Register& operator[](const size_t idx) {return mRegs[static_cast<Register::Index>(idx)];}
 };
 
-extern volatile uint8_t numberHandlers; //global variable to maintain the number of concurrent handlers
+extern std::atomic<uint8_t>  numberHandlers; //global variable to maintain the number of concurrent handlers
 extern volatile Modbus *mHandlers[MAX_M_HANDLERS];
 
 class Master:public Modbus {

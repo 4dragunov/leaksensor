@@ -7,19 +7,19 @@
 
 #ifndef SRC_APPS_SMARTROOF_LORA_NODE_LEAKDETECTOR_SRWLD01_SENSORS_H_
 #define SRC_APPS_SMARTROOF_LORA_NODE_LEAKDETECTOR_SRWLD01_SENSORS_H_
-#include <sys/time.h>
+#include <chrono>
 #include "sensors-board.h"
 
 typedef struct {
 	int16_t data[8];
 	uint8_t sensors;
-	struct timeval timestamp;
+	std::chrono::time_point<std::chrono::system_clock> timestamp;
 } ThermalSensorsData ;
 
 typedef struct{
 	Samples leakSamples;
 	ThermalSensorsData thermal;
-	struct timeval timestamp;
+	std::chrono::time_point<std::chrono::system_clock> timestamp;
 }SummarySensorsData;
 
 extern osMailQId  gSummarySensorsMq;

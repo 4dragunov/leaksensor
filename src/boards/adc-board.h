@@ -49,7 +49,7 @@ void AdcMcuConfig( Adc_t *obj );
  * \param [IN] obj     ADC object
  * \param [IN] channel ADC input channel
  */
-uint16_t AdcMcuReadChannel( Adc_t *obj );
+uint16_t AdcMcuReadChannel( Adc_t *obj, AdcMode mode, uint8_t averaging );
 
 #ifdef __cplusplus
 }

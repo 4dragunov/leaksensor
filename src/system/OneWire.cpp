@@ -2,7 +2,7 @@
 #include "uart.h"
 #include "utilities.h"
 
-#include <board-config.h>
+#include "board-config.h"
 
 #include  <cstring>
 
@@ -16,6 +16,13 @@
 
 namespace OneWire {
 
+#define OW_PD
+
+#ifdef OW_PD
+#pragma message "OW_PD enabled"
+#else
+#pragma message "OW_PD disabled"
+#endif
 
 Bus::Bus( Uart_t *const uart):
 	mLastDiscrepancy(),
@@ -27,7 +34,7 @@ Bus::Bus( Uart_t *const uart):
 	mOwpd(),
 	mPdState(false)
 {
-	init();
+
 }
 
 /**
@@ -48,8 +55,20 @@ void Bus::resetUART(void)
 void Bus::init(void)
 {
 	mStatus = 0;
-	UartConfig(mUart, RX_TX, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
-	GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
+	UartConfig(mUart, RX_TX, UART, SYNC, RESET_SPEED, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+	//init();
+#ifdef OW_PD
+	GpioInit(&mOwpd, OWPD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, OW_PD_OFF);
+	GpioWrite(&mOwpd, OW_PD_ON);
+	GpioWrite(&mOwpd, OW_PD_OFF);
+#endif
+}
+
+void Bus::deInit(void){
+#ifdef OW_PD
+	GpioInit(&mOwpd, OWPD, PIN_ANALOGIC, PIN_PUSH_PULL, PIN_NO_PULL, 0);
+#endif
+	UartDeInit(mUart);
 }
 
 static uint8_t bitsToByte(uint8_t *bits) {
@@ -97,15 +116,15 @@ bool Bus::reset()
 		resetUART();
 	}
 
-    uint8_t reset = 0xF0;
+    const uint8_t reset = 0xF0;
     uint8_t resetBack = 0;
-    UartSetState(mUart, false);
-    UartSetState(mUart, true);
+   // UartSetState(mUart, false);
+  //  UartSetState(mUart, true);
     setBaudRate(RESET_SPEED);
     UartPutChar(mUart, reset, OW_TIMEOUT);
     mStatus = UartGetChar(mUart, &resetBack, OW_TIMEOUT);
     setBaudRate(WORK_SPEED);
-
+    DBG("%i\n", reset!=resetBack);
     return reset!=resetBack;
 }
 
@@ -359,20 +378,32 @@ void Bus::selectWithPointer(uint8_t* ROM)
 	}
 }
 
+bool Bus::getPd(void){
+#ifdef OW_PD
+	return GpioRead(&mOwpd) == OW_PD_ON;
+#else
+	return mPdState;
+#endif
+}
+
+/*One wire power delivery*/
 void Bus::setPd(bool enabled){
-	if(mPdState!=enabled && enabled) {
+	if(getPd()!=enabled && enabled) {
 
 #ifdef OW_PD
-		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, OW_PD_ON );
+		//Enable power
+		GpioWrite(&mOwpd, OW_PD_ON);
+#else
+		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_OUTPUT, PIN_PUSH_PULL, PIN_PULL_UP, 1 );
 #endif
-		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_PUSH_PULL, PIN_PULL_UP, 1 );
 		DBG("enabling PD\n");
-	}else if(mPdState!= enabled){
-		resetUART();
+	}else if(getPd()!= enabled){
 #ifdef OW_PD
-		GpioInit(&mOwpd, OW_PD, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, !OW_PD_ON );
+		//Disable power
+		GpioWrite(&mOwpd, OW_PD_OFF);
+#else
+		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 #endif
-		GpioInit( &mUart->Tx, mUart->Tx.pin, PIN_ALTERNATE_FCT, mPdState? PIN_PUSH_PULL : PIN_OPEN_DRAIN, PIN_PULL_UP, 1 );
 		DBG("disabling PD\n");
 	}
 	mPdState = enabled;

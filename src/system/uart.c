@@ -28,7 +28,7 @@ const char *gUsartNames[] = {
 		FOREACH_USART(GENERATE_STRING)
 };
 
-void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode )
+void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx,  PinNames de, PinConfigs txPinMode )
 {
     if( obj->IsInitialized == false )
     {
@@ -41,23 +41,23 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfig
     	vQueueAddToRegistry( obj->txSem, "txSem"  );
 #endif
         obj->IsInitialized = true;
-        UartMcuInit( obj, uartId, tx, rx, txPinMode );
+        UartMcuInit( obj, uartId, tx, rx, de, txPinMode );
     }
 }
 
-void UartConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
+void UartConfig( Uart_t *obj, UartMode_t mode, UartBusMode_t busmode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl )
 {
-    UartMcuConfig( obj, mode, fifo, baudrate, wordLength, stopBits, parity, flowCtrl );
+    UartMcuConfig( obj, mode, busmode, fifo, baudrate, wordLength, stopBits, parity, flowCtrl );
 }
 
 void UartDeInit( Uart_t *obj )
 {
-    obj->IsInitialized = false;
     UartMcuDeInit( obj );
 #ifdef USART_SUPPORT_RTOS
     osSemaphoreDelete(obj->rxSem);
     osSemaphoreDelete(obj->txSem);
 #endif
+    obj->IsInitialized = false;
 }
 
 uint8_t UartPutChar( Uart_t *obj, uint8_t data , uint32_t timeout )

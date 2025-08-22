@@ -131,7 +131,7 @@ Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
   Eeprom::Result res = Result::ERROR;
   PageIdx activePage = PageIdx::PAGE_0;
 
-  osMutexWait(mRwLock, osWaitForever);
+ // osMutexWait(mRwLock, osWaitForever);
   if (GetActivePageIdx(&activePage) == Result::OK)
   {
 	  auto read_time_start = osKernelSysTick();
@@ -161,7 +161,7 @@ Eeprom::Result Eeprom::read(const Eeprom::address varId, Eeprom::data *varValue)
 		}
 	  }
   }
-  osMutexRelease(mRwLock);
+ // osMutexRelease(mRwLock);
   return  res;
 }
 

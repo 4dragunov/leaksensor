@@ -16,6 +16,29 @@
 ## Authors:  Johannes Bruder (STACKFORCE), Miguel Luis (Semtech), Andrey Belyakov (SimbirSoft)
 ##
 
+cmake_minimum_required(VERSION 3.16)
+
+# Set default build type if not specified
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+# Debug flags (no optimization, full debug info)
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O0 -g")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -g")
+
+# Release flags (optimize for size, no debug info unless RelWithDebInfo)
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -Os")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Os")
+
+
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    message(STATUS "--- Building in Debug mode ---")
+else()
+	message(STATUS "--- Building in Release mode ---")
+endif()
+
 #---------------------------------------------------------------------------------------
 # Options
 #---------------------------------------------------------------------------------------
@@ -34,6 +57,11 @@ set_property(CACHE BOARD_RADIO PROPERTY STRINGS ${BOARD_RADIO_LIST})
 set(SECURE_ELEMENT_LIST SOFT_SE LR1110_SE ATECC608A_TNGLORA_SE)
 set(SECURE_ELEMENT SOFT_SE CACHE STRING "Default secure element is SOFT_SE")
 set_property(CACHE SECURE_ELEMENT PROPERTY STRINGS ${SECURE_ELEMENT_LIST})
+
+# ADC oversampling
+set(BOARD_ADC_OVS_LIST HARD SOFT)
+set(BOARD_ADC_OVS HARD CACHE STRING "Default adc oversampling type is hardware")
+set_property(CACHE BOARD_ADC_OVS PROPERTY STRINGS ${BOARD_ADC_OVS_LIST})
 
 # Do not allow switching of board one wire bus drivers
 set(BOARD_OWI "")
@@ -54,6 +82,9 @@ option(USE_DEBUGGER "Use Debugger" ON)
 
 # Switch for Class B support of LoRaMac.
 option(CLASSB_ENABLED "Class B support of LoRaMac" OFF)
+
+# Option to add onewire power delivery support
+option(ENABLE_OWPD "Enable one wire power delivery" ON)
 
 #---------------------------------------------------------------------------------------
 # Target Boards

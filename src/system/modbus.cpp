@@ -40,7 +40,7 @@ void SlaveTask(void *argument);
 //Semaphore to access the Modbus Data
 osSemaphoreDef(ModBusSp);
 
-volatile uint8_t numberHandlers = 0;
+std::atomic<uint8_t> numberHandlers = 0;
 
 
 Register::Register():
@@ -53,7 +53,7 @@ Register::Register():
 	mOnChanged(defaultOnChanged),
 	mOnAccessError(defaultOnAccessError)
 {
-	DBG("Register: %i created empty\n", mIdx);
+	DBG("Register: %i created empty\n", (int)mIdx);
 }
 
 Register::Register(Register::Index idx, const char* name, Register::ValuesType values,
@@ -72,7 +72,7 @@ Register::Register(Register::Index idx, const char* name, Register::ValuesType v
 	mOnChanged(changed),
 	mOnAccessError(error)
 {
-	DBG("Register: %i: %s created\n", mIdx, mName);
+	DBG("Register: %i: %s created\n", (int)mIdx, mName);
 }
 
 Register::operator const uint16_t ()
@@ -323,7 +323,7 @@ Modbus::Modbus(Uart_t *uart, Gpio_t *dePin, ModBusType type, const uint8_t id, R
 
 void Modbus::SetLine(const uint32_t baudrate, const WordLength_t wordLength, const StopBits_t stopBits, const Parity_t parity)
 {
-	UartConfig( mUart, RX_TX, SYNC, baudrate, wordLength, stopBits, parity, NO_FLOW_CTRL );
+	UartConfig( mUart, RX_TX, RS485, SYNC, baudrate, wordLength, stopBits, parity, NO_FLOW_CTRL );
 }
 
 void Modbus::Start( )
@@ -391,7 +391,7 @@ void SlaveTask(void *argument) {
 
 void Modbus::DoSlaveTask()
 {
-  //uint32_t notification;
+  DBG("Modbus Task started\n");
 
   for(;;)
   {

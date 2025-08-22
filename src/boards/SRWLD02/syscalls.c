@@ -43,7 +43,7 @@
 #endif /* __weak */
 
 
-#define CAN_SLEEP_UNDER_DEBUGGER
+//#define CAN_SLEEP_UNDER_DEBUGGER
 
 /* Variables */
 char *__env[1] = { 0 };
@@ -59,7 +59,7 @@ static bool runningUnderDebugger;
 
 
 /* Functions */
-void initialise_monitor_handles()
+void initialise_monitor_handles(void)
 {
 	gIoGuardSem = osSemaphoreNew(1, 1, &gIoGuardSem_attr);
 	gFpu = SCB_GetFPUType();
@@ -89,7 +89,7 @@ __weak int __io_putchar(int ch){
 }
 
 __weak int __io_getchar(void) {
-	return ITM_ReceiveChar();
+	return SEGGER_RTT_HasKey()? SEGGER_RTT_GetKey(): EOF;
 }
 
 int _getpid(void)
@@ -131,12 +131,7 @@ __weak int _write(int file, char *ptr, int len)
 {
   (void)file;
   int DataIdx;
-  osSemaphoreAcquire(gIoGuardSem, osWaitForever);
-  for (DataIdx = 0; DataIdx < len; DataIdx++)
-  {
-    __io_putchar(*ptr++);
-  }
-  osSemaphoreRelease(gIoGuardSem);
+  SEGGER_RTT_Write(0, ptr, len);
   return len;
 }
 

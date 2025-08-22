@@ -16,7 +16,6 @@
 ## Authors:  Johannes Bruder (STACKFORCE), Miguel Luis (Semtech), Andrey Belyakov ( SombirSoft )
 ##
 project(SRWLD02)
-cmake_minimum_required(VERSION 3.6)
 enable_language(C ASM CXX)
 
 #---------------------------------------------------------------------------------------
@@ -67,8 +66,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/utilities.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/arm-gcc/startup_stm32wl55ccux.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/cmsis/system_stm32wlxx.c"
-    
-    
+
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_adc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_adc_ex.c"
@@ -79,10 +77,12 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_gpio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_i2c.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_i2c_ex.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_iwdg.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_pwr.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_pwr_ex.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_rcc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_rcc_ex.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_ll_rcc.c" 
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_rtc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_rtc_ex.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_spi.c"
@@ -91,6 +91,7 @@ list(APPEND ${PROJECT_NAME}_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_uart_ex.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_usart.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_usart_ex.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_ll_lpuart.c" 
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_subghz.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_tim.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../mcu/stm32/STM32WLxx_HAL_Driver/Src/stm32wlxx_hal_tim_ex.c"
@@ -103,22 +104,40 @@ set(MBED_RADIO_SHIELD STM32WL55)
 add_library(${PROJECT_NAME} OBJECT EXCLUDE_FROM_ALL ${${PROJECT_NAME}_SOURCES})
 
 target_compile_options(${PROJECT_NAME} PUBLIC
-	-DUSE_HAL_DRIVER
-	-DUSE_BSP_DRIVER
-	-DCORE_CM4
-	-DUSER_VECT_TAB_ADDRESS
-	 $<$<CONFIG:Debug>:-DDEBUG>
-	-DSTM32WL55xx
-	-DSTM32_THREAD_SAFE_STRATEGY=4
     -mcpu=cortex-m4
     -mthumb
     -mfloat-abi=soft
     -fdata-sections
     -ffunction-sections
-    -Wall
+    -Wall  
     $<$<CONFIG:Debug>:-Og>
-    $<$<CONFIG:Debug>:-DHARD_FAULT_HANDLER_ENABLED>
 )
+
+target_compile_definitions(${PROJECT_NAME} PUBLIC
+	USE_HAL_DRIVER
+	USE_BSP_DRIVER
+	CORE_CM4
+	OW_PD
+	USER_VECT_TAB_ADDRESS
+	USE_FULL_LL_DRIVER
+	 $<$<CONFIG:Debug>:DEBUG>
+	STM32WL55xx
+	STM32_THREAD_SAFE_STRATEGY=4
+    $<$<CONFIG:Debug>:HARD_FAULT_HANDLER_ENABLED>
+)
+
+
+if(${BOARD_ADC_OVS} MATCHES HARD)
+	message(STATUS "ADC OC HARD")
+	target_compile_definitions(${PROJECT_NAME} PRIVATE 
+	ADC_OVS_HARD
+	)
+elseif(${BOARD_ADC_OVS} MATCHES SOFT)
+	message(STATUS "ADC OC SOFT")
+	target_compile_definitions(${PROJECT_NAME} PRIVATE 
+	ADC_OVS_SOFT
+	)
+endif()
 
 # Add define if debbuger support is enabled
 target_compile_definitions(${PROJECT_NAME} PUBLIC $<$<BOOL:${USE_DEBUGGER}>:USE_DEBUGGER>)

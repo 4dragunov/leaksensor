@@ -28,7 +28,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "../../../../boards/SRWLD01/mav.h"
+#include "mav.h"
 #include "../firmwareVersion.h"
 #include "../../common/githubVersion.h"
 #include "utilities.h"
@@ -341,6 +341,7 @@ void StartTaskDefault(void * argument)
     LmHandlerJoin( );
 
     StartTxProcess( LORAMAC_HANDLER_TX_ON_TIMER );
+
   /* Infinite loop */
   for(;;)
   {
@@ -349,7 +350,6 @@ void StartTaskDefault(void * argument)
           CliProcess( stdin );
           // Processes the LoRaMac events
           LmHandlerProcess( );
-
           // Process application uplinks management
           UplinkProcess( );
 
@@ -379,8 +379,7 @@ const osThreadAttr_t thread_attr = {
 /*!
  * Main application entry point.
  */
-int main( void )
-{
+int main(void){
 	//Not needed but for compatibility
     BoardInitMcu( );
     osKernelInitialize();   // pre initialize CMSIS-RTOS
@@ -390,8 +389,8 @@ int main( void )
     InitModBus(mbus);
 
     gLoraNode = &InitLoraNode(mbus);
-    defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
-    assert(defaultTaskHandle);
+   // defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
+   // assert(defaultTaskHandle);
 
     // create semaphores
     gUplinkSem = osSemaphoreNew(1, 0, nullptr);

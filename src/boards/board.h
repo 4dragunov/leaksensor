@@ -137,8 +137,8 @@ Version_t BoardGetVersion( void );
 void BoardPrintSID(void);
 void BoardPrintUUID(void);
 
-void BoardInitWatchdog();
-void BoardResetWatchdog();
+void BoardInitWatchdog(void);
+void BoardResetWatchdog(void);
 
 #ifdef __cplusplus
 }

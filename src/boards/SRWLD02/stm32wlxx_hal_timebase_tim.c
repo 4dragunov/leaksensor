@@ -107,10 +107,8 @@ HAL_StatusTypeDef HAL_InitTick(uint32_t TickPriority)
       if (TickPriority < (1UL << __NVIC_PRIO_BITS))
       {
         /* Configure the TIM IRQ priority */
-        HAL_NVIC_SetPriority(TIM17_IRQn, TickPriority, 0U);
+        HAL_NVIC_SetPriority(TIM17_IRQn, 0, 3U);
         uwTickPrio = TickPriority;
-        HAL_SYSTICK_CLKSourceConfig( SYSTICK_CLKSOURCE_HCLK );
-        status = HAL_SYSTICK_Config(HAL_RCC_GetHCLKFreq() / (1000U / (uint32_t)uwTickFreq));
       }
       else
       {

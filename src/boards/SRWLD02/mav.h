@@ -30,7 +30,12 @@ public:
 		}
 		return DoFilter(raw_data);
 	}
-
+	T operator+=(T const* rhs)& {
+	    return Filter(rhs);
+	 }
+	 friend T operator+(MAV<T, WindowLength> &lhs, T* rhs){
+	    return lhs+=rhs;
+	 }
 private:
 	T History[WindowLength]; /*Array to store values of filter window*/
 	T Sum;	/* Sum of filter window's elements*/

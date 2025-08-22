@@ -37,7 +37,7 @@ void AdcDeInit( Adc_t *obj )
     AdcMcuDeInit(obj);
 }
 
-uint16_t AdcReadChannel( Adc_t *obj )
+uint16_t AdcReadChannel( Adc_t *obj, AdcMode mode, uint8_t averaging )
 {
-    return AdcMcuReadChannel( obj );
+    return AdcMcuReadChannel( obj, mode, averaging );
 }

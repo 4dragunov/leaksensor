@@ -90,6 +90,7 @@ typedef struct Uart_t
     bool IsInitialized;
     Gpio_t Tx;
     Gpio_t Rx;
+    Gpio_t De;
     Fifo_t FifoTx;
     Fifo_t FifoRx;
 #ifdef USART_SUPPORT_RTOS
@@ -110,6 +111,11 @@ typedef enum
     RX_ONLY,
     RX_TX
 }UartMode_t;
+
+typedef enum {
+	UART=0,
+	RS485
+}UartBusMode_t;
 
 /*!
  * UART word length
@@ -159,7 +165,7 @@ typedef enum
  * \param [IN] tx   UART Tx pin name to be used
  * \param [IN] rx   UART Rx pin name to be used
  */
-void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode );
+void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinNames de, PinConfigs txPinMode );
 
 /*!
  * \brief Configures the UART object and MCU peripheral
@@ -174,7 +180,7 @@ void UartInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfig
  * \param [IN] parity       packet parity
  * \param [IN] flowCtrl     UART flow control
  */
-void UartConfig( Uart_t *obj, UartMode_t mode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
+void UartConfig( Uart_t *obj, UartMode_t mode, UartBusMode_t busmode, FifoMode_t fifo, uint32_t baudrate, WordLength_t wordLength, StopBits_t stopBits, Parity_t parity, FlowCtrl_t flowCtrl );
 
 /*!
  * \brief DeInitializes the UART object and MCU pins

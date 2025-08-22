@@ -61,7 +61,7 @@ UartId_t IdByHandle(const UART_HandleTypeDef *handle){
 	return UART_NONE;
 }
 
-void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinConfigs txPinMode )
+void UartMcuInit( Uart_t *obj, UartId_t uartId, PinNames tx, PinNames rx, PinNames de, PinConfigs txPinMode )
 {
     obj->UartId = uartId;
     obj->handle = &UartHandle[uartId];

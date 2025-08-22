@@ -20,6 +20,7 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
+#include <assert.h>
 #include "stm32wlxx.h"
 #include "utilities.h"
 #include "board-config.h"
@@ -66,8 +67,7 @@ void I2cMcuInit( I2c_t *obj, I2cId_t i2cId, PinNames scl, PinNames sda )
 
 void I2cMcuFormat( I2c_t *obj, I2cMode mode, I2cDutyCycle dutyCycle, bool I2cAckEnable, I2cAckAddrMode AckAddrMode, uint32_t I2cFrequency )
 {
-    __HAL_RCC_I2C1_CLK_ENABLE( );
-    I2cHandle[obj->I2cId].Init.Timing = 0x0090194B;
+    I2cHandle[obj->I2cId].Init.Timing = 0x10805D88;
     I2cHandle[obj->I2cId].Init.OwnAddress1 = 0;
     I2cHandle[obj->I2cId].Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
     I2cHandle[obj->I2cId].Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -76,15 +76,32 @@ void I2cMcuFormat( I2c_t *obj, I2cMode mode, I2cDutyCycle dutyCycle, bool I2cAck
     I2cHandle[obj->I2cId].Init.NoStretchMode = I2C_NOSTRETCH_DISABLED;
 
     HAL_I2C_Init( &I2cHandle[obj->I2cId] );
+    HAL_I2CEx_ConfigAnalogFilter(&I2cHandle[obj->I2cId], I2C_ANALOGFILTER_ENABLE);
+    HAL_I2CEx_ConfigDigitalFilter(&I2cHandle[obj->I2cId], 0);
 }
 
 void I2cMcuResetBus( I2c_t *obj )
 {
-    __HAL_RCC_I2C1_CLK_DISABLE( );
-    __HAL_RCC_I2C1_CLK_ENABLE( );
-    __HAL_RCC_I2C1_FORCE_RESET( );
-    __HAL_RCC_I2C1_RELEASE_RESET( );
-
+	switch(obj->I2cId){
+		case I2C_1: {
+			__HAL_RCC_I2C1_FORCE_RESET( );
+			__HAL_RCC_I2C1_RELEASE_RESET( );
+		}
+		break;
+		case I2C_2:	{
+			__HAL_RCC_I2C2_FORCE_RESET( );
+			__HAL_RCC_I2C2_RELEASE_RESET( );
+		}
+		break;
+		case I2C_3: {
+			__HAL_RCC_I2C3_FORCE_RESET( );
+			__HAL_RCC_I2C3_RELEASE_RESET( );
+		}
+		break;
+		default:{
+			assert(0);
+		}
+	}
     uint8_t af =(obj->I2cId == I2C_1)? GPIO_AF4_I2C1 : \
     		    (obj->I2cId == I2C_2)? GPIO_AF4_I2C2 : GPIO_AF4_I2C3;
     GpioInit( &obj->Scl,  obj->Scl.pin, PIN_ALTERNATE_FCT, PIN_OPEN_DRAIN, PIN_NO_PULL, af );
@@ -172,4 +189,34 @@ LmnStatus_t I2cMcuWaitStandbyState( I2c_t *obj, uint8_t deviceAddr )
     status = ( HAL_I2C_IsDeviceReady( & I2cHandle[obj->I2cId], deviceAddr, 300, 4096 ) == HAL_OK ) ? LMN_STATUS_OK : LMN_STATUS_ERROR;
 
     return status;
+}
+
+
+void I2C1_EV_IRQHandler(void)
+{
+	HAL_I2C_EV_IRQHandler(&I2cHandle[I2C_1]);
+}
+void I2C2_EV_IRQHandler(void)
+{
+	HAL_I2C_EV_IRQHandler(&I2cHandle[I2C_2]);
+}
+
+void I2C3_EV_IRQHandler(void)
+{
+	HAL_I2C_EV_IRQHandler(&I2cHandle[I2C_3]);
+}
+
+void I2C1_ER_IRQHandler(void)
+{
+	HAL_I2C_ER_IRQHandler(&I2cHandle[I2C_1]);
+}
+
+void I2C2_ER_IRQHandler(void)
+{
+	HAL_I2C_ER_IRQHandler(&I2cHandle[I2C_2]);
+}
+
+void I2C3_ER_IRQHandler(void)
+{
+	HAL_I2C_ER_IRQHandler(&I2cHandle[I2C_3]);
 }

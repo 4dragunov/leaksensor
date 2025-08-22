@@ -35,6 +35,7 @@ extern "C" {
 #include "stm32wlxx_board_radio.h"  /* low layer api (bsp) */
 #include "utilities_def.h"  /* low layer api (bsp) */
 #include "stm32wlxx_hal_subghz.h"
+#include "task.h"
 /* USER CODE BEGIN include */
 
 /* USER CODE END include */
@@ -81,12 +82,6 @@ extern SUBGHZ_HandleTypeDef hsubghz;
 #define TCXO_CTRL_VOLTAGE           TCXO_CTRL_1_7V
 
 /**
-  * @brief Radio maximum wakeup time (in ms)
-  * @note override the default configuration of radio_driver.c
-  */
-#define RF_WAKEUP_TIME              ( 1UL )
-
-/**
   * @brief DCDC is enabled
   * @remark this define is only used if the DCDC is present on the board
   * @note override the default configuration of radio_driver.c
@@ -107,13 +102,15 @@ extern SUBGHZ_HandleTypeDef hsubghz;
 /**
   * @brief macro used to enter the critical section
   */
-#define CRITICAL_SECTION_BEGIN( )      UTILS_ENTER_CRITICAL_SECTION( )
+#define CRITICAL_SECTION_BEGIN( ) taskENTER_CRITICAL()
+//UTILS_ENTER_CRITICAL_SECTION( )
 #endif /* !CRITICAL_SECTION_BEGIN */
 #ifndef CRITICAL_SECTION_END
 /**
   * @brief macro used to exit the critical section
   */
-#define CRITICAL_SECTION_END( )        UTILS_EXIT_CRITICAL_SECTION( )
+#define CRITICAL_SECTION_END( )       taskEXIT_CRITICAL()
+//UTILS_EXIT_CRITICAL_SECTION( )
 #endif /* !CRITICAL_SECTION_END */
 
 /* Function mapping */

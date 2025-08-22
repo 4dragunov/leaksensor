@@ -21,7 +21,7 @@ void StartTaskLoraNode(void * argument){
 
 const osThreadAttr_t thread_attr = {
   .name = "LoraNode",
-  .stack_size = 128 * 4,
+  .stack_size = 128 * 4, //512
   .priority = (osPriority_t) osPriorityNormal
 };
 
@@ -51,16 +51,18 @@ void LoraNode::DataSend(){
 
 void LoraNode::DoTaskLoraNode()
 {
+	DBG("Lora node task started");
 	for(;;){
 		if(osSemaphoreAcquire(mDataChangedSem, osWaitForever) == osOK) {
 			uint8_t channel = 0;
 		    CayenneLppReset( );
 		    DBG("LS MAIL\n");
 
-		    size_t sensors = mSensorData->leakSamples.data.ch.wl.size();
+		    size_t sensors = mSensorData->leakSamples.data.ch.wl1.size() + mSensorData->leakSamples.data.ch.wl2.size();
 		    CayenneLppAddDigitalInput(channel++, sensors );
 		    for(size_t i = 0; i < sensors; i++) {
-		    	CayenneLppAddRelativeHumidity(channel++, mSensorData->leakSamples.data.ch.wl[i] );
+		    	CayenneLppAddRelativeHumidity(channel++, (i < mSensorData->leakSamples.data.ch.wl1.size())? mSensorData->leakSamples.data.ch.wl1[i] :
+		    																				   mSensorData->leakSamples.data.ch.wl2[i - mSensorData->leakSamples.data.ch.wl1.size()]);
 		    }
 
 		   	CayenneLppAddDigitalInput(channel++, mSensorData->thermal.sensors );

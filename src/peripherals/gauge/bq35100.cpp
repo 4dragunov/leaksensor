@@ -54,14 +54,14 @@ bool BatteryGaugeBq35100::getTwoBytes(uint8_t registerAddress, uint16_t *pBytes)
     bool success = false;
     uint8_t data[3];
 
-    if (gpI2c != NULL) {
+    if (mI2c != NULL) {
         data[0] = registerAddress;
         data[1] = 0;
         data[2] = 0;
 
         // Send a command to read from registerAddress
-        if ((gpI2c->write(gAddress, &(data[0]), 1, true) == 0) &&
-            (gpI2c->read(gAddress, &(data[1]), 2) == 0)) {
+        if ((mI2c->write(mAddress, &(data[0]), 1, true) == 0) &&
+            (mI2c->read(mAddress, &(data[1]), 2) == 0)) {
             success = true;
             if (pBytes) {
                 *pBytes = (((uint16_t) data[2]) << 8) + data[1];
@@ -80,7 +80,7 @@ uint8_t BatteryGaugeBq35100::computeChecksum(const uint8_t * pData, int32_t leng
 
     if (pData != NULL) {
 #ifdef DEBUG_BQ35100_BLOCK_DATA
-        printf ("BatteryGaugeBq35100 (I2C 0x%02x): computing check sum on data block.\n", gAddress >> 1);
+        printf ("BatteryGaugeBq35100 (I2C 0x%02x): computing check sum on data block.\n", mAddress >> 1);
         printf (" 0  1  2  3  4  5  6  7   8  9  A  B  C  D  E  F\n");
 #endif
         for (x = 1; x <= length; x++) {
@@ -106,7 +106,7 @@ uint8_t BatteryGaugeBq35100::computeChecksum(const uint8_t * pData, int32_t leng
         printf("\n");
     }
     
-    printf ("BatteryGaugeBq35100 (I2C 0x%02x): check sum is 0x%02x.\n", gAddress >> 1, checkSum);
+    printf ("BatteryGaugeBq35100 (I2C 0x%02x): check sum is 0x%02x.\n", mAddress >> 1, checkSum);
 #endif    
     
     return checkSum;
@@ -125,26 +125,26 @@ bool BatteryGaugeBq35100::readExtendedData(int32_t address, uint8_t * pData, int
 
     // Handle security mode
     if (setSecurityMode(SECURITY_MODE_UNSEALED)) {
-        if ((gpI2c != NULL) && (length <= 32) && (address >= 0x4000) && (address < 0x4400) && (pData != NULL)) {
+        if ((mI2c != NULL) && (length <= 32) && (address >= 0x4000) && (address < 0x4400) && (pData != NULL)) {
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): preparing to read %d byte(s) from address 0x%04x.\n", gAddress >> 1, (int) length, (unsigned int) address);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): preparing to read %d byte(s) from address 0x%04x.\n", mAddress >> 1, (int) length, (unsigned int) address);
 #endif
             // Enable Block Data Control (0x61)
             data[0] = 0x61;
             data[1] = 0;
 
-            if (gpI2c->write(gAddress, &(data[0]), 2) == 0) {
+            if (mI2c->write(mAddress, &(data[0]), 2) == 0) {
                 // Write address to ManufacturerAccessControl (0x3e)
                 data[0] = 0x3e;
                 data[1] = (char) address;
                 data[2] = (char) (address >> 8);
 
-                if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+                if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
                     // Read the address from ManufacturerAccessControl (0x3e then 0x3f),
                     // data from MACData (0x40 to 0x5f), checksum from MACDataSum (0x60) 
                     // and length from MACDataLen (0x61)
-                    if ((gpI2c->write(gAddress, &(data[0]), 1, true) == 0) &&
-                        (gpI2c->read(gAddress, &(block[0]), sizeof (block)) == 0)) {
+                    if ((mI2c->write(mAddress, &(data[0]), 1, true) == 0) &&
+                        (mI2c->read(mAddress, &(block[0]), sizeof (block)) == 0)) {
                         // Check that the address matches
                         if ((block[0] == (char) address) && (block[1] == (char) (address >> 8))) {
                             // Check that the checksum matches (-2 on MACDataLen as it includes MACDataSum and itself)
@@ -157,36 +157,36 @@ bool BatteryGaugeBq35100::readExtendedData(int32_t address, uint8_t * pData, int
                                 memcpy(pData, &(block[2]), lengthRead);
                                 success = true;
 #ifdef DEBUG_BQ35100
-                                printf("BatteryGaugeBq35100 (I2C 0x%02x): %d byte(s) read successfully.\n", gAddress >> 1, (int) lengthRead);
+                                printf("BatteryGaugeBq35100 (I2C 0x%02x): %d byte(s) read successfully.\n", mAddress >> 1, (int) lengthRead);
 #endif
                             } else {
 #ifdef DEBUG_BQ35100
-                                printf("BatteryGaugeBq35100 (I2C 0x%02x): checksum didn't match (0x%02x expected).\n", gAddress >> 1, block[34]);
+                                printf("BatteryGaugeBq35100 (I2C 0x%02x): checksum didn't match (0x%02x expected).\n", mAddress >> 1, block[34]);
 #endif
                             }
                         } else {
 #ifdef DEBUG_BQ35100
-                            printf("BatteryGaugeBq35100 (I2C 0x%02x): address didn't match (expected 0x%04x, received 0x%02x%02x).\n", gAddress >> 1, (unsigned int) address, block[1], block[0]);
+                            printf("BatteryGaugeBq35100 (I2C 0x%02x): address didn't match (expected 0x%04x, received 0x%02x%02x).\n", mAddress >> 1, (unsigned int) address, block[1], block[0]);
 #endif
                         }
                     } else {
 #ifdef DEBUG_BQ35100
-                        printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to read %d bytes from ManufacturerAccessControl.\n", gAddress >> 1, sizeof (block));
+                        printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to read %d bytes from ManufacturerAccessControl.\n", mAddress >> 1, sizeof (block));
 #endif
                     }
                 } else {
 #ifdef DEBUG_BQ35100
-                    printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write %d bytes to ManufacturerAccessControl.\r", gAddress >> 1, 3);
+                    printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write %d bytes to ManufacturerAccessControl.\r", mAddress >> 1, 3);
 #endif
                 }
             } else {
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set Block Data Control.\n", gAddress >> 1);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set Block Data Control.\n", mAddress >> 1);
 #endif
             }
         } else {
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set the security mode of the chip.\n", gAddress >> 1);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set the security mode of the chip.\n", mAddress >> 1);
 #endif
         }
     }
@@ -208,9 +208,9 @@ bool BatteryGaugeBq35100::writeExtendedData(int32_t address, const uint8_t * pDa
     uint8_t data[3 + 32];
     uint16_t controlStatus;
 
-    if ((gpI2c != NULL) && (length <= 32) && (address >= 0x4000) && (address < 0x4400) && (pData != NULL)) {
+    if ((mI2c != NULL) && (length <= 32) && (address >= 0x4000) && (address < 0x4400) && (pData != NULL)) {
 #ifdef DEBUG_BQ35100
-        printf("BatteryGaugeBq35100 (I2C 0x%02x): preparing to write %d byte(s) to address 0x%04x.\n", gAddress >> 1, (int) length, (unsigned int) address);
+        printf("BatteryGaugeBq35100 (I2C 0x%02x): preparing to write %d byte(s) to address 0x%04x.\n", mAddress >> 1, (int) length, (unsigned int) address);
 #endif
         // Handle security mode
         if (setSecurityMode(SECURITY_MODE_UNSEALED)) {
@@ -218,7 +218,7 @@ bool BatteryGaugeBq35100::writeExtendedData(int32_t address, const uint8_t * pDa
             data[0] = 0x61;
             data[1] = 0;
 
-            if (gpI2c->write(gAddress, &(data[0]), 2) == 0) {
+            if (mI2c->write(mAddress, &(data[0]), 2) == 0) {
                 // Start write at ManufacturerAccessControl (0x3e)
                 data[0] = 0x3e;
                 // Next two bytes are the address we will write to
@@ -227,51 +227,51 @@ bool BatteryGaugeBq35100::writeExtendedData(int32_t address, const uint8_t * pDa
                 // Remaining bytes are the data bytes we wish to write
                 memcpy (&(data[3]), pData, length);
 
-                if (gpI2c->write(gAddress, &(data[0]), 3 + length) == 0) {
+                if (mI2c->write(mAddress, &(data[0]), 3 + length) == 0) {
                     // Compute the checksum and write it to MACDataSum (0x60)
                     data[1] = computeChecksum (&(data[1]), length + 2);
                     data[0] = 0x60;
                     
-                    if (gpI2c->write(gAddress, &(data[0]), 2) == 0) {
+                    if (mI2c->write(mAddress, &(data[0]), 2) == 0) {
                         // Write 4 + length to MACDataLen (0x61)
                         data[1] = length + 4;
                         data[0] = 0x61;
 
-                        if (gpI2c->write(gAddress, &(data[0]), 2) == 0) {
+                        if (mI2c->write(mAddress, &(data[0]), 2) == 0) {
                             // Read the control status register to see if a bad
                             // flash write has been detected (bit 15)
                             data[0] = 0;
-                            if ((gpI2c->write(gAddress, &(data[0]), 1) == 0) &&
+                            if ((mI2c->write(mAddress, &(data[0]), 1) == 0) &&
                                 getTwoBytes(0, &controlStatus) &&
                                 (((controlStatus >> 15) & 0x01) != 0x01)) {
                                 success = true;
                             }
 #ifdef DEBUG_BQ35100
-                            printf("BatteryGaugeBq35100 (I2C 0x%02x): write successful.\n", gAddress >> 1);
+                            printf("BatteryGaugeBq35100 (I2C 0x%02x): write successful.\n", mAddress >> 1);
 #endif
                         } else {
 #ifdef DEBUG_BQ35100
-                            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to read write to MACDataLen.\n", gAddress >> 1);
+                            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to read write to MACDataLen.\n", mAddress >> 1);
 #endif
                         }
                     } else {
 #ifdef DEBUG_BQ35100
-                        printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write to MACDataSum.\n", gAddress >> 1);
+                        printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write to MACDataSum.\n", mAddress >> 1);
 #endif
                     }
                 } else {
 #ifdef DEBUG_BQ35100
-                    printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write %d bytes to ManufacturerAccessControl.\r", gAddress >> 1, (int) length + 2);
+                    printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to write %d bytes to ManufacturerAccessControl.\r", mAddress >> 1, (int) length + 2);
 #endif
                 }
             } else {
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set Block Data Control.\n", gAddress >> 1);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set Block Data Control.\n", mAddress >> 1);
 #endif
             }
         } else {
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set the security mode of the chip.\n", gAddress >> 1);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): unable to set the security mode of the chip.\n", mAddress >> 1);
 #endif
         }
     }
@@ -294,7 +294,7 @@ BatteryGaugeBq35100::SecurityMode BatteryGaugeBq35100::getSecurityMode(void)
 
     // Read the control status register
     data[0] = 0;
-    if ((gpI2c->write(gAddress, &(data[0]), 1) == 0) &&
+    if ((mI2c->write(mAddress, &(data[0]), 1) == 0) &&
         getTwoBytes(0, &controlStatus)) {
         // Bits 13 and 14 of the high byte represent the security status,
         // 01 = full access
@@ -302,7 +302,7 @@ BatteryGaugeBq35100::SecurityMode BatteryGaugeBq35100::getSecurityMode(void)
         // 11 = sealed access
         securityMode = (SecurityMode) ((controlStatus >> 13) & 0x03);
 #ifdef DEBUG_BQ35100
-        printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode is 0x%02x (control status 0x%04x).\r\n", gAddress >> 1, securityMode, controlStatus);
+        printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode is 0x%02x (control status 0x%04x).\r\n", mAddress >> 1, securityMode, controlStatus);
 #endif
     }
 
@@ -329,25 +329,25 @@ bool BatteryGaugeBq35100::setSecurityMode(SecurityMode securityMode)
                         // Just seal the chip
                         data[1] = 0x20;  // First byte of SEALED sub-command (0x20)
                         data[2] = 0x00;  // Second byte of SEALED sub-command (0x00) (register address will auto-increment)
-                        gpI2c->write(gAddress, &(data[0]), 3);
+                        mI2c->write(mAddress, &(data[0]), 3);
                     break;
                     case SECURITY_MODE_FULL_ACCESS:
                         // Send the full access code with endianness conversion
                         // in TWO writes
-                        data[2] = (char) (gFullAccessCodes >> 24);
-                        data[1] = (char) (gFullAccessCodes >> 16);
-                        gpI2c->write(gAddress, &(data[0]), 3);
-                        data[2] = (char) (gFullAccessCodes >> 8);
-                        data[1] = (char) gFullAccessCodes;
-                        gpI2c->write(gAddress, &(data[0]), 3);
+                        data[2] = (char) (mFullAccessCodes >> 24);
+                        data[1] = (char) (mFullAccessCodes >> 16);
+                        mI2c->write(mAddress, &(data[0]), 3);
+                        data[2] = (char) (mFullAccessCodes >> 8);
+                        data[1] = (char) mFullAccessCodes;
+                        mI2c->write(mAddress, &(data[0]), 3);
                     break;
                     case SECURITY_MODE_UNSEALED:
-                        data[2] = (char) (gSealCodes >> 24);
-                        data[1] = (char) (gSealCodes >> 16);
-                        gpI2c->write(gAddress, &(data[0]), 3);
-                        data[2] = (char) (gSealCodes >> 8);
-                        data[1] = (char) gSealCodes;
-                        gpI2c->write(gAddress, &(data[0]), 3);
+                        data[2] = (char) (mSealCodes >> 24);
+                        data[1] = (char) (mSealCodes >> 16);
+                        mI2c->write(mAddress, &(data[0]), 3);
+                        data[2] = (char) (mSealCodes >> 8);
+                        data[1] = (char) mSealCodes;
+                        mI2c->write(mAddress, &(data[0]), 3);
                     break;
                     case SECURITY_MODE_UNKNOWN:
                     default:
@@ -359,12 +359,12 @@ bool BatteryGaugeBq35100::setSecurityMode(SecurityMode securityMode)
                 if (currentSecurityMode == securityMode) {
                     success = true;
 #ifdef DEBUG_BQ35100
-                    printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode is now 0x%02x.\n", gAddress >> 1, currentSecurityMode);
+                    printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode is now 0x%02x.\n", mAddress >> 1, currentSecurityMode);
 #endif
                 } else {
                     osDelay(1000);
 #ifdef DEBUG_BQ35100
-                    printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode set failed (wanted 0x%02x, got 0x%02x), will retry.\n", gAddress >> 1, securityMode, currentSecurityMode);
+                    printf("BatteryGaugeBq35100 (I2C 0x%02x): security mode set failed (wanted 0x%02x, got 0x%02x), will retry.\n", mAddress >> 1, securityMode, currentSecurityMode);
 #endif
                 }
             }
@@ -399,12 +399,12 @@ bool BatteryGaugeBq35100::makeAdcReading(void)
 // Constructor.
 BatteryGaugeBq35100::BatteryGaugeBq35100(I2C *pI2c, PinNames gaugeEnable, uint8_t address,
 		uint32_t sealCodes):
-	gpI2c(pI2c),
-    pGaugeEnable{.pin = gaugeEnable},
-	gAddress(address),
-    gReady(false),
-    gSealCodes(sealCodes),
-    gFullAccessCodes(0)
+	mI2c(pI2c),
+	mAddress(address),
+    mGaugeEnable{.pin = gaugeEnable},
+    mSealCodes(sealCodes),
+    mFullAccessCodes(0),
+	mReady(false)
 {
 }
 
@@ -414,7 +414,7 @@ BatteryGaugeBq35100::~BatteryGaugeBq35100(void)
 }
 
 bool BatteryGaugeBq35100::init(){
-	return init(gpI2c, pGaugeEnable.pin, gAddress, gSealCodes);
+	return init(mI2c, mGaugeEnable.pin, mAddress, mSealCodes);
 }
 
 // Initialise ourselves.
@@ -423,52 +423,52 @@ bool BatteryGaugeBq35100::init(I2C * pI2c, PinNames gaugeEnable, uint8_t address
     uint16_t answer;
     uint8_t data[4];
 
-    gpI2c = pI2c;
-    gAddress = address << 1;
-    gSealCodes = sealCodes;
+    mI2c = pI2c;
+    mAddress = address << 1;
+    mSealCodes = sealCodes;
     
     if (gaugeEnable != NC) {
-        GpioInit(&pGaugeEnable, gaugeEnable, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1);
+        GpioInit(&mGaugeEnable, gaugeEnable, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1);
         osDelay(GAUGE_ENABLE_SETTLING_TIME_MS);
     }
 
-    if (gpI2c != NULL) {
-        gpI2c->lock();
-        gpI2c->frequency(I2C_CLOCK_FREQUENCY);
+    if (mI2c != NULL) {
+        mI2c->lock();
+        mI2c->frequency(I2C_CLOCK_FREQUENCY);
         
         // Send a control command to read the device type
         data[0] = 0x3e;  // Set address to ManufacturerAccessControl
         data[1] = 0x03;  // First byte of HW_VERSION sub-command (0x03)
         data[2] = 0x00;  // Second byte of HW_VERSION sub-command (0x00) (register address will auto-increment)
 
-        if ((gpI2c->write(gAddress, &(data[0]), 3) == 0) &&
+        if ((mI2c->write(mAddress, &(data[0]), 3) == 0) &&
             getTwoBytes(0x40, &answer)) {  // Read from MACData address
             if (answer == 0x00a8) {
-                gReady = true;
+                mReady = true;
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x as HW_VERSION, expected 0x00a8.\n", gAddress >> 1, answer);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x as HW_VERSION, expected 0x00a8.\n", mAddress >> 1, answer);
 #endif
         } else {
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): not responding on that I2C address.\n", gAddress >> 1);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): not responding on that I2C address.\n", mAddress >> 1);
 #endif
         }
 
         disableGauge();
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
 #ifdef DEBUG_BQ35100
-    if (gReady) {
-        printf("BatteryGaugeBq35100 (I2C 0x%02x): handler initialised.\n", gAddress >> 1);
+    if (mReady) {
+        printf("BatteryGaugeBq35100 (I2C 0x%02x): handler initialised.\n", mAddress >> 1);
     } else {
-        printf("BatteryGaugeBq35100 (I2C 0x%02x): init NOT successful.\n", gAddress >> 1);
+        printf("BatteryGaugeBq35100 (I2C 0x%02x): init NOT successful.\n", mAddress >> 1);
     }
 #endif
 
-    return gReady;
+    return mReady;
 }
 
 // Switch on the battery capacity monitor.
@@ -480,12 +480,12 @@ bool BatteryGaugeBq35100::enableGauge(bool nonVolatile)
     uint8_t opConfig;
     uint16_t controlStatus;
 
-    if (gReady) {
+    if (mReady) {
         if (nonVolatile) {
             // Read the OpConfig register which is at address 0x41b1
             if (readExtendedData(0x41b1, &opConfig, sizeof (opConfig))) {
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): OpConfig is 0x%02x.\n", gAddress >> 1, opConfig);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): OpConfig is 0x%02x.\n", mAddress >> 1, opConfig);
 #endif                        
                 // AccumulatedCapacity is achieved by setting GMSEL 1:0 (in bits 0 and 1) to 00
                 if ((opConfig & 0x03) != 0) {
@@ -494,7 +494,7 @@ bool BatteryGaugeBq35100::enableGauge(bool nonVolatile)
                     accumulatedCapacityOn = writeExtendedData(0x41b1, &opConfig, sizeof (opConfig));
 #ifdef DEBUG_BQ35100
                     if (accumulatedCapacityOn) {
-                        printf("BatteryGaugeBq35100 (I2C 0x%02x): AccumulatedCapacity enabled, OpConfig becomes 0x%02x.\r\n", gAddress >> 1, opConfig);
+                        printf("BatteryGaugeBq35100 (I2C 0x%02x): AccumulatedCapacity enabled, OpConfig becomes 0x%02x.\r\n", mAddress >> 1, opConfig);
                     }
 #endif
                 } else {
@@ -504,18 +504,18 @@ bool BatteryGaugeBq35100::enableGauge(bool nonVolatile)
         }
 
         if (accumulatedCapacityOn || !nonVolatile) {
-            if (pGaugeEnable.pin != NC) {
-                GpioWrite(&pGaugeEnable, 1);
+            if (mGaugeEnable.pin != NC) {
+                GpioWrite(&mGaugeEnable, 1);
                 osDelay(GAUGE_ENABLE_SETTLING_TIME_MS);
             }
-            gpI2c->lock();
+            mI2c->lock();
             data[0] = 0x3e;  // Set address to ManufacturerAccessControl
             data[1] = 0x11;  // First byte of GAUGE_START sub-command (0x11)
             data[2] = 0x00;  // Second byte of GAUGE_START sub-command (0x00) (register address will auto-increment)
-            if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+            if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
                 // Wait for GA bit of CONTROL_STATUS (bit 0) to become 1
                 data[0] = 0;
-                if (gpI2c->write(gAddress, &(data[0]), 1) == 0) {
+                if (mI2c->write(mAddress, &(data[0]), 1) == 0) {
                     for (int x = 0; (x < GAUGE_COMPLETE_osDelay / 10) && !success; x++) {
                         if (getTwoBytes(0, &controlStatus)) {
                             if ((controlStatus & 0x01) == 0x01) {
@@ -529,7 +529,7 @@ bool BatteryGaugeBq35100::enableGauge(bool nonVolatile)
                     }
                 }
             }
-            gpI2c->unlock();
+            mI2c->unlock();
         }
     }
     
@@ -545,12 +545,12 @@ bool BatteryGaugeBq35100::disableGauge(void)
     uint8_t opConfig;
     uint16_t controlStatus;
     
-    if (gReady) {
+    if (mReady) {
         if (isGaugeEnabled()) {
             // Read the OpConfig register which is at address 0x41b1
             if (readExtendedData(0x41b1, &opConfig, sizeof (opConfig))) {
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): OpConfig is 0x%02x.\n", gAddress >> 1, opConfig);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): OpConfig is 0x%02x.\n", mAddress >> 1, opConfig);
 #endif                        
                 // Check if AccumulatedCapacity is on
                 if ((opConfig & 0x03) == 0) {
@@ -558,16 +558,16 @@ bool BatteryGaugeBq35100::disableGauge(void)
                 }
                 
                 // Send GAUGE_STOP
-                gpI2c->lock();
+                mI2c->lock();
                 data[0] = 0x3e;  // Set address to ManufacturerAccessControl
                 data[1] = 0x12;  // First byte of GAUGE_STOP sub-command (0x12)
                 data[2] = 0x00;  // Second byte of GAUGE_STOP sub-command (0x00) (register address will auto-increment)
-                if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+                if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
                     // Wait for GA bit of CONTROL_STATUS (bit 0) to become 0 and,
                     // if AccumulatedCapacity was on, wait for G_DONE
                     // (bit 6 in CONTROL_STATUS) to be set
                     data[0] = 0;
-                    if (gpI2c->write(gAddress, &(data[0]), 1) == 0) {
+                    if (mI2c->write(mAddress, &(data[0]), 1) == 0) {
                         for (int x = 0; (x < GAUGE_COMPLETE_osDelay / 10) && !success; x++) {
                             if (getTwoBytes(0, &controlStatus)) {
                                 if ((controlStatus & 0x01) == 0) {
@@ -575,7 +575,7 @@ bool BatteryGaugeBq35100::disableGauge(void)
                                         if (((controlStatus >> 6) & 0x01) == 0x01) {
                                             success = true;
 #ifdef DEBUG_BQ35100
-                                            printf("BatteryGaugeBq35100 (I2C 0x%02x): AccumulatedCapacity data written to non-volatile memory.\r\n", gAddress >> 1);
+                                            printf("BatteryGaugeBq35100 (I2C 0x%02x): AccumulatedCapacity data written to non-volatile memory.\r\n", mAddress >> 1);
 #endif
                                         } else {
                                             osDelay(10);
@@ -592,14 +592,14 @@ bool BatteryGaugeBq35100::disableGauge(void)
                         }
                     }
                 }
-                gpI2c->unlock();
+                mI2c->unlock();
             }
         } else {
             success = true;
         }
 
-        if (pGaugeEnable.pin != NC) {
-        	GpioWrite(&pGaugeEnable, 0);
+        if (mGaugeEnable.pin != NC) {
+        	GpioWrite(&mGaugeEnable, 0);
         }
     }
     
@@ -613,13 +613,13 @@ bool BatteryGaugeBq35100::isGaugeEnabled(void)
     uint8_t data[1];
     uint16_t controlStatus;
 
-    if (gReady) {
+    if (mReady) {
         // Check the GA bit (bit 0) in CONTROL_STATUS
         data[0] = 0;
-        if ((gpI2c->write(gAddress, &(data[0]), 1) == 0) &&
+        if ((mI2c->write(mAddress, &(data[0]), 1) == 0) &&
             getTwoBytes(0, &controlStatus)) {
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x as CONTROL_STATUS.\n", gAddress >> 1, controlStatus);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x as CONTROL_STATUS.\n", mAddress >> 1, controlStatus);
 #endif
             if ((controlStatus & 0x01) == 0x01) {
                 gaugeEnabled = true;
@@ -636,8 +636,8 @@ bool BatteryGaugeBq35100::setDesignCapacity(uint32_t capacityMAh)
     bool success = false;
     uint8_t data[2];
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
         
         data[0] = capacityMAh >> 8;  // Upper byte of design capacity 
         data[1] = capacityMAh;  // Lower byte of design capacity
@@ -647,12 +647,12 @@ bool BatteryGaugeBq35100::setDesignCapacity(uint32_t capacityMAh)
             success = true;
  
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): designed cell capacity set to %d mAh.\n", gAddress >> 1,
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): designed cell capacity set to %d mAh.\n", mAddress >> 1,
                    (unsigned int) capacityMAh);
 #endif
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -664,8 +664,8 @@ bool BatteryGaugeBq35100::getDesignCapacity(uint32_t *pCapacityMAh)
     bool success = false;
     uint16_t data;
     
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         // Read from the DesignCapacity address
         if (getTwoBytes (0x3c, &data)) {
@@ -677,7 +677,7 @@ bool BatteryGaugeBq35100::getDesignCapacity(uint32_t *pCapacityMAh)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): designed cell capacity is %d mAh.\n", gAddress >> 1, data);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): designed cell capacity is %d mAh.\n", mAddress >> 1, data);
 #endif
         }
 
@@ -693,8 +693,8 @@ bool BatteryGaugeBq35100::getTemperature(int32_t *pTemperatureC)
     int32_t temperatureC = 0;
     uint16_t data;
 
-    if (gReady && makeAdcReading()) {
-        gpI2c->lock();
+    if (mReady && makeAdcReading()) {
+        mI2c->lock();
         // Read from the temperature register address
         if (getTwoBytes (0x06, &data)) {
             success = true;
@@ -707,11 +707,11 @@ bool BatteryGaugeBq35100::getTemperature(int32_t *pTemperatureC)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): chip temperature %.1f K, so %d C.\n", gAddress >> 1, ((float) data) / 10, (int) temperatureC);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): chip temperature %.1f K, so %d C.\n", mAddress >> 1, ((float) data) / 10, (int) temperatureC);
 #endif
         }
         
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -723,8 +723,8 @@ bool BatteryGaugeBq35100::getVoltage(int32_t *pVoltageMV)
     bool success = false;
     uint16_t data = 0;
 
-    if (gReady && makeAdcReading()) {
-        gpI2c->lock();
+    if (mReady && makeAdcReading()) {
+        mI2c->lock();
         // Read from the voltage register address
         if (getTwoBytes (0x08, &data)) {
             success = true;
@@ -735,11 +735,11 @@ bool BatteryGaugeBq35100::getVoltage(int32_t *pVoltageMV)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery voltage %.3f V.\n", gAddress >> 1, ((float) data) / 1000);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery voltage %.3f V.\n", mAddress >> 1, ((float) data) / 1000);
 #endif
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
     
     return success;
@@ -752,8 +752,8 @@ bool BatteryGaugeBq35100::getCurrent(int32_t *pCurrentMA)
     int32_t currentMA = 0;
     uint16_t data = 0;
 
-    if (gReady && makeAdcReading()) {
-        gpI2c->lock();            
+    if (mReady && makeAdcReading()) {
+        mI2c->lock();            
         // Read from the average current register address
         if (getTwoBytes (0x0c, &data)) {
             success = true;
@@ -763,11 +763,11 @@ bool BatteryGaugeBq35100::getCurrent(int32_t *pCurrentMA)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): current %d mA.\n", gAddress >> 1, (int) currentMA);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): current %d mA.\n", mAddress >> 1, (int) currentMA);
 #endif
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
     
     return success;
@@ -780,8 +780,8 @@ bool BatteryGaugeBq35100::getUsedCapacity(uint32_t *pCapacityUAh)
     uint8_t bytes[5];
     uint32_t data;
 
-    if (gReady && makeAdcReading()) {
-        gpI2c->lock();
+    if (mReady && makeAdcReading()) {
+        mI2c->lock();
         // Read four bytes from the AccummulatedCapacity register address
         
         // Send a command to read from registerAddress
@@ -791,8 +791,8 @@ bool BatteryGaugeBq35100::getUsedCapacity(uint32_t *pCapacityUAh)
         bytes[3] = 0;
         bytes[4] = 0;
 
-        if ((gpI2c->write(gAddress, &(bytes[0]), 1) == 0) &&
-            (gpI2c->read(gAddress, &(bytes[1]), 4) == 0)) {
+        if ((mI2c->write(mAddress, &(bytes[0]), 1) == 0) &&
+            (mI2c->read(mAddress, &(bytes[1]), 4) == 0)) {
             success = true;
             data = (((uint32_t) bytes[4]) << 24) + (((uint32_t) bytes[3]) << 16) + (((uint32_t) bytes[2]) << 8) + bytes[1];
  
@@ -802,11 +802,11 @@ bool BatteryGaugeBq35100::getUsedCapacity(uint32_t *pCapacityUAh)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity used %u uAh.\n", gAddress >> 1, (unsigned int) data);
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity used %u uAh.\n", mAddress >> 1, (unsigned int) data);
 #endif
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
     
     return success;
@@ -836,7 +836,7 @@ bool BatteryGaugeBq35100::getRemainingCapacity(uint32_t *pCapacityUAh)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity remaining %u uAh (from a designed capacity of %d uAh).\n", gAddress >> 1,
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity remaining %u uAh (from a designed capacity of %d uAh).\n", mAddress >> 1,
                    (unsigned int) (designCapacityUAh - usedCapacityUAh), (unsigned int) designCapacityUAh);
 #endif
         }
@@ -871,7 +871,7 @@ bool BatteryGaugeBq35100::getRemainingPercentage(int32_t *pBatteryPercentage)
             }
 
 #ifdef DEBUG_BQ35100
-            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity remaining %d%%.\n", gAddress >> 1,
+            printf("BatteryGaugeBq35100 (I2C 0x%02x): battery capacity remaining %d%%.\n", mAddress >> 1,
                    (unsigned int) batteryPercentage);
 #endif
         }
@@ -886,21 +886,21 @@ bool BatteryGaugeBq35100::newBattery(uint32_t capacityMAh)
     bool success = false;
     uint8_t data[3];
     
-    if (gReady) {
+    if (mReady) {
         if (setDesignCapacity(capacityMAh)) {
-            gpI2c->lock();
+            mI2c->lock();
             // Send a control command to indicate NEW_BATTERY
             data[0] = 0x3e;  // Set address to ManufacturerAccessControl
             data[1] = 0x13;  // First byte of NEW_BATTERY sub-command (0x13)
             data[2] = 0xA6;  // Second byte of NEW_BATTERY sub-command (0xA6) (register address will auto-increment)
-            if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+            if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
                 success = true;
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): new battery set.\n", gAddress >> 1);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): new battery set.\n", mAddress >> 1);
 #endif
             }
 
-            gpI2c->unlock();
+            mI2c->unlock();
         }
     }
 
@@ -912,12 +912,12 @@ bool BatteryGaugeBq35100::advancedGetConfig(int32_t address, uint8_t * pData, in
 {
     bool success = false;
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         success =  readExtendedData(address, pData, length);
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -928,12 +928,12 @@ bool BatteryGaugeBq35100::advancedSetConfig(int32_t address, const uint8_t * pDa
 {
     bool success = false;
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         success =  writeExtendedData(address, pData, length);
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -945,31 +945,31 @@ bool BatteryGaugeBq35100::advancedSendControlWord(uint16_t controlWord, uint16_t
     bool success = false;
     uint8_t data[3];
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         // Send the control command
         data[0] = 0x3e;  // Set address to ManufacturerAccessControl
         data[1] = (char) controlWord;        // First byte of controlWord
         data[2] = (char) (controlWord >> 8); // Second byte of controlWord
-        if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+        if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
             // Read the two bytes returned if requested
             if (pDataReturned != NULL) {
                 if (getTwoBytes(0x40, pDataReturned)) { // Read from MACData
                     success = true;
 #ifdef DEBUG_BQ35100
-                    printf("BatteryGaugeBq35100 (I2C 0x%02x): sent control word 0x%04x, read back 0x%04x.\n", gAddress >> 1, controlWord, *pDataReturned);
+                    printf("BatteryGaugeBq35100 (I2C 0x%02x): sent control word 0x%04x, read back 0x%04x.\n", mAddress >> 1, controlWord, *pDataReturned);
 #endif
                 }
             } else {
                 success = true;
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): sent control word 0x%04x.\n", gAddress >> 1, controlWord);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): sent control word 0x%04x.\n", mAddress >> 1, controlWord);
 #endif
             }
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -981,22 +981,22 @@ bool BatteryGaugeBq35100::advancedGet(uint8_t address, uint16_t *pDataReturned)
     bool success = false;
     uint16_t value = 0;
 
-    if (gReady) {
+    if (mReady) {
         // Make sure there's a recent reading, as most
         // of these commands involve the chip having done one
         if (makeAdcReading()) {            
-            gpI2c->lock();
+            mI2c->lock();
             // Read the data
             if (getTwoBytes(address, &value)) {
                 success = true;
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x from addresses 0x%02x and 0x%02x.\n", gAddress >> 1, value, address, address + 1);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): read 0x%04x from addresses 0x%02x and 0x%02x.\n", mAddress >> 1, value, address, address + 1);
 #endif
                 if (pDataReturned != NULL) {
                     *pDataReturned = value;
                 }
             }
-            gpI2c->unlock();
+            mI2c->unlock();
         }
     }
 
@@ -1008,12 +1008,12 @@ BatteryGaugeBq35100::SecurityMode BatteryGaugeBq35100::advancedGetSecurityMode(v
 {
     SecurityMode securityMode = SECURITY_MODE_UNKNOWN;
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         securityMode = getSecurityMode();
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return securityMode;
@@ -1024,12 +1024,12 @@ bool BatteryGaugeBq35100::advancedSetSecurityMode(SecurityMode securityMode)
 {
     bool success = false;
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         success = setSecurityMode(securityMode);
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;
@@ -1042,8 +1042,8 @@ bool BatteryGaugeBq35100::advancedReset(void)
     SecurityMode securityMode;
     uint8_t data[3];
 
-    if (gReady) {
-        gpI2c->lock();
+    if (mReady) {
+        mI2c->lock();
 
         securityMode = getSecurityMode(); // Must be inside lock()
         // Handle unsealing, as this command only works when unsealed
@@ -1053,10 +1053,10 @@ bool BatteryGaugeBq35100::advancedReset(void)
             data[1] = 0x41;  // First byte of RESET sub-command (0x41)
             data[2] = 0x00;  // Second byte of RESET sub-command (0x00) (register address will auto-increment)
 
-            if (gpI2c->write(gAddress, &(data[0]), 3) == 0) {
+            if (mI2c->write(mAddress, &(data[0]), 3) == 0) {
                 success = true;
 #ifdef DEBUG_BQ35100
-                printf("BatteryGaugeBq35100 (I2C 0x%02x): chip hard reset.\n", gAddress >> 1);
+                printf("BatteryGaugeBq35100 (I2C 0x%02x): chip hard reset.\n", mAddress >> 1);
 #endif
             }
             
@@ -1066,7 +1066,7 @@ bool BatteryGaugeBq35100::advancedReset(void)
             }
         }
 
-        gpI2c->unlock();
+        mI2c->unlock();
     }
 
     return success;

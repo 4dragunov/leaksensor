@@ -55,7 +55,7 @@ void HAL_SUBGHZ_MspInit(SUBGHZ_HandleTypeDef *subghzHandle)
 
   __HAL_RCC_SUBGHZSPI_CLK_ENABLE();
 
-  HAL_NVIC_SetPriority(SUBGHZ_Radio_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(SUBGHZ_Radio_IRQn, configMAX_SYSCALL_INTERRUPT_PRIORITY + 1, 0);
   HAL_NVIC_EnableIRQ(SUBGHZ_Radio_IRQn);
 }
 

@@ -40,12 +40,6 @@ extern "C" {
 #define LORAMAC_CLASSB_ENABLED  0
 #endif
 
-#ifndef CRITICAL_SECTION_BEGIN
-#define CRITICAL_SECTION_BEGIN( )      UTILS_ENTER_CRITICAL_SECTION( )
-#endif /* !CRITICAL_SECTION_BEGIN */
-#ifndef CRITICAL_SECTION_END
-#define CRITICAL_SECTION_END( )        UTILS_EXIT_CRITICAL_SECTION( )
-#endif /* !CRITICAL_SECTION_END */
 
 /**
  * @brief Maximum time to wait to receive a downlink packet or event after sending an uplink packet.

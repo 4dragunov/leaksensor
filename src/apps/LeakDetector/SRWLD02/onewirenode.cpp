@@ -30,6 +30,8 @@ NvProperty<std::underlying_type<OneWire::DS18B20::Resolution>::type> ds18b20_res
 /* USER CODE END Header_StartTaskOneWire */
 
 void OneWireNode::DoTaskOneWire(){
+  DBG("OneWire Task started\n");
+
   for(;;)
   {
     	gDs18b20.init(static_cast<OneWire::DS18B20::Resolution>((uint8_t)ds18b20_resolution));
@@ -69,8 +71,8 @@ void OneWireNode::DoTaskOneWire(){
 						DBG("Using CPU thermal sensor data!\n");
 						std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[0] = samples->data.ch.Ts;
 					}
-					gettimeofday(&std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.timestamp, 0);
-					gettimeofday(&std::static_pointer_cast<SummarySensorsData>(summaryData)->timestamp, 0);
+					std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.timestamp = std::chrono::system_clock::now();
+					std::static_pointer_cast<SummarySensorsData>(summaryData)->timestamp = std::chrono::system_clock::now();
 					osMemoryPoolFree(DataSampler::Instance().Pool(), samples);
 					send(summaryData);
 					summaryData = nullptr;
@@ -88,7 +90,7 @@ void StartTaskOneWire(void * argument){
 
 const osThreadAttr_t thread_attr = {
   .name = "OneWireNode",
-  .stack_size = 128 * 4,                            // Create the thread stack with a size of 1024 bytes
+  .stack_size = 256 * 4,                            // Create the thread stack with a size of 1024 bytes
   .priority = (osPriority_t) osPriorityNormal
 };
 

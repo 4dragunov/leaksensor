@@ -242,17 +242,17 @@ public:
     
 protected:
     /** Pointer to the I2C interface. */
-    I2C *gpI2c;
+    I2C *mI2c;
     /** The address of the device. */
-    uint8_t gAddress;
+    uint8_t mAddress;
     /** The gauge enable pin. */
-    Gpio_t  pGaugeEnable;
+    Gpio_t  mGaugeEnable;
     /** The seal codes for the device (step 1 in the higher word, step 2 the lower word), NOT byte reversed. . */
-    uint32_t gSealCodes;
+    uint32_t mSealCodes;
     /** The full access codes for the device (step 1 in the higher word, step 2 the lower word), NOT byte reversed. . */
-    uint32_t gFullAccessCodes;
+    uint32_t mFullAccessCodes;
     /** Flag to indicate device is ready. */
-    bool gReady;
+    bool mReady;
     
     /** Read two bytes starting at a given address.
      * Note: gpI2c should be locked before this is called.

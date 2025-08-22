@@ -28,6 +28,7 @@
 
 ADC_HandleTypeDef hadc = {.Instance = ADC};
 
+
 void AdcMcuInit( Adc_t *obj, PinNames adcInput )
 {
 	ADC_HandleTypeDef * h = &hadc;
@@ -75,53 +76,50 @@ void AdcMcuConfig( Adc_t *obj )
 	hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
 	hadc.Init.DMAContinuousRequests = DISABLE;
 	hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-	hadc.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
-	hadc.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
-
-	hadc.Init.OversamplingMode = ADC_OVS_HARDWARE;
+	hadc.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_79CYCLES_5;
+	hadc.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_79CYCLES_5;
+#ifdef ADC_OVS_HARD
+	hadc.Init.OversamplingMode = ENABLE;
 	hadc.Init.Oversampling.Ratio = ADC_OVERSAMPLING_RATIO_16;
 	hadc.Init.Oversampling.RightBitShift = ADC_RIGHTBITSHIFT_2;
 	hadc.Init.Oversampling.TriggeredMode = ADC_TRIGGEREDMODE_SINGLE_TRIGGER;
+#else
+	hadc.Init.OversamplingMode = DISABLE;
+#endif
 	hadc.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_LOW;
     HAL_ADC_Init( h );
     HAL_ADCEx_Calibration_Start(h);
 }
 
-uint16_t AdcMcuReadChannel( Adc_t *obj )
+#define AVERAGING 5
+
+uint16_t AdcMcuReadChannel( Adc_t *obj, AdcMode  mode, uint8_t averaging  )
 {
 	ADC_HandleTypeDef * h = &hadc;
     ADC_ChannelConfTypeDef adcConf = { 0 };
-    uint16_t adcData = 0;
-
-    // Enable HSI
-  //  __HAL_RCC_HSI_ENABLE( );
-
-    // Wait till HSI is ready
-    while( __HAL_RCC_GET_FLAG( RCC_FLAG_HSIRDY ) == RESET )
-    {
-    }
+    uint32_t adcData = 0;
+    uint8_t averaging_value = averaging;
 
     __HAL_RCC_ADC_CLK_ENABLE( );
 
-
     adcConf.Channel = obj->channel;
     adcConf.Rank = ADC_REGULAR_RANK_1;
-    adcConf.SamplingTime = ((obj->channel== ADC_CHANNEL_VREFINT) ||
-    						(obj->channel== ADC_CHANNEL_TEMPSENSOR))? ADC_SAMPLETIME_79CYCLES_5 : ADC_SAMPLETIME_1CYCLE_5;
-
+    adcConf.SamplingTime = ADC_SAMPLETIME_79CYCLES_5;
+//    adcConf.SingleDiff  = (mode == AdcMode::SE)? ADC_SINGLE_ENDED : ADC_DIFFERENTIAL_ENDED;      /* Single-ended input channel */
+ //   adcConf.OffsetNumber = ADC_OFFSET_NONE;       /* No offset subtraction */
+ //   adcConf.Offset = 0;
     HAL_ADC_ConfigChannel( h, &adcConf );
 
+    while(averaging--) {
     // Start ADC Software Conversion
-    HAL_ADC_Start( h );
+		HAL_ADC_Start( h );
 
-    HAL_ADC_PollForConversion( h, HAL_MAX_DELAY );
+		HAL_ADC_PollForConversion( h, HAL_MAX_DELAY );
 
-    adcData = HAL_ADC_GetValue( h );
-
+		adcData += HAL_ADC_GetValue( h );
+    }
+    adcData/=averaging_value;
     __HAL_RCC_ADC_CLK_DISABLE( );
-
-    // Disable HSI
-   // __HAL_RCC_HSI_DISABLE( );
 
     return adcData;
 }

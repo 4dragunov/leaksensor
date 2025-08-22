@@ -33,11 +33,6 @@
 #ifndef __BOARD_CONFIG_H__
 #define __BOARD_CONFIG_H__
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
 /*!
  * Defines the time required for the TCXO to wakeup [ms].
  */
@@ -54,40 +49,40 @@ typedef enum {
 	LED1 = 0,
 } LedsType;
 
-typedef enum {
-	SE = 0,
-	DIFF,
-} AdcMode_t;
-
 #define LED_ON  1
 #define LED_OFF 0
 
-
-#define MUX_ENABLE_TIMEOUT 2
-#define MUX_SELECT_TIMEOUT 2
-#define MUX_POL_SWITCH_TIMEOUT 4
-
-#define ADC_OVS_HARDWARE DISABLE
-
+#define MUX_COUNT 2
 //Half of channels selection 0- 9
 #define EN0                                         PA_0
+
 //Half of channels selection 10-19
 #define EN1                                         PA_1
+#define EN_ACTIVE									0
+#define EN_DISABLED									1
+#define MUX_ENABLE_TIMEOUT                          10
 
-//One wire uart tx and rx
-#define OW_TX                                       PA_2
-#define OW_RX                                       PA_3
 //RTC wakeup alarm - powers up the board from deep sleep
 #define WAKEUP                                      PA_4
 //Measurement channel polarity selection
-#define PSEL                                      	PA_5
+#define SENS_PSEL                                      	PA_5
+#define SENS_POL_DIRECT									0
+#define SENS_POL_REVERSED								1
+#define MUX_POL_SWITCH_TIMEOUT                          10   //milliseconds
 //Measurement channel selection
 #define SCH0                                      	PA_6
 #define SCH1                                      	PA_7
 #define SCH2                                      	PA_8
 #define SCH3                                      	PA_9
+#define MUX_SELECT_TIMEOUT                           10
 // One wire power delivery
 #define OWPD                                    	PB_2
+//One wire uart tx and rx
+#define OW_TX                                       PA_2
+#define OW_RX                                       PA_3
+#define OW_PD_ON                                      0
+#define OW_PD_OFF                                     1
+
 // Analog adc input channels
 #define ADC_IN_P                                    PB_3
 #define ADC_IN_N                                    PB_4
@@ -117,9 +112,5 @@ typedef enum {
 #define I2C1_SCL                                     PB_8
 #define I2C1_SDA                                     PA_10
 
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif // __BOARD_CONFIG_H__

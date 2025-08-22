@@ -90,8 +90,8 @@ union Usid {
 Gpio_t Led1;
 
 Gpio_t BattPwr;
-Gpio_t SensorsEn[2];
-Gpio_t SensorsPolarity;
+Gpio_t SensorsEn[MUX_COUNT]= {{.pin = EN0}, {.pin = EN1}};
+Gpio_t SensorsPolarity = {.pin = SENS_PSEL};
 
 /*
  * MCU objects
@@ -100,6 +100,7 @@ Adc_t  AdcVref = {.inst = ADC, .channel = ADC_CHANNEL_VREFINT };
 Adc_t  AdcTempSens = {.inst = ADC, .channel = ADC_CHANNEL_TEMPSENSOR};
 Adc_t  AdcInP = {.inst = ADC, .channel = ADC_CH_P};
 Adc_t  AdcInN = {.inst = ADC, .channel = ADC_CH_N};
+Adc_t  AdcVbat = {.inst = ADC, .channel = ADC_CHANNEL_VBAT};
 
 Uart_t LpUart1;
 Uart_t Usart1;
@@ -115,9 +116,6 @@ OneWire::Bus gOWI(&LpUart1);
 OneWire::DS18B20 gDs18b20(&gOWI, OneWire::DS18B20::Resolution::SR12BITS);
 
 NvProperty<uint32_t>  gBatteryReplacementDate(INITIAL_BATTERY_DATE,  MAX_BATTERY_DATE , INITIAL_BATTERY_DATE, NvVar::BATT_INS_DATE);
-
-static void MX_GPIO_Init(void);
-static void MX_IWDG_Init(void);
 
 int bcd2int(uint16_t bcd_value) {
     int result = 0;
@@ -176,11 +174,11 @@ static bool McuInitialized = false;
 /*!
  * UART2 FIFO buffers size
  */
-#define LPUART1_FIFO_TX_SIZE                                1024
-#define LPUART1_FIFO_RX_SIZE                                1024
+#define LPUART1_FIFO_TX_SIZE                                128
+#define LPUART1_FIFO_RX_SIZE                                128
 
-#define USART1_FIFO_TX_SIZE                                1024
-#define USART1_FIFO_RX_SIZE                                1024
+#define USART1_FIFO_TX_SIZE                                128
+#define USART1_FIFO_RX_SIZE                                128
 
 uint8_t LpUart1TxBuffer[LPUART1_FIFO_TX_SIZE];
 uint8_t LpUart1RxBuffer[LPUART1_FIFO_RX_SIZE];
@@ -210,7 +208,6 @@ void BoardInitMcu( void )
     	HAL_Init( );
     	SystemClockConfig( );
 
-
 #ifdef DEBUG
     	initialise_monitor_handles();
 #endif
@@ -224,32 +221,31 @@ void BoardInitMcu( void )
 
         FifoInit( &Usart1.FifoTx, Usart1TxBuffer, USART1_FIFO_TX_SIZE );
         FifoInit( &Usart1.FifoRx, Usart1RxBuffer, USART1_FIFO_RX_SIZE );
-
-
         // Configure your terminal for 8 Bits data (7 data bit + 1 parity bit), no parity and no flow ctrl
-        UartInit( &Usart1, USART_1, RS485_TX, RS485_RX, PIN_PUSH_PULL);
-        UartConfig( &Usart1, RX_TX, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
 
-        UartInit( &LpUart1, LPUART_1, OW_TX, OW_RX, PIN_OPEN_DRAIN );
-        UartConfig( &LpUart1, RX_TX, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartConfig( &Usart1, RX_TX, RS485, FIFO, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartInit( &Usart1, USART_1, RS485_TX, RS485_RX, RS485_DE, PIN_PUSH_PULL);
+
+        UartConfig( &LpUart1, RX_TX, UART, SYNC, 115200, UART_8_BIT, UART_1_STOP_BIT, NO_PARITY, NO_FLOW_CTRL );
+        UartInit( &LpUart1, LPUART_1, OW_TX, OW_RX, NC, PIN_OPEN_DRAIN );
 
         RtcInit( );
         i2c1.init();
         gauge.init();
-
+        gOWI.init();
         BoardUnusedIoInit( );
         if( BoardGetPowerSource( ) == EXT_POWER )
         {
-            // Disables OFF mode - Enables lowest power mode (STOP)
-            LpmSetOffMode( LPM_APPLI_ID, LPM_ENABLE );
+            LpmSetOffMode( LPM_APPLI_ID,  LPM_DISABLE);
         }else{
         	if(gBatteryReplacementDate == INITIAL_BATTERY_DATE)
         	{
         	    time_t replaced;
         	    gauge.newBattery(INITIAL_BATTERY_CAPACITY);
         	    gBatteryReplacementDate = time(&replaced);
-        	    LpmSetOffMode( LPM_APPLI_ID, LPM_DISABLE );
         	}
+        	 // Disables OFF mode - Enables lowest power mode (STOP)
+        	LpmSetOffMode( LPM_APPLI_ID, LPM_ENABLE);
         }
         McuInitialized = true;
     }
@@ -258,9 +254,9 @@ void BoardInitMcu( void )
         SystemClockReConfig( );
     }
     //includes vref and ts
-	GpioInit( &SensorsEn[0], EN0, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-	GpioInit( &SensorsEn[1], EN1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-	GpioInit( &SensorsPolarity, PSEL, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
+	GpioInit( &SensorsEn[0], EN0, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, EN_DISABLED );
+	GpioInit( &SensorsEn[1], EN1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, EN_DISABLED );
+	GpioInit( &SensorsPolarity, SENS_PSEL, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, SENS_POL_DIRECT );
 	AdcInit( ADC, &AdcInP, ADC_IN_P, ADC_CH_P);  // Just initialize ADC
 	AdcInit( ADC, &AdcInN, ADC_IN_N, ADC_CH_N);  // Just initialize ADC
 
@@ -268,6 +264,7 @@ void BoardInitMcu( void )
 	printf("HCLK=%li\n", HAL_RCC_GetHCLKFreq());
 	printf("APB1=%li\n", HAL_RCC_GetPCLK1Freq());
 	printf("APB2=%li\n", HAL_RCC_GetPCLK2Freq());
+
 }
 
 
@@ -455,7 +452,7 @@ uint16_t BoardBatteryMeasureVoltage( void )
     uint16_t vref = 0;
 
     // Read the current Voltage
-    vref = AdcReadChannel( &AdcVref );
+    vref = AdcReadChannel( &AdcVref, AdcMode::SE, 5 );
 
     // Compute and return the Voltage in millivolt
 
@@ -511,8 +508,7 @@ float BoardGetTemperature( void )
 
     BatteryVoltage = BoardBatteryMeasureVoltage( );
 
-    tempRaw = AdcReadChannel( &AdcTempSens );
-
+    tempRaw = AdcReadChannel( &AdcTempSens, AdcMode::SE, 5 );
     // Compute and return the temperature in degree celcius * 256
     return COMPUTATION_TEMPERATURE_STD_PARAMS( tempRaw);
 }
@@ -568,9 +564,12 @@ void SystemClockConfig( void )
 	    Error_Handler();
 	  }
 
-	  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC;
+	  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_I2C1;
+	  PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;;
 	  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
 	  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
+	  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+	  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK2;
 	  if( HAL_RCCEx_PeriphCLKConfig( &PeriphClkInit ) != HAL_OK )
 	  {
 	      assert_param( LMN_STATUS_ERROR );
@@ -757,16 +756,8 @@ void BoardLowPowerHandler( void )
     __enable_irq( );
 }
 
-static void MX_IWDG_Init(void)
+void BoardInitWatchdog(void)
 {
-
-  /* USER CODE BEGIN IWDG_Init 0 */
-
-  /* USER CODE END IWDG_Init 0 */
-
-  /* USER CODE BEGIN IWDG_Init 1 */
-
-  /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
   hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
   hiwdg.Init.Window = 4095;
@@ -775,76 +766,14 @@ static void MX_IWDG_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN IWDG_Init 2 */
-
-  /* USER CODE END IWDG_Init 2 */
-
 }
 
-static void MX_GPIO_Init(void)
-{
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
-  /* USER CODE BEGIN MX_GPIO_Init_1 */
-  /* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-/*
-
-  HAL_GPIO_WritePin(GPIOA, EN0_Pin | FE_CTRL3_Pin, GPIO_PIN_RESET);
-
-
-  HAL_GPIO_WritePin(GPIOB, OWPD_Pin |OFF_Pin, GPIO_PIN_RESET);
-
-
-  HAL_GPIO_WritePin(FE_CTRL2_GPIO_Port, FE_CTRL2_Pin, GPIO_PIN_RESET);
-*/
-  /*Configure GPIO pins : EN0_Pin FE_CTRL3_Pin */
- // GPIO_InitStruct.Pin = EN0_Pin | FE_CTRL3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  //HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : EN1_Pin PST_Pin */
- /*
-  GPIO_InitStruct.Pin = EN1_Pin | PST_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-*/
-  /*Configure GPIO pins : PA6 PA7 */
- // GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
- // HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : OWPD_Pin OFF_Pin */
-  /*
-  GPIO_InitStruct.Pin = OWPD_Pin|OFF_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-*/
-  /*Configure GPIO pin : FE_CTRL2_Pin */
-  //GPIO_InitStruct.Pin = FE_CTRL2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  //HAL_GPIO_Init(FE_CTRL2_GPIO_Port, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN MX_GPIO_Init_2 */
-  /* USER CODE END MX_GPIO_Init_2 */
+void BoardResetWatchDog(void){
+	HAL_IWDG_Refresh(&hiwdg);
 }
 
 void HAL_ADC_MspInit(ADC_HandleTypeDef* hadc)
 {
-  GPIO_InitTypeDef GPIO_InitStruct = {0};
   if(hadc->Instance==ADC)
   {
     /* USER CODE BEGIN ADC_MspInit 0 */

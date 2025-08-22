@@ -165,17 +165,17 @@ void ModBusNode::DoTaskModBus()
 	//REg 11 to reg 18
 	for(size_t sensor = 0; sensor < DS18B20MAX_SENSORS ; sensor++){
 		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::TEMP_1) + sensor);
-		DBG("ModBus reg temp:%i created\n", Index);
+		DBG("ModBus reg temp:%i created\n", (int) Index);
 		modbusRegisters.emplace(Index,
 				ModBus::Register(Index, tempRegNames[sensor] ,{ModBus::Register::RefValue<int16_t>(ds18b20SensorTemp[sensor], -550, 1250)}, ModBus::Register::Access::RO));
 	}
 	Index = static_cast<ModBus::Register::Index>(Index::WL_SENSORS);
-	DBG("ModBus reg sensor count:%i created\n", Index);
+	DBG("ModBus reg sensor count:%i created\n",(int)  Index);
 	modbusRegisters.emplace(Index, ModBus::Register(Index, "WL_SENSORS", {ModBus::Register::RefValue<uint8_t>(gLeakSensorCount, 1,  20)}, ModBus::Register::Access::RO));
 
 	for(size_t sensor = 0; sensor < gLeakSensorCount; sensor++) {
 		Index = static_cast<ModBus::Register::Index>(to_underlying(Index::WL_1) + sensor);
-		DBG("ModBus reg wl:%i created\n", Index);
+		DBG("ModBus reg wl:%i created\n", (int) Index);
 		modbusRegisters.emplace(Index,
 				ModBus::Register(Index, wlRegNames[sensor], {ModBus::Register::RefValue<uint16_t>(gLeakSensorData[sensor], 0,100)}, ModBus::Register::Access::RO));
 	}
@@ -187,14 +187,18 @@ void ModBusNode::DoTaskModBus()
 		if(osSemaphoreAcquire(mDataChangedSem, osWaitForever) == osOK) {
 			DBG("MB MAIL\n");
 
-			for(size_t sensor = 0; sensor < mSensorData->leakSamples.data.ch.wl.size(); sensor++) {
-				gLeakSensorData[sensor]= mSensorData->leakSamples.data.ch.wl[sensor];
-				DBG("Set mb wl reg:%i\n", sensor);
+			for(size_t sensor = 0; sensor < mSensorData->leakSamples.data.ch.wl1.size(); sensor++) {
+				gLeakSensorData[sensor]= mSensorData->leakSamples.data.ch.wl1[sensor];
+				DBG("Set mb wl1 reg:%i\n", (int) sensor);
+			}
+			for(size_t sensor = 0; sensor < mSensorData->leakSamples.data.ch.wl2.size(); sensor++) {
+				gLeakSensorData[10 + sensor]= mSensorData->leakSamples.data.ch.wl2[sensor];
+				DBG("Set mb wl2 reg:%i\n", (int) sensor);
 			}
 			DBG("WL-set!\n");
 			for(size_t sensor = 0; sensor < mSensorData->thermal.sensors; sensor++) {
 				ds18b20SensorTemp[sensor] = mSensorData->thermal.data[sensor];
-				DBG("Set mb temp reg:%i\n", sensor);
+				DBG("Set mb temp reg:%i\n",(int)  sensor);
 			}
 			DBG("TMP-set!\n");
 			mSensorData = nullptr;

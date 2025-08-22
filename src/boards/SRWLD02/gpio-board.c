@@ -20,6 +20,7 @@
  *
  * \author    Gregory Cristian ( Semtech )
  */
+#include "assert.h"
 #include "stm32wlxx.h"
 #include "utilities.h"
 #include "sysIrqHandlers.h"
@@ -127,6 +128,8 @@ void GpioMcuSetContext( Gpio_t *obj, void* context )
 
 void GpioMcuSetInterrupt( Gpio_t *obj, IrqModes irqMode, IrqPriorities irqPriority, GpioIrqHandler *irqHandler )
 {
+	assert(irqPriority <= configMAX_SYSCALL_INTERRUPT_PRIORITY);
+
     if( obj->pin < IOE_0 )
     {
         uint32_t priority = 0;
@@ -165,17 +168,17 @@ void GpioMcuSetInterrupt( Gpio_t *obj, IrqModes irqMode, IrqPriorities irqPriori
         {
         case IRQ_VERY_LOW_PRIORITY:
         case IRQ_LOW_PRIORITY:
-            priority = 3;
+            priority = configMAX_SYSCALL_INTERRUPT_PRIORITY + 3;
             break;
         case IRQ_MEDIUM_PRIORITY:
-            priority = 2;
+            priority = configMAX_SYSCALL_INTERRUPT_PRIORITY + 2;
             break;
         case IRQ_HIGH_PRIORITY:
-            priority = 1;
+            priority = configMAX_SYSCALL_INTERRUPT_PRIORITY + 1;
             break;
         case IRQ_VERY_HIGH_PRIORITY:
         default:
-            priority = 0;
+            priority = configMAX_SYSCALL_INTERRUPT_PRIORITY;
             break;
         }
 

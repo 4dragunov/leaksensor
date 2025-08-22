@@ -39,8 +39,8 @@ extern "C" {
 #define REGION_EU868
 /*#define REGION_KR920*/
 /*#define REGION_IN865*/
-#define REGION_US915
-/*#define REGION_RU864*/
+/*#define REGION_US915*/
+#define REGION_RU864
 
 #define HYBRID_ENABLED          0
 
@@ -73,10 +73,10 @@ extern "C" {
 #endif /* LORAMAC_CLASSB_ENABLED == 1 */
 
 #ifndef CRITICAL_SECTION_BEGIN
-#define CRITICAL_SECTION_BEGIN( )      UTILS_ENTER_CRITICAL_SECTION( )
+#define CRITICAL_SECTION_BEGIN( )      taskENTER_CRITICAL( )
 #endif /* !CRITICAL_SECTION_BEGIN */
 #ifndef CRITICAL_SECTION_END
-#define CRITICAL_SECTION_END( )        UTILS_EXIT_CRITICAL_SECTION( )
+#define CRITICAL_SECTION_END( )        taskEXIT_CRITICAL( )
 #endif /* !CRITICAL_SECTION_END */
 
 #ifdef __cplusplus

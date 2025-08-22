@@ -1,8 +1,9 @@
+#include <stddef.h>
 #include <stm32wlxx.h>
 #include "flash-board.h"
 
 #define FLASH_SIZE_KB             (uint32_t)(*((uint32_t *)FLASHSIZE_BASE)&0xFFFF)
-#define FLASH_SIZE                (uint32_t)(FLASH_SIZE_KB * 1024U)
+#define FLASH_SIZE_BYTES                (uint32_t)(FLASH_SIZE_KB * 1024U)
 
 class Stm32FlashInfo:public IFlashInfo {
 	friend IFlashInfo& boardFlashInstance();
@@ -23,7 +24,7 @@ IFlashInfo& Stm32FlashInfo::Instance()
 }
 
 size_t Stm32FlashInfo::size() {
-	return FLASH_SIZE;
+	return FLASH_SIZE_BYTES;
 }
 
 size_t Stm32FlashInfo::pagesize(){

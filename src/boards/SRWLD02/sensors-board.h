@@ -21,18 +21,22 @@
 #include <ctime>
 #include <chrono>
 #include "arm_math.h"
-
+#include "freertos_mpool.h"
 #include "tinyfsm.hpp"
 //#include "fsmlist.hpp"
 
 #define WL_CHANNEL_COUNT 20
+#define WL_CHANNEL_HALF_COUNT 10
 #define CAL_CHANNEL_COUNT 4
-#define VREF_TS_CHANNEL_COUNT 2
+#define VREF_VBAT_AND_TEMP_CHANNEL_COUNT 3
 #define MAV_WINDOW 4
 
 #define CHANNEL_SHORTED_LIMIT 100 //ohm
 #define CHANNEL_DISCONNECTED_LIMIT 120000 //ohm
-#define CHANNEL_NOMINAL_CURRENT 20 //uA
+#define CHANNEL_NOMINAL_CURRENT 20 //uA (microAmpere)
+#define CALIBRATION_VALID_TIME 3600//sec
+#define CALIBRATION_REPEAT 30//sec
+#define SELF_TEST_REPEAT   30//sec
 
 typedef enum {
 	CHANNEL_WL0 = 0,
@@ -59,10 +63,12 @@ typedef enum {
 	CHANNEL_WL19,
 	CHANNEL_WL_HREF_MIN,
 	CHANNEL_WL_HREF_MAX,
-	CHANNEL_TS,
+	CHANNEL_MUX_COUNT,
+	CHANNEL_TS = CHANNEL_MUX_COUNT,
 	CHANNEL_VREF,
+	CHANNEL_VBAT,
 	CHANNEL_COUNT
-	} CHANNEL_IDX;
+	} ChannelIdx;
 
 typedef struct {
 	PinNames channel_en_pin;      // Первый пин для ToggleCurrentDirection
@@ -82,57 +88,53 @@ typedef enum  {
 typedef struct SelfTestResult{
    Status status;
    std::chrono::time_point<std::chrono::system_clock> time;
-   SelfTestResult(const Status st):
+   SelfTestResult():status(UNKNOWN),time(std::chrono::system_clock::now()){}
+   SelfTestResult(const Status &st):
 	   status(st),
 	   time(std::chrono::system_clock::now()){}
 }  SelfTestResult;
 
-//Connection state
-typedef enum  {
-	DISCONNECTED,
-	CONNECTED,
-	SHORTED
-} ChannelConnectionStatus;
 
-typedef enum  {
-	UNCALIBRATED,
-	CALIBRATED
-} ChannelCalibrationStatus;
+/*---------------------------------------------------------------------------------------*/
 
-typedef struct {
-	ChannelCalibrationStatus status;
-	std::chrono::time_point<std::chrono::system_clock> time;
-} ChannelCalibration;
-
+class Channel;
 struct ChannelEvent: tinyfsm::Event {
-	CHANNEL_IDX channel;
-	ChannelEvent(CHANNEL_IDX ch):
+	const Channel& channel;
+	ChannelEvent(const Channel& ch):
 		tinyfsm::Event(),
 		channel(ch) {}
 };
-
 
 struct CalibrationStatusEvent: ChannelEvent {
   const Status status;
   const float &shift;
   const float &factor;
-  CalibrationStatusEvent(const Status st, const CHANNEL_IDX &ch, const float &sh, const float &fa):
-	  ChannelEvent(ch),
+  const float &error;
+  CalibrationStatusEvent(const Status st, const Channel &ch, const float &sh, const float &fa, const float& er):
+	  ChannelEvent(const_cast<Channel&>(ch)),
 	  status(st),
 	  shift(sh),
-	  factor(fa)
+	  factor(fa),
+	  error(er)
  {
 
  }
 };
 
+struct CalibrationEndedEvent: tinyfsm::Event {};
 struct MeasurementEvent       : ChannelEvent { };
+struct SelfTestStatusEvent      : tinyfsm::Event {
+	SelfTestResult result;
+	SelfTestStatusEvent(const Status &st):tinyfsm::Event(), result(st){}
+};
 
+struct SampleEvent  : tinyfsm::Event { };
+struct SampleDoneEvent : tinyfsm::Event {};
 
 #define Q2F(q) (q / 32768)
 #define F2Q(f) (f * 32768)
 
-class Channel: public tinyfsm::Fsm<Channel>{
+class Channel{
 public:
 	typedef float ValueType;
 	typedef void (*OnLimit)(const Channel *ch);
@@ -142,8 +144,10 @@ public:
 	};
 	enum class Type:uint8_t{
 		WL 	= 0, //water lavel
+		CAL,
 		TS, 	 //thermal sensor
 		VREF, 	 //vref
+		VBAT,    // rtc battery
 		COUNT
 	};
 
@@ -157,46 +161,93 @@ public:
 
 	struct MeasureEvent: ChannelEvent {
 		const Channel::ValueType &value;
-		MeasureEvent(const CHANNEL_IDX &ch, const Channel::ValueType &v):ChannelEvent(ch), value(v) {}
+		MeasureEvent(const Channel &ch, const Channel::ValueType &v):ChannelEvent(ch), value(v) {}
+	};
+	//Connection state
+
+	class Connection {
+	public:
+		typedef enum {
+			DISCONNECTED,
+			CONNECTED,
+			SHORTED
+		}Status;
+
+		Connection():time(std::chrono::system_clock::now()),state(DISCONNECTED){};
+
+		void react(tinyfsm::Event const &) { };
+		virtual void react(Channel::MeasureEvent const &e);
+
+		std::chrono::time_point<std::chrono::system_clock> time;
+		Status state;
 	};
 
-	Channel(const CHANNEL_IDX id, const ChannelConfig &config, const  Type type, const  Limits limits, const OnLimit onLimit = nullptr);
+	class Calibration {
+	public:
+		Calibration(bool requred):time(),shift(0),factor(1),status(UNKNOWN),requred(requred){}
+		virtual ~Calibration(){}
+
+		void react(tinyfsm::Event const &) { };
+		virtual void react(CalibrationStatusEvent const &);
+		std::chrono::seconds elapsedTime();
+		std::chrono::time_point<std::chrono::system_clock> time;
+		float shift;
+		float factor;
+		float error;
+		Status status;
+		bool requred;
+	};
+	Channel(const ChannelIdx id, const ChannelConfig &config, const  Type type, const  Limits limits, const OnLimit onLimit = nullptr);
 	virtual ~Channel() = default;
 
-	virtual void entry(void) {};
-	void exit(void)  { };
-	virtual void react(const CalibrationStatusEvent& e);
+
+	virtual void react(const tinyfsm::Event&e){};
+	virtual bool react(const CalibrationStatusEvent& e);
 	virtual void react(const MeasureEvent& e);
 
-	void Measure(Channel::ValueType &val);
-	Channel::ValueType Measure();
+	void Measure(Channel::ValueType &val, size_t averaging = 1);
+	Channel::ValueType Measure(size_t averaging = 1);
 	void ToggleCurrentDirection(uint16_t time_delay);
 	Type chType(){return type;}
 	operator Channel::ValueType() {Channel::ValueType val; Measure(val); return val;}
-    const CHANNEL_IDX idx;
+
+    const ChannelIdx idx;
 	const Type type;
 	const Limits limits;
 	const OnLimit     onLimit;
 	const ChannelConfig &config;
 	Channel::ValueType value;
-	float shift;
-	float factor;
-	ChannelCalibration calibration;
-	ChannelConnectionStatus  connection;
+	Calibration calibration;
+	Connection  connection;
 };
-
-
 
 typedef struct Samples{
 	union Data{
-		std::array<Channel::ValueType, WL_CHANNEL_COUNT + 1 + 1> raw;
+		std::array<Channel::ValueType, ChannelIdx::CHANNEL_COUNT> raw;
 		struct {
-			std::array<Channel::ValueType, WL_CHANNEL_COUNT>  wl;
+			std::array<Channel::ValueType, WL_CHANNEL_HALF_COUNT>  wl1;
+			Channel::ValueType refmin1;
+			Channel::ValueType refmax1;
+			std::array<Channel::ValueType, WL_CHANNEL_HALF_COUNT>  wl2;
+			Channel::ValueType refmin2;
+			Channel::ValueType refmax2;
 			Channel::ValueType Ts;
 			Channel::ValueType Vref;
+			Channel::ValueType Vbat;
 		} ch;
 	}data;
 	std::chrono::time_point<std::chrono::system_clock> timestamp;
+	std::chrono::milliseconds duration;
+
+	Samples():data(),timestamp(std::chrono::system_clock::now()),duration(){}
+    virtual ~Samples() = default;
+
+    std::chrono::milliseconds& sampled(){
+    	if(duration.count() == 0)
+    		duration = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now() - timestamp) ;
+    	return duration;
+    }
+
     friend  std::ostream& operator<<(std::ostream& os, const Samples& s) {
     	os << "ts s:" << s.timestamp << std::endl;
     	auto size = s.data.raw.size();
@@ -284,92 +335,44 @@ typedef enum {
 	CONTINUOUS
 }SamplerMode;
 
-struct InitStatusEvent       : tinyfsm::Event { };
-struct SelfTestStatusEvent      : tinyfsm::Event {
-	SelfTestResult result;
-	SelfTestStatusEvent(const Status &st):tinyfsm::Event(), result(st){}
-};
-
-struct SampleEvent  : tinyfsm::Event { };
-struct SampleDoneEvent : tinyfsm::Event {};
-
-
 template<unsigned int Bits=4>
-class ChannelSelector {
-	std::array<Gpio_t,Bits> mPins;
+class Multiplexer {
+	std::array<Gpio_t, Bits> mPins;
 	std::array<PinNames, Bits> mPinNames;
-	uint8_t mSelected;
+	const ChannelConfig* mConfig;
 public:
-	ChannelSelector(const std::array<PinNames, Bits>& names):
-		mPins{},
-		mPinNames{names},
-		mSelected(0)
-	{
-		for(uint8_t bit = 0; bit < Bits; bit++){
-			GpioInit( &mPins[bit], mPinNames[bit], PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 0 );
-		}
-	}
-	virtual ~ChannelSelector(void){
-		for(uint8_t bit = 0; bit < Bits; bit++){
-			GpioInit( &mPins[bit], mPinNames[bit], PIN_ANALOGIC, PIN_OPEN_DRAIN, PIN_NO_PULL, 0 );
-		}
-	}
-	bool Select(uint8_t channel){
-
-		if(channel && channel < (1 << Bits)){
-			for(uint8_t bit = 0; bit < Bits; bit++){
-				GpioWrite(&mPins[bit], ((channel - 1) >> bit) & 0x01);
-			}
-			mSelected = channel;
-			return true;
-		}else
-			return false;
-	}
-	operator int(){return mSelected;}
-	//0 means none selected
-	uint8_t Current(){return mSelected;}
+	Multiplexer(const std::array<PinNames, Bits>& names);
+	virtual ~Multiplexer(void);
+	void Select(const ChannelConfig &config);
+	uint8_t CurrentChannel() const;
+	ChannelConfig& CurrentConfig(){return *(ChannelConfig*)mConfig;}
+	void Sleep();
+	operator int(){return CurrentChannel();}
 };
 
-class DataSampler;
-class DataSamplerFsm: public tinyfsm::Fsm<DataSamplerFsm> {
-public:
-	DataSamplerFsm():tinyfsm::Fsm<DataSamplerFsm>(),s(), mTaskHandle(){}
-	virtual ~DataSamplerFsm(){}
-
-	 virtual void entry(void) {};
-	 virtual void exit(void)  {};
-
-	 void react(tinyfsm::Event &e) {};
-	 virtual void react(const InitStatusEvent &e);
-	 virtual void react(const SelfTestStatusEvent &e);
-	 virtual void react(const CalibrationStatusEvent &e);
-	 virtual void react(const SampleEvent &e);
-	 virtual void react(const SampleDoneEvent &e);
-	 DataSampler* s;
-	 osThreadId_t mTaskHandle;
-};
-
-class DataSampler {
+class DataSampler:public tinyfsm::Fsm<DataSampler> {
+	friend class Fsm;
 	friend void SamplerTask(void* argument);
-	friend class DataSamplerFsm;
+//	friend class DataSamplerFsm;
 	friend class Calibrating;
 	friend class SelfTest;
+	friend class Channel;
 public:
-	 typedef std::array<Channel, WL_CHANNEL_COUNT + 2 + 4> Channels;
-	 typedef ChannelSelector<4> Multiplexer;
-     typedef enum {SE,DIFF}AdcMode;
+	 typedef std::array<Channel, ChannelIdx::CHANNEL_COUNT> Channels;
+	 typedef Multiplexer<4> Multiplexer;
+     virtual void entry(void) {};
+     virtual void exit(void)  {};
 
-
-	 void react(tinyfsm::Event &e) {fsm.react(e);};
-	 virtual void react(const InitStatusEvent &e) {fsm.react(e);};
-	 virtual void react(const SelfTestStatusEvent &e){fsm.react(e);};
-	 virtual void react(const CalibrationStatusEvent &e){fsm.react(e);};
-	 virtual void react(const SampleEvent &e){fsm.react(e);};
-	 virtual void react(const SampleDoneEvent &e){fsm.react(e);};
+	 void react(tinyfsm::Event &e);
+	 virtual void react(const SelfTestStatusEvent &e);
+	 virtual void react(const CalibrationStatusEvent &e);
+	 virtual void react(const CalibrationEndedEvent &e);
+	 virtual void react(const SampleEvent &e);
+	 virtual void react(const SampleDoneEvent &e);
 
 	 static DataSampler &Instance() {
-		 static DataSampler instance;
-		 return  instance;
+		 assert(tinyfsm::Fsm<DataSampler>::current_state_ptr);
+		 return  *tinyfsm::Fsm<DataSampler>::current_state_ptr;
 	 }
 	 void DeInit();
 
@@ -379,33 +382,35 @@ public:
 	 Channel &operator[](const size_t idx) {
 	 		return mChannels[idx];
 	 	}
-	 void setSamplerate(struct timeval &tv);
-	 struct timeval getSamplerate(void);
+	 void setSamplePeriod(std::chrono::milliseconds  samplePeriod) {mSamplePeriod = samplePeriod;}
+	 std::chrono::milliseconds& getSamplePeriod(void) {return mSamplePeriodReal;};
 	 osMemoryPoolId_t Pool() { return mSamplesMp;}
 	 osMessageQueueId_t Queue() {return mSamplesMq;}
-	 static float vdda_voltage;
+	 static uint16_t vdda_voltage;
 	 SamplerMode Mode();
-	 AdcMode     MeasureMode(){return mAdcMode;}
-	 Multiplexer& Mux() { return mSelector;};
+	 static AdcMode  MeasureMode(){return mAdcMode;}
+	 Multiplexer& Mux() { return mMultiplexer;};
+	 void Calibrate();
+	 void StartSelfTest();
 protected:
-
+	 DataSampler();
+	 virtual ~DataSampler();
 	 static Channels mChannels;
-	 DataSamplerFsm fsm;
-	 osMemoryPoolId_t mSamplesMp;
+	 //DataSamplerFsm fsm;
+	 std::chrono::time_point<std::chrono::system_clock> mCalibrated;
+	 std::chrono::time_point<std::chrono::system_clock> mTested;
+	 MemPool_t* mSamplesMp;
 	 osMessageQueueId_t mSamplesMq;
 	 MAV<Samples, MAV_WINDOW> mMav;
 	 std::chrono::time_point<std::chrono::system_clock> mTs;
 	 std::chrono::milliseconds  mSamplePeriod;
 	 std::chrono::milliseconds  mSamplePeriodReal;
-	 AdcMode      mAdcMode;
+	 static AdcMode      mAdcMode;
+	 static Multiplexer mMultiplexer;
 	 SelfTestResult  mSelfTest;
-	 Multiplexer mSelector;
 	 osThreadId_t mTaskHandle;
-	 DataSampler();
-	 virtual ~DataSampler();
+
 	 void DoSamplerTask();
 };
-extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + 4 + 2];
-#endif
-
-
+extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + CAL_CHANNEL_COUNT + VREF_VBAT_AND_TEMP_CHANNEL_COUNT];
+#endif //__cplusplus
