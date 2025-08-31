@@ -1,0 +1,32 @@
+Output: Gerber X2 Files
+Type  : GerberX2
+From  : Variant [[No Variations]] of Project [water-leak.PrjPcb]
+   Generated File[4 layers.GTL]
+   Generated File[4 layers.G1]
+   Generated File[4 layers.G2]
+   Generated File[4 layers.GBL]
+   Generated File[4 layers.GPB]
+   Generated File[4 layers.GPT]
+   Generated File[4 layers.GTO]
+   Generated File[4 layers.GBO]
+   Generated File[4 layers.GTS]
+   Generated File[4 layers.GBS]
+   Generated File[4 layers.GTP]
+   Generated File[4 layers.GBP]
+   Generated File[4 layers.GKO]
+   Generated File[4 layers.GM1]
+   Generated File[4 layers.GM2]
+   Generated File[4 layers.GM]
+   Generated File[4 layers.GBR1]
+   Generated File[4 layers.GBR2]
+   Generated File[4 layers.GD1]
+   Generated File[4 layers.GG1]
+   Generated File[4 layers.RUL]
+   Generated File[4 layers.EXTREP]
+   Generated File[4 layers.REP]
+
+
+Files Generated   : 23
+Documents Printed : 0
+
+Finished Output Generation At 0:31:37 On 01.09.2025
