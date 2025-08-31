@@ -50,9 +50,9 @@ PrefsVaultGUID=
 PrefsRevisionGUID=
 
 [Release]
-ReleaseTarget=1
+ReleaseTarget=2
 ReleaseFolderPath=.\gerbers
-ReleaseZipPath=[OutputPath][ProjectName].zip
+ReleaseZipPath=C:\Users\Andrey\git\smart.roof\leaksensor\doc\board\water-leak\output\
 
 [Document1]
 DocumentPath=sensors-new.SchDoc
@@ -698,9 +698,7 @@ ParameterCount=0
 ConstraintFileCount=0
 ReleaseItemId=
 Variant=[No Variations]
-OutputJobsCount=1
-DocumentReferenceClass1=DocumentReference
-OutputJobFileName1=gerber_output.OutJob
+OutputJobsCount=0
 ContentTypeGUID=0D12F8DC-E60C-11DF-B822-12313F0024A2
 ConfigurationType=Assembly
 
