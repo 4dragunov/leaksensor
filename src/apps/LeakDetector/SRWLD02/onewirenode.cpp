@@ -58,7 +58,7 @@ void OneWireNode::DoTaskOneWire(){
 					std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors = 0;
 					if(gDs18b20.sensors() && gDs18b20.waitTempReady(0) == osOK) {
 						DBG("Reading sensors.\n");
-						for(uint8_t sensor = 0; sensor < gDs18b20.sensors(); sensor++) {
+						for(uint8_t sensor = 0; sensor < std::min(gDs18b20.sensors(), (uint8_t)MAX_DS18B20_SENSOR_COUNT); sensor++) {
 							int16_t temp = 0;
 							bool read_success = gDs18b20.getTempRaw(sensor, &temp) == OneWire::DS18B20::Error::TEMP_READ;
 							DBG("Sensor %i read %s, value %i\n", sensor, read_success? "success" : "failed", temp);
@@ -69,7 +69,7 @@ void OneWireNode::DoTaskOneWire(){
 					if(!std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.sensors)
 					{
 						DBG("Using CPU thermal sensor data!\n");
-						std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[0] = samples->data.ch.Ts;
+						std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.data[0] = samples->data.ch.Tcpu;
 					}
 					std::static_pointer_cast<SummarySensorsData>(summaryData)->thermal.timestamp = std::chrono::system_clock::now();
 					std::static_pointer_cast<SummarySensorsData>(summaryData)->timestamp = std::chrono::system_clock::now();

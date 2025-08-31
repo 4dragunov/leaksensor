@@ -24,6 +24,46 @@
 
 SUBGHZ_HandleTypeDef hsubghz;
 
+
+#if defined(RF_CLOCK_SOURCE_TXCO)
+#pragma message("RF_CLOCK_SOURCE_TXCO")
+static void BSP_TCXO_Init()
+{
+    GPIO_InitTypeDef gpio_init_structure = {0};
+
+    RF_TCXO_VCC_CLK_ENABLE();
+
+    gpio_init_structure.Pin = RF_TCXO_VCC_PIN;
+    gpio_init_structure.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio_init_structure.Pull = GPIO_NOPULL;
+    gpio_init_structure.Speed = GPIO_SPEED_FREQ_LOW;
+
+    HAL_GPIO_Init(RF_TCXO_VCC_GPIO_PORT, &gpio_init_structure);
+
+    HAL_GPIO_WritePin(RF_TCXO_VCC_GPIO_PORT, RF_TCXO_VCC_PIN, 1);
+}
+
+static void BSP_TCXO_DeInit(){
+	RF_TCXO_VCC_CLK_ENABLE();
+	HAL_GPIO_WritePin(RF_TCXO_VCC_GPIO_PORT, RF_TCXO_VCC_PIN, 0);
+	HAL_GPIO_DeInit(RF_TCXO_VCC_GPIO_PORT, RF_TCXO_VCC_PIN);
+}
+#endif
+
+#if defined(RF_CLOCK_SOURCE_XTAL)
+#pragma message("RF_CLOCK_SOURCE_XTAL")
+static void BSP_XTAL_Init()
+{
+	RCC->CR |= RCC_CR_HSEON;                            // turn on HSE (high speed external) oscillator
+    while(!(RCC->CR & RCC_CR_HSERDY)){}
+}
+
+static void BSP_XTAL_DeInit(){
+	HAL_GPIO_WritePin(RF_TCXO_VCC_GPIO_PORT, RF_TCXO_VCC_PIN, 0);
+	HAL_GPIO_DeInit(RF_TCXO_VCC_GPIO_PORT, RF_TCXO_VCC_PIN);
+}
+#endif
+
 int32_t BSP_SUBGHZ_Init(void)
 {
     hsubghz.Init.BaudratePrescaler = SUBGHZSPI_BAUDRATEPRESCALER_4;
@@ -31,6 +71,12 @@ int32_t BSP_SUBGHZ_Init(void)
     {
         return -1;
     }
+#if defined(RF_CLOCK_SOURCE_TXCO)
+    BSP_TCXO_Init();
+#else
+    BSP_XTAL_Init();
+#endif
+
     return 0;
 }
 
@@ -42,21 +88,22 @@ int32_t RBI_Init(void)
     RF_SW_CTRL3_GPIO_CLK_ENABLE();
 
     /* Configure the Radio Switch pin */
-    gpio_init_structure.Pin = RF_SW_CTRL1_PIN;
+
     gpio_init_structure.Mode = GPIO_MODE_OUTPUT_PP;
     gpio_init_structure.Pull = GPIO_NOPULL;
     gpio_init_structure.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-
+/*  Not used in this board
+    gpio_init_structure.Pin = RF_SW_CTRL1_PIN;
     HAL_GPIO_Init(RF_SW_CTRL1_GPIO_PORT, &gpio_init_structure);
-
+*/
     gpio_init_structure.Pin = RF_SW_CTRL2_PIN;
     HAL_GPIO_Init(RF_SW_CTRL2_GPIO_PORT, &gpio_init_structure);
 
     gpio_init_structure.Pin = RF_SW_CTRL3_PIN;
     HAL_GPIO_Init(RF_SW_CTRL3_GPIO_PORT, &gpio_init_structure);
 
+   // HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_RESET);
 
     return 0;
@@ -64,15 +111,20 @@ int32_t RBI_Init(void)
 
 int32_t RBI_DeInit(void)
 {
+#if defined(RF_CLOCK_SOURCE_TXCO)
+	BSP_TCXO_DeInit();
+#else
+	BSP_XTAL_DeInit();
+#endif
     RF_SW_CTRL3_GPIO_CLK_ENABLE();
 
     /* Turn off switch */
-    HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
+  //  HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_RESET);
 
     /* DeInit the Radio Switch pin */
-    HAL_GPIO_DeInit(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN);
+  //  HAL_GPIO_DeInit(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN);
     HAL_GPIO_DeInit(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN);
     HAL_GPIO_DeInit(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN);
 
@@ -85,40 +137,40 @@ int32_t RBI_ConfigRFSwitch(RBI_Switch_TypeDef Config)
     {
     case RBI_SWITCH_OFF:
     {
+    	//BSP_LPM_disable_lownoise_operation();
         /* Turn off switch */
         HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
         break;
     }
     case RBI_SWITCH_RX:
     {
+    	//BSP_LPM_enable_lownoise_operation();
         /*Turns On in Rx Mode the RF Switch */
         HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
+        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_SET);
         break;
     }
     case RBI_SWITCH_RFO_LP:
     {
+    	//BSP_LPM_enable_lownoise_operation();
         /*Turns On in Tx Low Power the RF Switch */
         HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
         break;
     }
     case RBI_SWITCH_RFO_HP:
     {
+    	//BSP_LPM_enable_lownoise_operation();
         /*Turns On in Tx High Power the RF Switch */
         HAL_GPIO_WritePin(RF_SW_CTRL3_GPIO_PORT, RF_SW_CTRL3_PIN, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(RF_SW_CTRL1_GPIO_PORT, RF_SW_CTRL1_PIN, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_SET);
+        HAL_GPIO_WritePin(RF_SW_CTRL2_GPIO_PORT, RF_SW_CTRL2_PIN, GPIO_PIN_RESET);
         break;
     }
     default:
         break;
     }
-
+    __HAL_RCC_HSE_CONFIG(RCC_HSE_OFF);
     return 0;
 }
 

@@ -63,7 +63,8 @@ typedef enum {
 #define MUX_ENABLE_TIMEOUT                          10
 
 //RTC wakeup alarm - powers up the board from deep sleep
-#define WAKEUP                                      PA_4
+#define POWER_OFF_AND_WAKEUP                        PA_4
+#define POWER_OFF_VALUE                     	   1
 //Measurement channel polarity selection
 #define SENS_PSEL                                      	PA_5
 #define SENS_POL_DIRECT									0
@@ -84,10 +85,8 @@ typedef enum {
 #define OW_PD_OFF                                     1
 
 // Analog adc input channels
-#define ADC_IN_P                                    PB_3
-#define ADC_IN_N                                    PB_4
-#define ADC_CH_P                                    ADC_CHANNEL_2
-#define ADC_CH_N                                    ADC_CHANNEL_3
+#define ADC_IN_P                                    PB_4
+#define ADC_CH_P                                    ADC_CHANNEL_3
 #define ADC_MODE									SE
 // Modbus
 #define RS485_RE                                    PB_5
@@ -97,8 +96,6 @@ typedef enum {
 //Rtc clock
 #define OSC_LSE_IN                                  PC_14
 #define OSC_LSE_OUT                                 PC_15
-//TXCO power
-#define VDD_TXCO                                    PB_0
 
 //Antenna multiplexer
 #define FE_CTRL2									PC_13
@@ -112,5 +109,6 @@ typedef enum {
 #define I2C1_SCL                                     PB_8
 #define I2C1_SDA                                     PA_10
 
+#define ADC_OVS_BITS 14
 
 #endif // __BOARD_CONFIG_H__

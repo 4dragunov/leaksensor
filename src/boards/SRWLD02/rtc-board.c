@@ -161,7 +161,6 @@ void RtcInit( void )
     	{
 
     	}
-
     	    /* Peripheral clock enable */
         __HAL_RCC_RTC_ENABLE();
     	__HAL_RCC_RTCAPB_CLK_ENABLE();
@@ -376,7 +375,7 @@ void RtcStopAlarm( void )
     EXTI->PR1 = RTC_EXTI_LINE_ALARM_EVENT;
 }
 
-void RtcStartAlarm( uint32_t timeout )
+bool RtcStartAlarm( uint32_t timeout )
 {
     uint16_t rtcAlarmSubSeconds = 0;
     uint16_t rtcAlarmSeconds = 0;
@@ -476,7 +475,7 @@ void RtcStartAlarm( uint32_t timeout )
     RtcAlarm.AlarmTime.StoreOperation = RTC_STOREOPERATION_RESET;
 
     // Set RTC_Alarm
-    HAL_RTC_SetAlarm_IT( &RtcHandle, &RtcAlarm, RTC_FORMAT_BIN );
+   return HAL_RTC_SetAlarm_IT( &RtcHandle, &RtcAlarm, RTC_FORMAT_BIN ) == HAL_OK;
 }
 
 uint32_t RtcGetTimerValue( void )

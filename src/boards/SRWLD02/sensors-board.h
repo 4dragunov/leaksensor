@@ -38,6 +38,23 @@
 #define CALIBRATION_REPEAT 30//sec
 #define SELF_TEST_REPEAT   30//sec
 
+#define OVSF(bits) (std::pow(4, bits)) // Фактор оверсэмлинга (4^2) - используем белый шум потому 4
+#define OVSD(bits) (std::pow(2, bits)) // Делитель для результатов оверсемплинга (деление на 4 эквивалентно сдвигу вправо на 2)
+#define FOVS(fADCmax, oversampling_bits) = (fADCmax/(2.4*oversampling_bits)) //зменение частоты
+#define OVSMV(new_resolution) ((1 << new_resolution) - 1) // Максимальное значение для нового разрешения
+
+#define ADC_CALIBRATION_RESOLUTION 12
+
+#define ADC_CALC_DATA_TO_VOLTAGE(VREFANALOG_VOLTAGE, ADC_DATA, ADC_RESOLUTION)    \
+((ADC_DATA * VREFANALOG_VOLTAGE)                                               \
+ / OVSMV(ADC_RESOLUTION)                                                          \
+)
+
+#define ADC_CALC_VREFANALOG_VOLTAGE(__VREFINT_ADC_DATA__, __ADC_RESOLUTION__)     \
+((FB2B((uint32_t)(*VREFINT_CAL_ADDR), ADC_CALIBRATION_RESOLUTION, __ADC_RESOLUTION__) * VREFINT_CAL_VREF) /__VREFINT_ADC_DATA__)
+
+
+
 typedef enum {
 	CHANNEL_WL0 = 0,
 	CHANNEL_WL1,
@@ -231,7 +248,7 @@ typedef struct Samples{
 			std::array<Channel::ValueType, WL_CHANNEL_HALF_COUNT>  wl2;
 			Channel::ValueType refmin2;
 			Channel::ValueType refmax2;
-			Channel::ValueType Ts;
+			Channel::ValueType Tcpu;
 			Channel::ValueType Vref;
 			Channel::ValueType Vbat;
 		} ch;
@@ -412,5 +429,6 @@ protected:
 
 	 void DoSamplerTask();
 };
+float calc_temperature(uint16_t __VREFANALOG_VOLTAGE__,int16_t  __TEMPSENSOR_ADC_DATA__, uint8_t __ADC_RESOLUTION__);
 extern const ChannelConfig gChannelConfig[WL_CHANNEL_COUNT + CAL_CHANNEL_COUNT + VREF_VBAT_AND_TEMP_CHANNEL_COUNT];
 #endif //__cplusplus

@@ -58,7 +58,7 @@ typedef enum
 
 /* Indicates the type of switch between the ones proposed by CONFIG Constants
  */
-#define RBI_CONF_RFO                        RBI_CONF_RFO_LP_HP
+#define RBI_CONF_RFO                        RBI_CONF_RFO_LP
 
 /* Radio maximum wakeup time (in ms) */
 #define RF_WAKEUP_TIME                     10U
@@ -74,27 +74,34 @@ typedef enum
  * 1: DCDC supported
  */
 #define IS_DCDC_SUPPORTED                   1U
+//RF ANT switch power and power for the othe rf components (switch like NX3L1T3157GMZ if available for cmmutation of the rf power modes)
+#define RF_SW_CTRL3_PIN                          GPIO_PIN_11
+#define RF_SW_CTRL3_GPIO_PORT                    GPIOA
+#define RF_SW_CTRL3_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
+#define RF_SW_CTRL3_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOA_CLK_DISABLE()
 
-#define RF_SW_CTRL3_PIN                          GPIO_PIN_8
-#define RF_SW_CTRL3_GPIO_PORT                    GPIOB
-#define RF_SW_CTRL3_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOB_CLK_ENABLE()
-#define RF_SW_CTRL3_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOB_CLK_DISABLE()
-
-#define RF_SW_CTRL1_PIN                          GPIO_PIN_0
-#define RF_SW_CTRL1_GPIO_PORT                    GPIOA
-#define RF_SW_CTRL1_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
-#define RF_SW_RX_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOA_CLK_DISABLE()
-
-#define RF_SW_CTRL2_PIN                          GPIO_PIN_1
-#define RF_SW_CTRL2_GPIO_PORT                    GPIOA
-#define RF_SW_CTRL2_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOA_CLK_ENABLE()
-#define RF_SW_CTRL2_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOA_CLK_DISABLE()
-
+//RF ANT switch control V1  - inverted by the transistor for V2
+//1 means RX and 0 means TX
+#define RF_SW_CTRL2_PIN                          GPIO_PIN_13
+#define RF_SW_CTRL2_GPIO_PORT                    GPIOC
+#define RF_SW_CTRL2_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOC_CLK_ENABLE()
+#define RF_SW_CTRL2_GPIO_CLK_DISABLE()           __HAL_RCC_GPIOC_CLK_DISABLE()
+/*
+//RF ANT switch control - not used in current board
+#define RF_SW_CTRL1_PIN                          GPIO_PIN_12
+#define RF_SW_CTRL1_GPIO_PORT                    GPIOB
+#define RF_SW_CTRL1_GPIO_CLK_ENABLE()            __HAL_RCC_GPIOB_CLK_ENABLE()
+#define RF_SW_RX_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOB_CLK_DISABLE()
+*/
+#if defined(RF_CLOCK_SOURCE_TXCO)
 /* A verifier car le TCXO est genere par la clock config */
 #define RF_TCXO_VCC_PIN                          GPIO_PIN_0
 #define RF_TCXO_VCC_GPIO_PORT                    GPIOB
 #define RF_TCXO_VCC_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
 #define RF_TCXO_VCC_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
+#elif defined(RF_CLOCK_SOURCE_XTAL)
+#define HSE_VALUE 32000000
+#endif
 
 int32_t BSP_SUBGHZ_Init(void);
 int32_t RBI_Init(void);

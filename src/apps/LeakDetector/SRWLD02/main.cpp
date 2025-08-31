@@ -68,7 +68,7 @@
  * LoRaWAN default end-device class
  */
 #ifndef LORAWAN_DEFAULT_CLASS
-#define LORAWAN_DEFAULT_CLASS                       CLASS_B
+#define LORAWAN_DEFAULT_CLASS                      ((BoardGetPowerSource()==EXT_POWER)?CLASS_B:CLASS_A)
 #endif
 
 /*!
@@ -383,14 +383,12 @@ int main(void){
 	//Not needed but for compatibility
     BoardInitMcu( );
     osKernelInitialize();   // pre initialize CMSIS-RTOS
-    DBG("Heap %i\n", xPortGetFreeHeapSize());
-    MessageBus& mbus = InitOneWire();
-    DBG("Heap %i\n", xPortGetFreeHeapSize());
-    InitModBus(mbus);
 
+    MessageBus& mbus = InitOneWire();
+    InitModBus(mbus);
     gLoraNode = &InitLoraNode(mbus);
-   // defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
-   // assert(defaultTaskHandle);
+    defaultTaskHandle = osThreadNew(StartTaskDefault, &mbus, &thread_attr);
+    assert(defaultTaskHandle);
 
     // create semaphores
     gUplinkSem = osSemaphoreNew(1, 0, nullptr);
@@ -533,7 +531,7 @@ static void PrepareTxFrame( void )
     AppData.Port = LORAWAN_APP_PORT;
 
     NewDataAvailable =!NewDataAvailable? osSemaphoreAcquire(gLoraNode->AppDataChanged(), 10) == osOK : NewDataAvailable;
-    if( NewDataAvailable && (LmHandlerSend( &AppData, LmHandlerParams.IsTxConfirmed ) == LORAMAC_HANDLER_SUCCESS ))
+
     {
     	NewDataAvailable = false;
     	gLoraNode->DataSend();

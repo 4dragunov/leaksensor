@@ -30,8 +30,6 @@
 #define VDDA_MIN 2600
 #define VDDA_MAX 3610
 
-#define ADC_OVS_BITS 14
-
 #define CHANNELS_PER_MUX_BLOCK 10
 #define CALIBRATION_AVERAGE 20
 #define SAMPLING_AVERAGE 2
@@ -43,24 +41,6 @@
 #define MAX_SHIFT_ERROR 1000
 
 #define DEFAULT_SAMPLE_PERIOD 1000 //ms
-
-#define OVSF(bits) (std::pow(4, bits)) // Фактор оверсэмлинга (4^2) - используем белый шум потому 4
-#define OVSD(bits) (std::pow(2, bits)) // Делитель для результатов оверсемплинга (деление на 4 эквивалентно сдвигу вправо на 2)
-#define FOVS(fADCmax, oversampling_bits) = (fADCmax/(2.4*oversampling_bits)) //зменение частоты
-#define OVSMV(new_resolution) ((1 << new_resolution) - 1) // Максимальное значение для нового разрешения
-
-#define CALC_VDDA(vref, bits) (roundf(OVSMV(bits) * VREFINT_CAL_VREF/(vref)))
-
-#define ADC_CALIBRATION_RESOLUTION 12
-
-#define ADC_CALC_DATA_TO_VOLTAGE(VREFANALOG_VOLTAGE, ADC_DATA, ADC_RESOLUTION)    \
-((ADC_DATA * VREFANALOG_VOLTAGE)                                               \
- / OVSMV(ADC_RESOLUTION)                                                          \
-)
-
-#define ADC_CALC_VREFANALOG_VOLTAGE(__VREFINT_ADC_DATA__, __ADC_RESOLUTION__)     \
-((FB2B((uint32_t)(*VREFINT_CAL_ADDR), ADC_CALIBRATION_RESOLUTION, __ADC_RESOLUTION__) * VREFINT_CAL_VREF) /__VREFINT_ADC_DATA__)
-
 
 float calc_temperature(uint16_t __VREFANALOG_VOLTAGE__,int16_t  __TEMPSENSOR_ADC_DATA__, uint8_t __ADC_RESOLUTION__){
 
@@ -250,7 +230,7 @@ extern Adc_t  AdcTempSens;
 extern Gpio_t SensorsEn[2];
 extern Gpio_t SensorsPolarity;
 extern Adc_t  AdcInP;
-extern Adc_t  AdcInN;
+//extern Adc_t  AdcInN;
 
 bool operator==(const Gpio_t& lhs, const Gpio_t& rhs)
 {
@@ -393,8 +373,11 @@ Channel::ValueType Channel::Measure(size_t averaging) {
 			// Считывание значения АЦП
     		if (DataSampler::mAdcMode==AdcMode::SE)
     			total+= AdcReadChannel(const_cast<Adc_t*>(&AdcInP), DataSampler::mAdcMode, averaging);
-    		else
+    		else {
+#if 0
     			total+= (AdcReadChannel(const_cast<Adc_t*>(&AdcInP), AdcMode::SE, averaging) - AdcReadChannel(const_cast<Adc_t*>(&AdcInN), AdcMode::SE, averaging));
+#endif
+    		}
     	}else{
     		total+= AdcReadChannel(type == Type::TS? &AdcTempSens :
     				               type == Type::VREF? &AdcVref : &AdcVbat, AdcMode::SE, averaging);
@@ -564,7 +547,6 @@ class Calibrating
 
 				shift = REFERENCE_RES_LO - resistence[0];
 				float factor = (REFERENCE_RES_HI - REFERENCE_RES_LO)/((resistence[1] - shift) - (resistence[0] - shift));
-				float adc_err = (((vdda_voltage/1000) / std::pow(2,14)) / 2) * 100;
 				float real_lo = factor * (resistence[0] + shift);
 				float real_hi = factor * (resistence[1] + shift);
 				float error_lo = std::abs((REFERENCE_RES_LO/real_lo) * 100 - 100);
@@ -656,7 +638,7 @@ DataSampler::~DataSampler(){
 void DataSampler::DeInit(){
 
 	AdcDeInit( &AdcInP );
-	AdcDeInit( &AdcInN );
+//	AdcDeInit( &AdcInN );
 }
 
 SamplerMode DataSampler::Mode() {

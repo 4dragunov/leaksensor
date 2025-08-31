@@ -63,6 +63,11 @@ set(BOARD_ADC_OVS_LIST HARD SOFT)
 set(BOARD_ADC_OVS HARD CACHE STRING "Default adc oversampling type is hardware")
 set_property(CACHE BOARD_ADC_OVS PROPERTY STRINGS ${BOARD_ADC_OVS_LIST})
 
+# TXCO
+set(BOARD_CLOCK_SOURCE_LIST TXCO XTAL)
+set(BOARD_CLOCK_SOURCE TXCO CACHE STRING "Default clock source is TXCO")
+set_property(CACHE BOARD_CLOCK_SOURCE PROPERTY STRINGS ${BOARD_CLOCK_SOURCE_LIST})
+
 # Do not allow switching of board one wire bus drivers
 set(BOARD_OWI "")
 
@@ -129,6 +134,7 @@ elseif(BOARD STREQUAL SRWLD02)
     
 	set(BOARD_GAUGE BQ35100 CACHE INTERNAL "Gauge bq35100 selected")
 	set(BOARD_OWI OWI_UART CACHE INTERNAL "One wire bus using uart selected")
+	set(BOARD_CLOCK_SOURCE TXCO CACHE STRING "Clock source TXCO selected")
 endif()
 
 #---------------------------------------------------------------------------------------

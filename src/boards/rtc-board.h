@@ -111,7 +111,7 @@ void RtcStopAlarm( void );
  *
  * \param [IN] timeout Timeout value in milliseconds
  */
-void RtcStartAlarm(const uint32_t timeoutMs);
+bool RtcStartAlarm(const uint32_t timeoutMs);
 
 /*!
  * \brief Sets the RTC timer reference

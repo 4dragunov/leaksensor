@@ -9,9 +9,9 @@
 #define SRC_APPS_SMARTROOF_LORA_NODE_LEAKDETECTOR_SRWLD01_SENSORS_H_
 #include <chrono>
 #include "sensors-board.h"
-
+#define MAX_DS18B20_SENSOR_COUNT 8
 typedef struct {
-	int16_t data[8];
+	int16_t data[MAX_DS18B20_SENSOR_COUNT];
 	uint8_t sensors;
 	std::chrono::time_point<std::chrono::system_clock> timestamp;
 } ThermalSensorsData ;

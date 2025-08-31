@@ -79,7 +79,7 @@ extern SUBGHZ_HandleTypeDef hsubghz;
   * @brief voltage of vdd tcxo.
   * @note override the default configuration of radio_driver.c
   */
-#define TCXO_CTRL_VOLTAGE           TCXO_CTRL_1_7V
+#define TCXO_CTRL_VOLTAGE           TCXO_CTRL_3_3V
 
 /**
   * @brief DCDC is enabled
@@ -109,7 +109,7 @@ extern SUBGHZ_HandleTypeDef hsubghz;
 /**
   * @brief macro used to exit the critical section
   */
-#define CRITICAL_SECTION_END( )       taskEXIT_CRITICAL()
+#define CRITICAL_SECTION_END( ) taskEXIT_CRITICAL()
 //UTILS_EXIT_CRITICAL_SECTION( )
 #endif /* !CRITICAL_SECTION_END */
 
@@ -122,7 +122,7 @@ extern SUBGHZ_HandleTypeDef hsubghz;
 /**
   * @brief Delay interface to radio Middleware
   */
-#define RADIO_DELAY_MS                          HAL_Delay
+#define RADIO_DELAY_MS                          osDelay
 
 /**
   * @brief Memset utilities interface to radio Middleware

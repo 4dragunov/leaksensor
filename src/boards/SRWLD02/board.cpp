@@ -88,7 +88,7 @@ union Usid {
  * LED GPIO pins objects
  */
 Gpio_t Led1;
-
+Gpio_t PowerOffAndWakeup = {.pin = POWER_OFF_AND_WAKEUP};
 Gpio_t BattPwr;
 Gpio_t SensorsEn[MUX_COUNT]= {{.pin = EN0}, {.pin = EN1}};
 Gpio_t SensorsPolarity = {.pin = SENS_PSEL};
@@ -99,7 +99,6 @@ Gpio_t SensorsPolarity = {.pin = SENS_PSEL};
 Adc_t  AdcVref = {.inst = ADC, .channel = ADC_CHANNEL_VREFINT };
 Adc_t  AdcTempSens = {.inst = ADC, .channel = ADC_CHANNEL_TEMPSENSOR};
 Adc_t  AdcInP = {.inst = ADC, .channel = ADC_CH_P};
-Adc_t  AdcInN = {.inst = ADC, .channel = ADC_CH_N};
 Adc_t  AdcVbat = {.inst = ADC, .channel = ADC_CHANNEL_VBAT};
 
 Uart_t LpUart1;
@@ -258,7 +257,6 @@ void BoardInitMcu( void )
 	GpioInit( &SensorsEn[1], EN1, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, EN_DISABLED );
 	GpioInit( &SensorsPolarity, SENS_PSEL, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, SENS_POL_DIRECT );
 	AdcInit( ADC, &AdcInP, ADC_IN_P, ADC_CH_P);  // Just initialize ADC
-	AdcInit( ADC, &AdcInN, ADC_IN_N, ADC_CH_N);  // Just initialize ADC
 
 	printf("\n\nCore=%li, %li MHz\n", SystemCoreClock, SystemCoreClock / 1000000);
 	printf("HCLK=%li\n", HAL_RCC_GetHCLKFreq());
@@ -278,10 +276,10 @@ void BoardResetMcu( void )
 
 void BoardDeInitMcu( void )
 {
+	AdcDeInit( &AdcVbat );
     AdcDeInit( &AdcVref );
     AdcDeInit( &AdcTempSens );
     AdcDeInit( &AdcInP );
-    AdcDeInit( &AdcInN );
 }
 
 uint32_t BoardGetRandomSeed( void )
@@ -364,34 +362,11 @@ void BoardPrintUUID(void) {
   printf( "######   Board UUID: %s   ######\r\n\r\n", buf);
 }
 
-/*!
- * Factory power supply
- */
-#define VDDA_VREFINT_CAL ( ( uint32_t ) 3000 )  // mV
-
-/*!
- * VREF calibration value
- */
-#define VREFINT_CAL ( *( uint16_t* ) ( ( uint32_t ) 0x1FF800F8 ) )
-
-/*
- * Internal temperature sensor, parameter TS_CAL1: TS ADC raw data acquired at
- * a temperature of 110 DegC (+-5 DegC), VDDA = 3.3 V (+-10 mV).
- */
-#define TEMP30_CAL_ADDR ( *( uint16_t* ) ( ( uint32_t ) 0x1FF8007A ) )
-
-/* Internal temperature sensor, parameter TS_CAL2: TS ADC raw data acquired at
- *a temperature of  30 DegC (+-5 DegC), VDDA = 3.3 V (+-10 mV). */
-#define TEMP110_CAL_ADDR ( *( uint16_t* ) ( ( uint32_t ) 0x1FF8007E ) )
-
-/* Vdda value with which temperature sensor has been calibrated in production
-   (+-10 mV). */
-#define VDDA_TEMP_CAL ( ( uint32_t ) 3000 )
 
 /*!
  * Battery thresholds
  */
-#define BATTERY_MAX_LEVEL 3000       // mV
+#define BATTERY_MAX_LEVEL 3600       // mV
 #define BATTERY_MIN_LEVEL 2400       // mV
 #define BATTERY_SHUTDOWN_LEVEL 2300  // mV
 
@@ -400,63 +375,19 @@ void BoardPrintUUID(void) {
 #define BATTERY_LORAWAN_MIN_LEVEL 1
 #define BATTERY_LORAWAN_EXT_PWR 0
 
-#define VDD_APPLI                      ((uint32_t) 3300)   /* Value of analog voltage supply Vdda (unit: mV) */
-#define RANGE_12BITS                   ((uint32_t) 4095)   /* Max value with a full range of 12 bits */
-#define INTERNAL_TEMPSENSOR_V25        ((int32_t)1430)         /* Internal temperature sensor, parameter V25 (unit: mV). Refer to device datasheet for min/typ/max values. */
-#define INTERNAL_TEMPSENSOR_AVGSLOPE   ((int32_t)4300)         /* Internal temperature sensor, parameter Avg_Slope (unit: uV/DegCelsius). Refer to device datasheet for min/typ/max values. */
-/* This calibration parameter is intended to calculate the actual VDDA from Vrefint ADC measurement. */
-
-/**
-  * @brief  Computation of temperature (unit: degree Celsius) from the internal
-  *         temperature sensor measurement by ADC.
-  *         Computation is using temperature sensor standard parameters (refer
-  *         to device datasheet).
-  *         Computation formula:
-  *         Temperature = (VTS - V25)/Avg_Slope + 25
-  *         with VTS = temperature sensor voltage
-  *              Avg_Slope = temperature sensor slope (unit: uV/DegCelsius)
-  *              V25 = temperature sensor @25degC and Vdda 3.3V (unit: mV)
-  *         Calculation validity conditioned to settings:
-  *          - ADC resolution 12 bits (need to scale value if using a different
-  *            resolution).
-  *          - Power supply of analog voltage Vdda 3.3V (need to scale value
-  *            if using a different analog voltage supply value).
-  * @param TS_ADC_DATA: Temperature sensor digital value measured by ADC
-  * @retval None
-  */
-#define COMPUTATION_TEMPERATURE_STD_PARAMS(TS_ADC_DATA)                        \
-  ((((int32_t)(INTERNAL_TEMPSENSOR_V25 - (((TS_ADC_DATA) * VDD_APPLI) / RANGE_12BITS)   \
-     ) * 1000                                                                  \
-    ) / INTERNAL_TEMPSENSOR_AVGSLOPE                                           \
-   ) + 25                                                                      \
-  )
-
-/**
-  * @brief  Computation of voltage (unit: mV) from ADC measurement digital
-  *         value on range 12 bits.
-  *         Calculation validity conditioned to settings:
-  *          - ADC resolution 12 bits (need to scale value if using a different
-  *            resolution).
-  *          - Power supply of analog voltage Vdda 3.3V (need to scale value
-  *            if using a different analog voltage supply value).
-  * @param ADC_DATA: Digital value measured by ADC
-  * @retval None
-  */
-#define COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(ADC_DATA)  (roundf(4095.0 * 1200/(ADC_DATA)))
-
 
 static uint16_t BatteryVoltage = BATTERY_MAX_LEVEL;
 
 uint16_t BoardBatteryMeasureVoltage( void )
 {
-    uint16_t vref = 0;
+    uint16_t vbat = 0;
 
     // Read the current Voltage
-    vref = AdcReadChannel( &AdcVref, AdcMode::SE, 5 );
+    vbat = AdcReadChannel( &AdcVbat, AdcMode::SE, 5 );
 
     // Compute and return the Voltage in millivolt
 
-    return COMPUTATION_DIGITAL_12BITS_TO_VOLTAGE(vref);
+    return ADC_CALC_DATA_TO_VOLTAGE(DataSampler::vdda_voltage, vbat, ADC_OVS_BITS);
 }
 
 uint32_t BoardGetBatteryVoltage( void )
@@ -505,12 +436,9 @@ uint8_t BoardGetBatteryLevel( void )
 float BoardGetTemperature( void )
 {
     uint16_t tempRaw = 0;
-
-    BatteryVoltage = BoardBatteryMeasureVoltage( );
-
     tempRaw = AdcReadChannel( &AdcTempSens, AdcMode::SE, 5 );
     // Compute and return the temperature in degree celcius * 256
-    return COMPUTATION_TEMPERATURE_STD_PARAMS( tempRaw);
+    return calc_temperature(DataSampler::vdda_voltage, tempRaw, ADC_OVS_BITS);
 }
 
 static void BoardUnusedIoInit( void )
@@ -656,7 +584,7 @@ void HAL_MspDeInit(void)
 
 }
 
-void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
+void BoardPreSleepProcessing(uint32_t *ulExpectedIdleTime)
 {
 	__HAL_RCC_GPIOA_CLK_DISABLE( );
 	__HAL_RCC_GPIOB_CLK_DISABLE( );
@@ -680,7 +608,7 @@ void PreSleepProcessing(uint32_t *ulExpectedIdleTime)
 	  HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
 }
 
-void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
+void BoardPostSleepProcessing(uint32_t *ulExpectedIdleTime)
 {
 	 __HAL_RCC_GPIOA_CLK_ENABLE( );
 	 __HAL_RCC_GPIOB_CLK_ENABLE( );
@@ -690,6 +618,19 @@ void PostSleepProcessing(uint32_t *ulExpectedIdleTime)
 
 	  /* Avoid compiler warnings about the unused parameter. */
 	  (void) ulExpectedIdleTime;
+}
+
+bool BoardPowerOff( uint32_t timeout ){
+
+	assert(timeout);
+    taskENTER_CRITICAL();
+    if(RtcStartAlarm(timeout)) {
+    GpioInit( &PowerOffAndWakeup, POWER_OFF_AND_WAKEUP, PIN_OUTPUT, PIN_PUSH_PULL, PIN_NO_PULL, 1);
+    GpioWrite(&PowerOffAndWakeup ,POWER_OFF_VALUE);
+    GpioInit( &PowerOffAndWakeup, POWER_OFF_AND_WAKEUP, PIN_ALTERNATE_FCT, PIN_PUSH_PULL, PIN_NO_PULL, 0);
+    while(1){}
+    }else
+    	return false;
 }
 
 uint8_t BoardGetPowerSource( void )

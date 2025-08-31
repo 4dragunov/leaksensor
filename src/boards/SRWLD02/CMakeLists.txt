@@ -139,6 +139,20 @@ elseif(${BOARD_ADC_OVS} MATCHES SOFT)
 	)
 endif()
 
+if(${BOARD_CLOCK_SOURCE} MATCHES XTAL)
+	message(STATUS "Using 32Mhz XTAL as clock source")
+	target_compile_definitions(${PROJECT_NAME} PRIVATE 
+	RF_CLOCK_SOURCE_XTAL
+	)
+elseif(${BOARD_CLOCK_SOURCE} MATCHES TXCO)
+	message(STATUS "Using 32Mhz TXCO as clock source")
+	target_compile_definitions(${PROJECT_NAME} PRIVATE 
+	RF_CLOCK_SOURCE_TXCO
+	)
+endif()
+
+
+
 # Add define if debbuger support is enabled
 target_compile_definitions(${PROJECT_NAME} PUBLIC $<$<BOOL:${USE_DEBUGGER}>:USE_DEBUGGER>)
 
