@@ -3,7 +3,6 @@ RuleKind=Clearance|RuleName=Stitching GND|Scope=Board|Minimum=0.00
 RuleKind=Clearance|RuleName=Pour_Default|Scope=Board|Minimum=9.84
 RuleKind=Width|RuleName=Width_Default|Scope=Board|Minimum=7.87
 RuleKind=SolderMaskExpansion|RuleName=SolderMaskExpansion LDI|Scope=Board|Minimum=0.98
-RuleKind=SolderMaskExpansion|RuleName=SolderMaskExpansion-1|Scope=Board|Minimum=1.97
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR PAD Advance|Scope=Board|Minimum=5.91
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR VIA Advance|Scope=Board|Minimum=3.94
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR PAD Standart|Scope=Board|Minimum=7.87
