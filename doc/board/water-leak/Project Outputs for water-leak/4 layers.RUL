@@ -8,7 +8,7 @@ RuleKind=MinimumAnnularRing|RuleName=Minimum AR PAD Advance|Scope=Board|Minimum=
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR VIA Advance|Scope=Board|Minimum=3.94
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR PAD Standart|Scope=Board|Minimum=7.87
 RuleKind=MinimumAnnularRing|RuleName=Minimum AR VIA Standart|Scope=Board|Minimum=5.91
-RuleKind=Width|RuleName=Impedance 50Ohm|Scope=Board|Minimum=7.87
+RuleKind=Width|RuleName=Impedance 50Ohm|Scope=Board|Minimum=7.46
 RuleKind=Width|RuleName=Power Int|Scope=Board|Minimum=19.69
 RuleKind=Width|RuleName=Power Ext|Scope=Board|Minimum=9.84
 RuleKind=Clearance|RuleName=Clearance-1 1/2 Oz|Scope=Board|Minimum=7.87
